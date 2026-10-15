@@ -1,0 +1,103 @@
+name: Backend Go
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-go.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend-go.yml"
+  workflow_dispatch:
+
+# Least privilege: tidak ada langkah yang menulis kembali ke repositori.
+permissions:
+  contents: read
+
+concurrency:
+  group: backend-go-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows (format, vet, build, test)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Verifikasi toolchain
+        run: |
+          go version
+          go env GOOS GOARCH CGO_ENABLED
+
+      - name: Pemeriksaan format (gofmt)
+        run: |
+          belum_format=$(gofmt -l .)
+          if [ -n "$belum_format" ]; then
+            echo "::error::Berkas berikut belum diformat dengan gofmt:"
+            echo "$belum_format"
+            echo ""
+            echo "Jalankan: gofmt -w .  (di dalam folder backend/)"
+            exit 1
+          fi
+          echo "Semua berkas Go sudah diformat."
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test
+        run: go test -count=1 ./...
+
+  ubuntu:
+    name: Ubuntu (race detector, build, test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+
+      - name: Verifikasi compiler C untuk race detector
+        run: |
+          # Race detector Go memerlukan cgo; gagal jelas bila gcc tidak ada, bukan diam-diam terlewat.
+          gcc --version
+          go env CGO_ENABLED
+
+      - name: Pemeriksaan format (gofmt)
+        run: test -z "$(gofmt -l .)" || { echo "::error::Berkas belum diformat:"; gofmt -l .; exit 1; }
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test
+        run: go test -count=1 ./...
+
+      - name: go test -race
+        run: go test -race -count=1 ./...
