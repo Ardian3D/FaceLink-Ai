@@ -39,6 +39,14 @@
 | T-18 | Peserta memakai kacamata bening | Hasil diuji dan dilaporkan, tanpa jaminan lulus |
 | T-19 | Foto wajah pada layar HP/hasil cetak | Keterbatasan spoofing didokumentasikan |
 | T-20 | APK dipasang ke HP Android | Instalasi dan alur utama berjalan pada jaringan lokal |
+| T-21 | Kunci aktif tidak ada saat backend dinyalakan | Penyalaan **gagal dengan pesan jelas**; backend **tidak** membuat kunci baru sendiri dan **tidak** membuat template tironan |
+| T-22 | Berkas kunci disalin ke mesin/akun lain | Dekripsi gagal; tidak ada template yang terbaca dan tidak ada yang ditebak. Hasil dicatat apa adanya, termasuk bila gagal pada tahap yang tidak terduga |
+| T-23 | Berkas kunci dihapus, database utuh | Template dihapus, peristiwa tercatat di `audit_events` tanpa isi embedding, peserta dapat hadir lewat jalur manual |
+| T-24 | `aad` pada baris diubah (uji perusakan) | Verifikasi AAD gagal; baris **tidak** dipakai dan backend mengembalikan “tidak dapat diverifikasi” |
+| T-25 | `key_version` baris tidak sesuai kunci yang tersedia | Baris tidak dapat didekripsi; backend tidak menurunkan versi secara diam-diam dan tidak mencoba kunci lain di luar versi yang ditunjuk |
+| T-26 | Cadangan database tanpa berkas kunci dipulihkan | Kehadiran dan nama tetap terbaca; kolom `ciphertext` **tidak** dapat dibaca. Ini harus dilaporkan sebagai keterbatasan, bukan kegagalan tak terduga |
+| T-27 | Pencabutan persetujuan lalu pemulihan kunci | Template **tidak** kembali; pencabutan tetap bersifat penghapusan |
+| T-28 | Pemeriksaan kebocoran berkas kunci | Berkas kunci tidak ada di dalam repositori, tidak ada di direktori yang disinkronkan awan, dan tidak ada pada keluaran log |
 
 ## 3. Protokol evaluasi wajah
 
@@ -76,3 +84,14 @@ Bug/risiko dan tindak lanjut:
 ```
 
 **Tidak boleh** mengisi hasil lulus atau akurasi dengan angka rekaan. Laporan akhir presentasi harus membedakan bukti nyata, demo terbatas, dan kemampuan yang baru direncanakan.
+
+## 6. Catatan FL-004: batas pengujian pengelolaan kunci
+
+T-21 sampai T-28 di atas adalah **skenario yang direncanakan**, bukan hasil yang sudah dijalankan. Ketentuan yang mengikat:
+
+1. Skenario kunci **baru boleh dijalankan setelah D-030 disetujui** dan implementasi penyimpanan biometrik diizinkan. Sebelum itu, tidak ada kode yang boleh menulis `face_templates`.
+2. Hasil uji kehilangan kunci dan penggantian perangkat harus **diukur pada mesin demo sungguhan**, dengan Windows dan akun yang akan dipakai. Jangan menyimpulkan perilaku DPAPI dari dokumentasi lalu menuliskannya sebagai hasil uji.
+3. Skenario T-22 harus menguji dua kondisi terpisah: (a) berkas kunci disalin ke **mesin lain**, dan (b) berkas kunci disalin ke **akun lain pada mesin yang sama**. Keduanya dapat berbeda hasilnya.
+4. Bila mesin demo memakai akun dengan profil roaming, hasilnya **tidak** dapat digeneralisasi ke mesin lain; catat kondisi profil bersama hasilnya.
+5. **Tidak boleh** ada klaim bahwa data biometrik aman terhadap serangan yang sudah menguasai akun Windows. Skenario seperti itu **di luar jangkauan** rancangan MVP dan harus disebutkan sebagai keterbatasan, bukan diuji lalu dinyatakan lulus.
+6. Uji negatif lebih penting daripada uji positif di area ini: yang harus dibuktikan adalah backend **menolak bekerja** saat kunci hilang atau tidak cocok, bukan bahwa backend bekerja saat semuanya benar.

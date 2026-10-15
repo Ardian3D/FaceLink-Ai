@@ -43,6 +43,73 @@ Dokumen ini memisahkan apa yang **sudah disepakati**, apa yang **masih merupakan
 | D-027 | DISETUJUI (FL-003) | **Kepemilikan tunggal keputusan domain absensi dan penulisan database berada pada Go.** Python tidak boleh langsung menetapkan peserta sebagai hadir, dan tidak boleh menulis tabel kehadiran. Kontrak internal: `docs/API_CONTRACT.md` §6. |
 | D-028 | DISETUJUI (FL-003) | **UI React Native bukan penentu kehadiran.** Backend Go adalah sumber kebenaran; aplikasi hanya menampilkan hasil dan mengirim permintaan manual melalui endpoint yang diaudit. Ketentuan per layar: `docs/UX_FLOWS.md` §10. |
 | D-029 | TERBUKA | **Liveness detection bukan bagian dari YuNet/SFace.** Keduanya tidak boleh diklaim menyediakan perlindungan anti-spoofing lengkap. Mitigasi tahap MVP bersifat prosedural (operator hadir, satu orang per pemindaian, verifikasi manual) dan harus diuji sebagai eksperimen terpisah. |
+| D-030 | **USULAN (FL-004)** | **Kebijakan pengelolaan kunci biometrik**: kunci AES-256-GCM disimpan di **luar database dan di luar Git**, dibungkus **Windows DPAPI cakupan pengguna**, berkas di `%LOCALAPPDATA%\FaceLink\keys\`, `key_version` pertama bernilai teks `'1'`, akses lewat satu antarmuka `KeyProvider` di Go, rotasi disiapkan tetapi belum diaktifkan, dan **tanpa kunci pemulihan otomatis**. Menjawab Q-16. **Belum disetujui pemilik project — penyimpanan biometrik tidak boleh diimplementasikan sebelum status berubah menjadi DISETUJUI.** Spesifikasi lengkap: `docs/SECURITY_PRIVACY.md` §5a–§5d. |
+
+## Usulan FL-004 — kebijakan pengelolaan kunci biometrik (D-030)
+
+> **Status: USULAN. Belum disetujui.** Diajukan pada 15 Oktober 2026 untuk menjawab **Q-16**. Sesuai protokol perubahan keputusan, usulan ini **menunggu persetujuan pemilik project**; agent dilarang menaikkan statusnya sendiri. Sampai status berubah, implementasi penyimpanan biometrik **tetap terhambat**.
+
+### Masalah yang harus dijawab
+
+D-022 menetapkan template biometrik disimpan sebagai AES-256-GCM per baris di `face_templates`, dengan AAD mengikat `person_id` + `model_id` + `model_version` + `key_version`. Yang belum dijawab: **dari mana kunci itu datang, di mana ia disimpan, bagaimana ia dirotasi, dan apa yang terjadi bila ia hilang.** Tanpa jawaban itu, tabel biometrik tidak boleh ditulis.
+
+Q-16 adalah pertanyaan **operasional**, bukan pertanyaan kriptografi. Algoritme, panjang nonce, dan AAD sudah final di D-022. Yang tersisa adalah siapa yang memegang kunci dan apa yang terjadi saat pemegangnya hilang.
+
+### Keputusan yang diusulkan
+
+**1. Kunci tidak pernah berada di database, di Git, atau di lingkungan yang ikut ter-commit.** Ini melanjutkan `docs/DATA_MODEL.md` §11 butir 4 dan `docs/SECURITY_PRIVACY.md` §5. Larangannya tegas: tidak ada kunci di berkas `.env` yang ter-commit, tidak ada kunci di variabel lingkungan yang ditulis ke berkas konfigurasi, tidak ada kunci di dalam repositori, dan tidak ada kunci di dalam berkas `facelink.db`.
+
+**2. Materi kunci dibungkus Windows DPAPI cakupan pengguna (CurrentUser).** Berkas kunci disimpan di `%LOCALAPPDATA%\FaceLink\keys\` dengan ACL yang dibatasi pada akun pengguna yang menjalankan backend. Berkas itu **tidak** memuat kunci mentah; ia memuat hasil `CryptProtectData`, sehingga menyalin berkasnya ke mesin lain tidak cukup untuk memakainya. Alasan memilih DPAPI: tidak ada biaya, tidak ada layanan tambahan, tidak ada frasa sandi yang harus diketik pada setiap penyalaan, dan Office/Chrome memakai pola perlindungan yang sama untuk kredensial lokal.
+
+**3. Akses kunci disalurkan melalui satu antarmuka `KeyProvider` di Go.** Seluruh kode yang butuh kunci memanggil antarmuka ini, bukan membaca berkas kunci sendiri. Modul ini mengekspos operasi yang sempit: membaca kunci aktif, membaca kunci berdasarkan versi (untuk dekripsi baris lama setelah rotasi), dan memuat kunci baru. Tidak ada operasi "daftar semua kunci" dan tidak ada jalur untuk menuliskan kunci ke log. Dengan begitu, aturan "jangan mencetak kunci ke log" (`AGENTS.md` §3) menjadi properti struktural, bukan disiplin manual.
+
+**4. `key_version` pertama bernilai teks `'1'`.** Kolom `key_version` bertipe `TEXT` (`docs/DATA_MODEL.md` §4.12), jadi versi ditulis sebagai `'1'`, bukan `1`. Nilai ini masuk ke AAD, sehingga baris yang ditulis dengan `'1'` **tidak** dapat didekripsi dengan kunci apa pun yang diberi label `'2'`. Format penamaan disiapkan untuk rotasi: kenaikan bilangan bulat sederhana, tanpa tanggal dan tanpa nama pengguna di dalam nilai.
+
+**5. Dekripsi gagal berperilaku seperti yang sudah ditetapkan, tanpa tambahan.** Bila kunci hilang, rusak, atau AAD tidak cocok, backend menandai kegagalan, menulis audit, dan mengembalikan "tidak dapat diverifikasi" kepada operator. **Tidak ada** kunci pengganti otomatis, **tidak ada** pembuatan template baru secara diam-diam, dan **tidak ada** tebakan identitas. Ini hanya menegaskan kembali `docs/DATA_MODEL.md` §4.12, bukan aturan baru.
+
+**6. Rotasi dirancang tetapi belum diaktifkan.** Rotasi berarti: buat kunci versi baru, tulis template baru dengan versi itu, dekripsi baris lama memakai kunci lamanya, dan hapus kunci lama **hanya setelah** tidak ada baris yang menunjuk versinya. Prosedurnya disiapkan sekarang agar format berkas dan AAD siap, tetapi operasinya tidak dijalankan sampai ada permintaan nyata dan pemilik project menyetujuinya. Alasan: MVP hanya menyimpan template satu kelas dalam satu sesi demo; rotasi yang tidak diminta hanya menambah jalur kegagalan baru.
+
+**7. Tidak ada kunci pemulihan cadangan otomatis.** Kesepakatan ini disengaja dan harus dipahami konsekuensinya: **pemulihan bukan operasi yang menjamin template kembali.** Yang dapat dipulihkan adalah keberadaan sistem, bukan data biometriknya. Untuk memastikan kapan pemulihan masih memungkinkan, kebijakan ini menetapkan **periode pemulihan 30 hari** yang dihitung dari tanggal pemulihan aktif terakhir yang tercatat pada `audit_events`; di luar periode itu, template dianggap tidak dapat dipulihkan dan peserta harus mendaftar ulang.
+
+**8. Kehilangan kunci adalah kehilangan template, dan itu berakhir dengan enrollment ulang ber-consent.** Bila kunci tidak dapat dipulihkan (berkas hilang, profil Windows direset, perangkat diganti tanpa salinan terlindungi, atau periode 30 hari terlampaui), template lama dihapus, peristiwa dicatat di `audit_events`, dan peserta **diminta ulang** persetujuannya sebelum melakukan enrollment baru. Kehadiran selama template tidak tersedia ditangani melalui jalur absensi manual, bukan melalui pembuatan template tironan.
+
+**9. Tidak ada penyalinan kunci antar mesin.** Batas cakupan pengguna membuat kunci terikat pada akun Windows **ketika profilnya tidak roaming**; DPAPI sendiri **tidak** mengikat blob ke mesin secara mutlak, dan pemilik profil roaming dapat membukanya dari komputer lain di jaringan. Karena itu perpindahan kunci antar mesin hanya melalui berkas terlindungi yang disalin sadar oleh operator, dan **tidak boleh** melalui Git, surel, penyimpanan awan, atau lampiran pesan. Bila kunci harus dipindahkan, itu operasi tercatat, bukan hal yang terjadi sendiri.
+
+### Batasan yang harus dinyatakan jujur
+
+**DPAPI bukan kotak ajaib, dan dokumen ini tidak boleh menggambarkannya begitu.** Empat batas berikut dibuktikan oleh sumber Microsoft dan harus dibaca sebelum menganggap kunci aman:
+
+| Batas | Konsekuensi nyata |
+|---|---|
+| Setiap aplikasi yang berjalan dengan kredensial pengguna yang sama dapat membuka blob DPAPI | DPAPI melindungi dari **pengguna lain di mesin yang sama** dan dari **berkas yang dicuri lalu dibaca di mesin lain**. Ia **tidak** melindungi dari malware yang berjalan sebagai pengguna yang sama, dan tidak melindungi dari operator yang menyalahgunakan mesinnya sendiri |
+| Profil **roaming** dapat didekripsi dari komputer lain di jaringan | Jika akun Windows di domain memakai profil roaming, template dapat didekripsi di mesin lain. Asumsi ini harus **diverifikasi**, bukan diandaikan |
+| DPAPI menyimpan materi kunci di dalam profil pengguna | Bila profil tidak termuat, dekripsi **gagal**. Reset profil, penghapusan akun, atau profil yang rusak menghilangkan kemampuan membaca template lama |
+| DPAPI memakai mode pengguna, bukan mode mesin | Ini disengaja. Mode mesin (`CRYPTPROTECT_LOCAL_MACHINE`) akan membuka kunci bagi **semua** pengguna mesin itu, sehingga **ditolak** untuk project ini |
+
+Kesimpulan yang harus diucapkan apa adanya kepada pemilik project: **AES-256-GCM melindungi isi database bila berkasnya bocor; DPAPI melindungi kunci dari pengguna lain dan dari pencurian berkas. Tidak ada lapisan di sini yang melindungi data biometrik dari akun Windows yang sudah dikuasai penyerang.** MVP tidak memiliki jawaban untuk itu.
+
+### Alasan menolak alternatif
+
+| Alternatif | Alasan tidak dipilih |
+|---|---|
+| Kunci di berkas konfigurasi atau `.env` ter-commit | Dilarang tegas oleh `docs/DATA_MODEL.md` §11 butir 4 dan `docs/SECURITY_PRIVACY.md` §5; kunci akan ikut bocor bersama repositori |
+| Kunci diturunkan dari kata sandi operator | Menambah biaya operasional (wajib diketik saat penyalaan), menciptakan ketergantungan pada kebijakan kata sandi, dan memperkenalkan jalur pemulihan ilegal saat kata sandi dilupakan |
+| Penyimpanan rahasia sistem (Windows Credential Manager) | Menjadi **alternatif yang dipertimbangkan**, bukan pendamping. Ia menyimpan rahasia per-entri dengan perlindungan serupa DPAPI, tetapi membatasi ukuran dan format nilai serta menyulitkan penyimpanan lebih dari satu versi kunci sekaligus, padahal rotasi membutuhkan itu |
+| Kunci di variabel lingkungan | Sering tersalin ke berkas konfigurasi, terbaca oleh proses anak, dan muncul pada pesan kesalahan. Tidak memenuhi syarat "berkas key yang tidak masuk Git" |
+| Layanan manajemen kunci awan | Melanggar batas Rp0 dan batas lokal MVP (D-002, D-003) |
+
+### Konsekuensi yang diterima
+
+1. **Tidak ada jaminan pemulihan.** Bila kunci hilang dan periode pemulihan berakhir, semua template hilang dan peserta harus mendaftar ulang. Ini konsekuensi sadar, bukan kelalaian.
+2. **Satu mesin, satu akun.** MVP berjalan pada satu laptop Windows dengan satu akun operator. Perpindahan mesin adalah operasi manual yang tercatat.
+3. **`synchronous=NORMAL` pada SQLite tetap berlaku** (`docs/DATA_MODEL.md` §13 butir 2). Kunci yang tersimpan aman dari kegagalan proses, tetapi kombinasi kunci hilang + transaksi terakhir hilang tetap mungkin terjadi pada mati listrik. Ini harus dinyatakan, bukan disembunyikan.
+4. **Backup database tidak memulihkan template tanpa kunci.** Menyalin `facelink.db` beserta `-wal` dan `-shm` tanpa memindahkan berkas kunci terlindungi menghasilkan database yang isinya **tidak dapat dibaca**. Prosedur cadangan di `docs/DATA_MODEL.md` §7.3 harus diperlakukan sebagai **satu kesatuan dengan kunci**, bukan hanya tiga berkas database.
+
+### Kondisi peninjauan ulang
+
+Usulan ini harus ditinjau ulang bila salah satu terjadi: akun Windows di domain dengan profil roaming; kebutuhan memindahkan backend ke mesin lain; kebutuhan rotasi kunci yang nyata; atau keputusan pindah ke PostgreSQL (D-011). Pada dua kondisi pertama, DPAPI cakupan pengguna **tidak** memenuhi kebutuhan dan rancangan harus diganti, bukan ditambal.
+
+**Yang diminta dari pemilik project:** setujui usulan ini sehingga status D-030 berubah menjadi DISETUJUI dan Q-16 ditutup, **atau** tolak/tunda dengan menunjukkan bagian mana yang harus berbeda. Selama belum dijawab, status D-030 tetap **USULAN** dan Q-16 tetap **terbuka**.
 
 ## Dampak FL-003 terhadap keputusan lama
 
