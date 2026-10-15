@@ -96,15 +96,21 @@ FaceLink-AI/                      # ← kondisi FL-001: hanya berkas di bawah in
 ├── research/                     # ADA — ruang kajian jurnal (referensi saja)
 ├── apps/                         # BELUM ADA — dibuat pada fase 1 dan 3
 │   ├── mobile/                   # BELUM ADA (React Native + Expo, fase 3)
-│   └── api/                      # BELUM ADA (Go API kandidat, fase 1)
+│   └── api/                      # TIDAK DIPAKAI — lihat catatan FL-005 di bawah
 ├── services/                     # BELUM ADA
 │   └── face-engine/              # BELUM ADA (Python + OpenCV, fase 2)
 ├── firmware/                     # BELUM ADA (fase hardware)
 │   └── esp32-s3-cam/             # BELUM ADA (firmware, fase 5)
-└── tests/                        # BELUM ADA (pengujian integrasi)
+├── tests/                        # BELUM ADA (pengujian integrasi)
+└── backend/                      # ADA (FL-005) — Go API + migrasi SQL
+    ├── cmd/server/
+    ├── internal/
+    └── migrations/
 ```
 
 > **Catatan FL-001 (15 Oktober 2026):** pada saat fondasi dokumentasi dibuat, hanya `README.md`, `AGENTS.md`, `PROJECT_STATE.md`, `.gitignore`, `docs/`, dan `research/` yang benar-benar ada. Folder `apps/`, `services/`, `firmware/`, dan `tests/` sengaja **belum dibuat**; keberadaannya di atas hanya rencana. Jangan menafsirkan diagram ini sebagai bukti implementasi. Nama dan struktur akhir menunggu review arsitektur.
+
+> **Catatan FL-005 (15 Oktober 2026):** kode backend Go yang benar-benar ditulis **berada di `backend/`**, bukan di `apps/api/` seperti sketsa di atas. Perbedaan ini disengaja dan **belum disetujui sebagai perubahan arsitektur**: `backend/` adalah nama yang dipakai pada tugas implementasi FL-005, sedangkan `apps/api/` hanya kandidat dari fase dokumentasi. `apps/` tetap **belum dibuat** dan `apps/api/` tidak dipakai. `services/face-engine/`, `firmware/`, `apps/mobile/`, dan `tests/` tetap rencana. Penyelarasan nama ini adalah keputusan pemilik project dan **tidak** diambil sendiri oleh FL-005; sampai ada keputusan, `backend/` adalah lokasi nyata dan diagram di atas tetap menggambarkan rencana lama.
 
 ## 9. Status keputusan setelah FL-003
 

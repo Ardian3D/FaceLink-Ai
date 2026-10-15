@@ -1,0 +1,247 @@
+package config
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+func envFrom(pairs map[string]string) EnvLookup {
+	return func(key string) (string, bool) {
+		v, ok := pairs[key]
+		return v, ok
+	}
+}
+
+func TestLoadDefaultsMemakaiNilaiAman(t *testing.T) {
+	cfg, err := LoadFrom(envFrom(nil))
+	if err != nil {
+		t.Fatalf("konfigurasi bawaan harus sah, dapat galat: %v", err)
+	}
+
+	if cfg.Addr != DefaultAddr {
+		t.Errorf("Addr = %q, ingin %q", cfg.Addr, DefaultAddr)
+	}
+	if !strings.HasPrefix(cfg.Addr, "127.0.0.1") {
+		t.Errorf("alamat bawaan %q tidak dibatasi ke loopback", cfg.Addr)
+	}
+	if cfg.LogLevel != DefaultLogLevel {
+		t.Errorf("LogLevel = %q, ingin %q", cfg.LogLevel, DefaultLogLevel)
+	}
+	if cfg.AIEngineURL != "" {
+		t.Errorf("AIEngineURL bawaan harus kosong (belum dikonfigurasi), dapat %q", cfg.AIEngineURL)
+	}
+	if cfg.BuildVersion != "dev" {
+		t.Errorf("BuildVersion = %q, ingin %q", cfg.BuildVersion, "dev")
+	}
+
+	want := map[string]time.Duration{
+		"ReadTimeout":     DefaultReadTimeout,
+		"WriteTimeout":    DefaultWriteTimeout,
+		"IdleTimeout":     DefaultIdleTimeout,
+		"ShutdownTimeout": DefaultShutdownTimeout,
+	}
+	got := map[string]time.Duration{
+		"ReadTimeout":     cfg.ReadTimeout,
+		"WriteTimeout":    cfg.WriteTimeout,
+		"IdleTimeout":     cfg.IdleTimeout,
+		"ShutdownTimeout": cfg.ShutdownTimeout,
+	}
+	for name, wantDur := range want {
+		if got[name] != wantDur {
+			t.Errorf("%s = %v, ingin %v", name, got[name], wantDur)
+		}
+	}
+}
+
+func TestLoadFromMembacaSeluruhVariabel(t *testing.T) {
+	cfg, err := LoadFrom(envFrom(map[string]string{
+		EnvAddr:            "127.0.0.1:9911",
+		EnvDatabasePath:    "data/uji.db",
+		EnvMigrationsDir:   "migrasi",
+		EnvAIEngineURL:     "http://127.0.0.1:8001",
+		EnvReadTimeout:     "3s",
+		EnvWriteTimeout:    "7s",
+		EnvIdleTimeout:     "11s",
+		EnvShutdownTimeout: "13s",
+		EnvLogLevel:        "DEBUG",
+		EnvBuildVersion:    "fl-005-uji",
+	}))
+	if err != nil {
+		t.Fatalf("konfigurasi sah harus diterima, dapat galat: %v", err)
+	}
+
+	if cfg.Addr != "127.0.0.1:9911" {
+		t.Errorf("Addr = %q", cfg.Addr)
+	}
+	if cfg.DatabasePath != filepath.Clean("data/uji.db") {
+		t.Errorf("DatabasePath = %q", cfg.DatabasePath)
+	}
+	if cfg.ReadTimeout != 3*time.Second || cfg.WriteTimeout != 7*time.Second {
+		t.Errorf("timeout baca/tulis = %v/%v", cfg.ReadTimeout, cfg.WriteTimeout)
+	}
+	if cfg.IdleTimeout != 11*time.Second || cfg.ShutdownTimeout != 13*time.Second {
+		t.Errorf("timeout idle/shutdown = %v/%v", cfg.IdleTimeout, cfg.ShutdownTimeout)
+	}
+	if cfg.LogLevel != "debug" {
+		t.Errorf("LogLevel = %q, ingin dinormalkan menjadi huruf kecil", cfg.LogLevel)
+	}
+	if cfg.BuildVersion != "fl-005-uji" {
+		t.Errorf("BuildVersion = %q", cfg.BuildVersion)
+	}
+}
+
+func TestLoadFromMenolakKonfigurasiTidakValid(t *testing.T) {
+	cases := []struct {
+		name    string
+		pairs   map[string]string
+		wantSub string
+	}{
+		{"alamat tanpa port", map[string]string{EnvAddr: "127.0.0.1"}, EnvAddr},
+		{"alamat terbuka jaringan", map[string]string{EnvAddr: "0.0.0.0:8080"}, "loopback"},
+		{"alamat host kosong", map[string]string{EnvAddr: ":8080"}, "semua antarmuka"},
+		{"alamat IP LAN", map[string]string{EnvAddr: "192.168.1.10:8080"}, "loopback"},
+		{"basis data kosong", map[string]string{EnvDatabasePath: "   "}, EnvDatabasePath},
+		{"basis data di OneDrive", map[string]string{EnvDatabasePath: "C:/Users/X/OneDrive/data/facelink.db"}, "tersinkronisasi"},
+		{"basis data jalur UNC", map[string]string{EnvDatabasePath: "//server/data/facelink.db"}, "lokal"},
+		{"migrasi kosong", map[string]string{EnvMigrationsDir: ""}, EnvMigrationsDir},
+		{"url AI bukan loopback", map[string]string{EnvAIEngineURL: "http://192.168.1.20:8001"}, "loopback"},
+		{"level log tidak dikenal", map[string]string{EnvLogLevel: "verbose"}, EnvLogLevel},
+		{"durasi bukan angka", map[string]string{EnvReadTimeout: "cepat"}, EnvReadTimeout},
+		{"durasi nol", map[string]string{EnvWriteTimeout: "0"}, EnvWriteTimeout},
+		{"durasi negatif", map[string]string{EnvIdleTimeout: "-5s"}, EnvIdleTimeout},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := LoadFrom(envFrom(tc.pairs))
+			if err == nil {
+				t.Fatalf("konfigurasi tidak sah harus ditolak, tetapi diterima: %+v", cfg)
+			}
+			if !strings.Contains(err.Error(), tc.wantSub) {
+				t.Errorf("galat %q tidak memuat %q", err.Error(), tc.wantSub)
+			}
+		})
+	}
+}
+
+func TestLoadFromMengumpulkanSeluruhMasalahSekaligus(t *testing.T) {
+	_, err := LoadFrom(envFrom(map[string]string{
+		EnvAddr:        "0.0.0.0:8080",
+		EnvLogLevel:    "verbose",
+		EnvReadTimeout: "cepat",
+	}))
+	if err == nil {
+		t.Fatal("konfigurasi dengan tiga masalah harus ditolak")
+	}
+	msg := err.Error()
+	for _, want := range []string{EnvAddr, EnvLogLevel, EnvReadTimeout} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("laporan galat tidak menyebut %s:\n%s", want, msg)
+		}
+	}
+}
+
+func TestLoadFromMenolakPembacaNil(t *testing.T) {
+	if _, err := LoadFrom(nil); err == nil {
+		t.Fatal("pembaca nil harus ditolak")
+	}
+}
+
+func TestDurasiMenerimaBentukMilidetik(t *testing.T) {
+	cfg, err := LoadFrom(envFrom(map[string]string{EnvReadTimeout: "2500"}))
+	if err != nil {
+		t.Fatalf("bentuk milidetik harus diterima: %v", err)
+	}
+	if cfg.ReadTimeout != 2500*time.Millisecond {
+		t.Errorf("ReadTimeout = %v, ingin 2.5s", cfg.ReadTimeout)
+	}
+}
+
+func TestRedactedTidakMembocorkanNilaiSensitif(t *testing.T) {
+	const secretURL = "http://127.0.0.1:8001/mesin/rahasia"
+
+	cfg, err := LoadFrom(envFrom(map[string]string{
+		EnvAIEngineURL: secretURL,
+		EnvLogLevel:    "debug",
+	}))
+	if err != nil {
+		t.Fatalf("konfigurasi harus sah: %v", err)
+	}
+
+	encoded, err := json.Marshal(cfg.Redacted())
+	if err != nil {
+		t.Fatalf("bentuk aman harus dapat diserialkan: %v", err)
+	}
+	rendered := string(encoded)
+
+	if strings.Contains(rendered, secretURL) {
+		t.Errorf("bentuk aman membocorkan URL mesin AI:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "/mesin/rahasia") {
+		t.Errorf("bentuk aman membocorkan jalur mesin AI:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, `"ai_engine_url":"set"`) {
+		t.Errorf("bentuk aman harus melaporkan ai_engine_url sebagai set:\n%s", rendered)
+	}
+
+	// Seluruh nilai yang boleh muncul hanyalah nilai yang memang tidak rahasia.
+	for _, forbidden := range []string{"password", "token", "secret", "api_key"} {
+		if strings.Contains(strings.ToLower(rendered), forbidden) {
+			t.Errorf("bentuk aman memuat nama field sensitif %q:\n%s", forbidden, rendered)
+		}
+	}
+}
+
+func TestRedactedMenandaiMesinAIBelumDikonfigurasi(t *testing.T) {
+	cfg, err := LoadFrom(envFrom(nil))
+	if err != nil {
+		t.Fatalf("konfigurasi bawaan harus sah: %v", err)
+	}
+	encoded, err := json.Marshal(cfg.Redacted())
+	if err != nil {
+		t.Fatalf("serialisasi gagal: %v", err)
+	}
+	if !strings.Contains(string(encoded), `"ai_engine_url":"unset"`) {
+		t.Errorf("bentuk aman harus melaporkan ai_engine_url sebagai unset:\n%s", encoded)
+	}
+}
+
+func TestOSEnvMembacaLingkunganNyata(t *testing.T) {
+	const key = "FACELINK_TEST_OS_ENV"
+	const value = "nilai-uji-fl-005"
+
+	t.Setenv(key, value)
+
+	got, ok := OSEnv(key)
+	if !ok {
+		t.Fatalf("OSEnv(%q) melaporkan variabel tidak ada", key)
+	}
+	if got != value {
+		t.Errorf("OSEnv(%q) = %q, ingin %q", key, got, value)
+	}
+
+	os.Unsetenv(key)
+	if _, ok := OSEnv(key); ok {
+		t.Errorf("OSEnv(%q) masih melaporkan variabel ada setelah dihapus", key)
+	}
+}
+
+func TestLoadMemakaiLingkunganProses(t *testing.T) {
+	t.Setenv(EnvBuildVersion, "fl-005-dari-env")
+	t.Setenv(EnvLogLevel, "warn")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() harus berhasil dengan lingkungan uji: %v", err)
+	}
+	if cfg.BuildVersion != "fl-005-dari-env" {
+		t.Errorf("BuildVersion = %q, ingin nilai dari lingkungan", cfg.BuildVersion)
+	}
+	if cfg.LogLevel != "warn" {
+		t.Errorf("LogLevel = %q, ingin %q", cfg.LogLevel, "warn")
+	}
+}
