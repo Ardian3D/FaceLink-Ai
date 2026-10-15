@@ -144,7 +144,7 @@ Kesimpulan yang harus diucapkan apa adanya kepada pemilik project: **AES-256-GCM
 
 Usulan ini harus ditinjau ulang bila salah satu terjadi: akun Windows di domain dengan profil roaming; kebutuhan memindahkan backend ke mesin lain; kebutuhan rotasi kunci yang nyata; atau keputusan pindah ke PostgreSQL (D-011). Pada dua kondisi pertama, DPAPI cakupan pengguna **tidak** memenuhi kebutuhan dan rancangan harus diganti, bukan ditambal.
 
-**Catatan persetujuan:** pemilik project menyetujui rancangan ini pada 15 Oktober 2026 (**FL-004S**) dengan **dua klarifikasi wajib** yang kini menjadi butir 10 dan butir 11 keputusan ini. Status D-030 karena itu **DISETUJUI**, dan Q-16 **DIPUTUSKAN untuk rancangan MVP**. Persetujuan ini **bukan** izin implementasi: penulisan kode `face_templates`, penyimpanan kunci, dan seluruh pengujian nyata (T-21–T-35) tetap tertunda sampai ada tugas implementasi tersendiri yang disetujui pemilik.
+**Catatan persetujuan:** pemilik project menyetujui rancangan ini pada 15 Oktober 2026 (**FL-004S**) dengan **dua klarifikasi wajib** yang kini menjadi butir 10 dan butir 11 keputusan ini. Status D-030 karena itu **DISETUJUI**, dan Q-16 **DIPUTUSKAN untuk rancangan MVP**. Persetujuan ini **bukan** izin implementasi: penulisan kode `face_templates`, penyimpanan kunci, dan seluruh pengujian nyata (T-21–T-38) tetap tertunda sampai ada tugas implementasi tersendiri yang disetujui pemilik.
 
 ## Dampak FL-003 terhadap keputusan lama
 
