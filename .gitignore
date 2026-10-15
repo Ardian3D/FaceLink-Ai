@@ -72,6 +72,9 @@ templates/
 *.sqlite3
 *.db
 *.db-journal
+*.db-wal
+*.db-shm
+*.db-wal2
 *.mdb
 *.dump
 *.sql.gz
@@ -312,5 +315,9 @@ out/
 # - Jangan tambahkan pola yang mengabaikan `docs/`, `research/`, `*.md`,
 #   `AGENTS.md`, `PROJECT_STATE.md`, `README.md`, atau source code.
 # - Uji ulang dengan `git status --ignored` setelah menambah pola baru.
+# - Data biometrik tidak selalu lenyap bersama berkasnya: SQLite WAL (`*.db-wal`,
+#   `*.db-shm`) dan salinan cadangan dapat memuat sisa baris yang sudah dihapus.
+#   Pola WAL/SHM ada di bagian 2 agar berkas itu tidak ikut ter-commit
+#   (docs/SECURITY_PRIVACY.md §5c dan §5f).
 # - Rahasia yang sudah terlanjur di-commit harus dianggap bocor: rotasi
 #   kredensial, lalu bersihkan riwayat. Jangan mengandalkan penghapusan biasa.

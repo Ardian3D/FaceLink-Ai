@@ -54,6 +54,9 @@
 | T-33 | Sisa biometrik setelah penghapusan | Setelah penghapusan template, periksa `facelink.db`, **`-wal`**, **`-shm`**, **salinan cadangan**, dan **cache**. Tidak ada sisa yang dapat dipulihkan; bila ada, penghapusan dinyatakan **belum selesai** dan dilaporkan sebagai bug |
 | T-34 | Absensi manual ketika tidak ada satu pun template | Seluruh template tidak tersedia (kondisi A atau C). Peserta **tetap** dapat hadir melalui jalur manual, dan kehadiran itu berlaku sama sahnya; tidak ada penolakan kehadiran |
 | T-35 | Enrollment ulang dengan persetujuan baru | Peserta diminta ulang persetujuannya; bila menolak, **tidak ada** template baru dan tidak ada konsekuensi merugikan; `audit_events` mencatat status persetujuan tanpa potret atau embedding |
+| T-36 | Kesiapan dipisahkan: absensi manual tanpa layanan biometrik | Layanan biometrik dimatikan atau kuncinya tidak tersedia. Absensi manual **tetap** melayani peserta, kehadiran tercatat, dan **tidak ada** pemeriksaan keamanan yang dilemahkan agar layanan hidup (paparan §5e butir 4) |
+| T-37 | Urutan pemulihan setelah gangguan kunci | Setelah insiden kunci diselesaikan, **absensi manual dipulihkan lebih dahulu**; layanan biometrik menyusul. Kelas tidak menunggu penyelesaian insiden |
+| T-38 | Tidak ada klaim penghapusan berlebihan | Laporan hasil penghapusan menyebut lokasi yang **belum** terjangkau (media penyimpanan, cadangan di luar jangkauan) apa adanya; frasa “terhapus permanen” dan “tidak dapat dipulihkan secara forensik” **tidak muncul** |
 
 ## 3. Protokol evaluasi wajah
 
@@ -96,7 +99,7 @@ Bug/risiko dan tindak lanjut:
 
 T-21 sampai T-35 di atas adalah **skenario yang direncanakan**, bukan hasil yang sudah dijalankan. Ketentuan yang mengikat:
 
-1. Skenario kunci **baru boleh dijalankan setelah D-030 disetujui** dan implementasi penyimpanan biometrik diizinkan. Sebelum itu, tidak ada kode yang boleh menulis `face_templates`.
+1. Skenario kunci **baru boleh dijalankan setelah ada tugas implementasi yang disetujui pemilik**. D-030 **sudah disetujui pada FL-004S**, tetapi persetujuan itu berlaku atas **rancangan**; sampai tugas implementasi disetujui, tetap tidak ada kode yang boleh menulis `face_templates`.
 2. Hasil uji kehilangan kunci dan penggantian perangkat harus **diukur pada mesin demo sungguhan**, dengan Windows dan akun yang akan dipakai. Jangan menyimpulkan perilaku DPAPI dari dokumentasi lalu menuliskannya sebagai hasil uji.
 3. Skenario T-22 harus menguji dua kondisi terpisah: (a) berkas kunci disalin ke **mesin lain**, dan (b) berkas kunci disalin ke **akun lain pada mesin yang sama**. Keduanya dapat berbeda hasilnya.
 4. Bila mesin demo memakai akun dengan profil roaming, hasilnya **tidak** dapat digeneralisasi ke mesin lain; catat kondisi profil bersama hasilnya.
@@ -106,3 +109,5 @@ T-21 sampai T-35 di atas adalah **skenario yang direncanakan**, bukan hasil yang
 8. **Periode pemulihan 30 hari bukan objek uji kelulusan.** Yang diuji adalah bahwa penghapusan hanya terjadi setelah kondisi C ditetapkan dan tidak pernah dipicu otomatis (T-32). Jangan menuliskan hasil uji seolah masa 30 hari menjamin template dapat dipulihkan.
 9. **Uji T-33 wajib memeriksa lebih dari berkas `facelink.db`**: berkas `-wal`, `-shm`, salinan cadangan, dan cache juga diperiksa. Penghapusan yang hanya membersihkan tabel induk dinyatakan **belum selesai**.
 10. **Fallback absensi manual diuji sebagai jalur normal, bukan hanya saat darurat** (T-34). Bila jalur manual hanya bekerja ketika template masih ada, itu kegagalan yang harus dilaporkan.
+11. **Dua klarifikasi FL-004S menjadi syarat lulus yang eksplisit.** (a) **T-36** harus membuktikan kesiapan dipisahkan: dengan layanan biometrik dimatikan atau kunci tidak tersedia, absensi manual **tetap berjalan** dan tidak ada pemeriksaan keamanan yang dilonggarkan untuk itu (`docs/SECURITY_PRIVACY.md` §5e). (b) **T-38** harus membuktikan tidak ada klaim penghapusan yang berlebihan: laporan akhir menyebut lokasi yang **belum** terjangkau (media penyimpanan, cadangan di luar jangkauan) apa adanya (`docs/SECURITY_PRIVACY.md` §5f).
+12. **Kegagalan layanan biometrik bukan alasan melumpuhkan pemeriksaan keamanan.** Bila implementasi “berhasil” dengan cara menonaktifkan pemeriksaan agar layanan tetap hidup, hasil itu dinyatakan **gagal** sesuai `docs/SECURITY_PRIVACY.md` §5e butir 4.

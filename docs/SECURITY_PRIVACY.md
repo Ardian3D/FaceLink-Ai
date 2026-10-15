@@ -43,15 +43,15 @@ Data wajah dan template biometrik bersifat sangat sensitif. Di Indonesia, **UU N
 
 - Tentukan umur simpan **sebelum** pengambilan data asli. Prinsip awal: simpan seminimal mungkin, hapus sesegera mungkin setelah presentasi dan evaluasi selesai.
 - Template biometrik disimpan **terenkripsi AES-256-GCM per baris** (D-022): nonce acak kriptografis per baris, tag autentikasi diverifikasi sebelum dekripsi, dan dekripsi yang gagal **tidak** diganti dengan tebakan. Satu-satunya lokasi penyimpanan biometrik adalah tabel `face_templates` (`docs/DATA_MODEL.md` §4.12).
-- Kunci enkripsi **tidak** boleh berada di dalam database, di dalam commit, atau di berkas konfigurasi yang ikut ter-commit. Bentuk penyimpanan final (AES-256-GCM per baris, D-022); kebijakan pengelolaannya diusulkan pada **D-030 (USULAN, menunggu persetujuan pemilik project)** dan dirinci pada §5a–§5d di bawah. Sampai D-030 disetujui, **Q-16 tetap terbuka dan implementasi penyimpanan biometrik tetap terhambat.**
+- Kunci enkripsi **tidak** boleh berada di dalam database, di dalam commit, atau di berkas konfigurasi yang ikut ter-commit. Bentuk penyimpanan final (AES-256-GCM per baris, D-022); kebijakan pengelolaannya ditetapkan pada **D-030 (DISETUJUI pada FL-004S dengan dua klarifikasi wajib)** dan dirinci pada §5a–§5f di bawah. Q-16 **DIPUTUSKAN** untuk rancangan MVP, tetapi **implementasi penyimpanan biometrik dan seluruh pengujiannya masih tertunda** dan menunggu tugas implementasi tersendiri.
 - Enkripsi template bukan enkripsi seluruh berkas database: rekap kehadiran dan nama peserta tetap terbaca bagi siapa pun yang memegang berkas SQLite. Jangan mengklaim sebaliknya.
 - Cadangan data, jika benar-benar dibutuhkan, harus tunduk pada retensi/penghapusan yang sama; jangan menyisakan template yang sudah dicabut di backup tanpa kebijakan.
 - **Pencabutan persetujuan tetap merupakan penghapusan, bukan penonaktifan.** Kunci tidak menyimpan salinan template, sehingga penghapusan pada `face_templates` (`docs/DATA_MODEL.md` §5.3) bersifat final dan tidak dapat dibatalkan dengan memulihkan kunci (D-030 butir 7).
 - **Cadangan database bukan cadangan biometrik.** Berkas `facelink.db`, `-wal`, dan `-shm` hanya berguna bersama berkas kunci terlindungi. Cadangan yang hanya berisi database harus dijelaskan apa adanya kepada pemilik project, bukan disajikan sebagai pemulihan penuh.
 
-### 5a. Kebijakan kunci yang diusulkan (D-030, belum disetujui)
+### 5a. Kebijakan kunci yang berlaku (D-030)
 
-Bagian ini memuat **usulan** yang menjawab Q-16. Berlaku sebagai kebijakan hanya setelah status D-030 berubah menjadi DISETUJUI.
+Bagian ini memuat **kebijakan yang menjawab Q-16**. D-030 **DISETUJUI pemilik project pada 15 Oktober 2026 (FL-004S)** dengan dua klarifikasi wajib, yang ketentuannya ada pada §5e dan §5f. **Disetujui bukan berarti diimplementasikan:** belum ada kode yang ditulis dan belum ada pengujian yang dijalankan.
 
 1. **Pemilik kunci adalah backend Go.** Python tidak memegang kunci, tidak menerima kunci, dan tidak mendekripsi template. Ini memperluas D-027 dan `docs/API_CONTRACT.md` §6.8.
 2. **Lokasi penyimpanan:** berkas kunci terlindungi di `%LOCALAPPDATA%\FaceLink\keys\` pada akun Windows yang menjalankan backend, dengan ACL yang hanya mengizinkan akun itu. Jangan memakai folder yang disinkronkan ke penyimpanan awan.
@@ -148,6 +148,74 @@ Satu hal yang harus dinyatakan jujur kepada peserta dan pemilik project: **kehil
 - Foto JPEG pemindaian rutin tidak disimpan secara default. Cukup simpan hasil status dan metadata seperlunya.
 - Catatan audit menunjukkan tindakan tanpa merekam informasi wajah atau nilai embedding.
 
+### 5e. Kesiapan layanan dipisahkan (klarifikasi wajib pemilik, FL-004S)
+
+Klarifikasi ini menetapkan bahwa **kegagalan kunci atau `KeyProvider` tidak otomatis mematikan seluruh backend**. Yang dipisahkan adalah **kesiapan layanan**, bukan kepemilikan keputusan domain: absensi manual tetap ditulis oleh Go sesuai D-027 dan `docs/API_CONTRACT.md` §5.8. Rujukan keputusan: `docs/DECISIONS.md` D-030 butir 10.
+
+**1. Dua status kesiapan yang terpisah.** Backend melaporkan kesiapan **layanan absensi manual** dan kesiapan **layanan biometrik** secara terpisah, masing-masing dengan alasannya sendiri. Kegagalan pada layanan biometrik **tidak boleh** menurunkan status layanan absensi manual, dan tidak boleh membuat seluruh backend berhenti melayani.
+
+**2. Yang tetap berjalan ketika kunci hilang atau `KeyProvider` gagal:**
+
+| Tetap berjalan | Keterangan |
+|---|---|
+| Absensi manual dan koreksi kehadiran manual | Jalur tetap, bukan darurat (§5d.5) |
+| Rekap dan ekspor kehadiran | Membaca data yang sudah tersimpan |
+| Kelola peserta, kelas, dan sesi | Tidak menyentuh template |
+| Autentikasi dan otorisasi operator | Dasar keamanan; harus hidup agar jalur manual dapat dipertanggungjawabkan |
+| Pencatatan `audit_events` | Justru wajib hidup saat insiden berlangsung |
+
+Perubahan izin administratif yang tidak menyentuh biometrik **tidak** ikut berhenti.
+
+**3. Yang berhenti dan menolak bekerja dengan pesan jelas:** enrollment biometrik, pembuatan template baru, pencocokan otomatis, dan **setiap penulisan** ke `face_templates`. Endpoint biometrik mengembalikan hasil "tidak dapat diverifikasi" (`docs/API_CONTRACT.md` §7), **bukan** kesalahan server umum yang menyiratkan backend rusak.
+
+**4. Tetap gagal secara aman.** Pemisahan kesiapan **bukan** pembenaran untuk melanjutkan operasi yang keamanan atau integritasnya tidak dapat dijamin. Backend **wajib** berhenti keras bila salah satu hal berikut tidak dapat dijamin:
+
+1. Integritas, keaslian, dan keterpulihan database serta migrasinya.
+2. Autentikasi dan otorisasi operator.
+3. Konsistensi kunci dengan AAD dan `key_version`, **termasuk** ketika tidak dapat dipastikan apakah kunci yang tersedia benar-benar kunci yang sesuai — keadaan itu adalah kondisi C yang belum pasti, dan perilakunya **berhenti dan melaporkan**, bukan menghapus.
+4. Keutuhan riwayat audit dan catatan kehadiran.
+5. Batas ukuran dan jenis input serta otorisasi pada endpoint absensi manual.
+
+Menonaktifkan komponen keamanan agar layanan "tetap hidup" adalah pelanggaran, bukan pemulihan.
+
+**5. Urutan pemulihan layanan.** Setelah gangguan, **absensi manual dipulihkan lebih dahulu**, baru layanan biometrik (§5d.3 langkah 8). Kegiatan kelas tidak boleh menunggu penyelesaian insiden kunci.
+
+### 5f. Retensi, pembersihan, dan keterbatasan jaminan penghapusan (klarifikasi wajib pemilik, FL-004S)
+
+Klarifikasi ini menetapkan bahwa kebijakan penghapusan **mengakui keterbatasan jaminan** pada SQLite WAL, salinan cadangan, dan media penyimpanan. Dokumen ini **tidak** boleh menyatakan data biometrik pasti lenyap dari disk. Rujukan keputusan: `docs/DECISIONS.md` D-030 butir 11.
+
+**1. Urutan pembersihan yang ditetapkan.** Penghapusan biometrik dijalankan berurutan, dan setiap langkah dicatat pada `audit_events`:
+
+1. Hapus baris pada `face_templates` (dan baris terkait yang menunjuk padanya).
+2. Jalankan titik periksa WAL dengan pemotongan (`PRAGMA wal_checkpoint(TRUNCATE)`) agar isi WAL dipindahkan ke berkas utama dan berkas `-wal` dikosongkan.
+3. Jalankan `VACUUM` agar halaman bebas dipadatkan dan ditimpa.
+4. Hapus seluruh salinan cadangan yang dikenal, termasuk berkas `-wal` dan `-shm` pada salinan itu.
+5. Bersihkan cache lapisan kamera dan antarmuka yang menyimpan gambar atau data turunannya.
+6. Catat berkas yang disentuh, waktu, operator, dan **lokasi yang belum terjangkau**.
+
+**2. Yang dapat diklaim setelah prosedur itu:** baris pada tabel sudah tidak ada; berkas database aktif tidak lagi memuat baris tersebut; WAL dan SHM sudah dipadatkan lalu ditimpa; salinan cadangan yang dikenal sudah dihapus.
+
+**3. Yang tidak dapat diklaim, dan tidak boleh ditulis:**
+
+| Klaim | Alasan tidak boleh |
+|---|---|
+| "Terhapus permanen dari disk" | SSD dan media flash memakai pemetaan ulang blok, TRIM, dan daur ulang blok di luar kendali aplikasi. Salinan lama dapat tetap berada pada blok yang tidak terjangkau berkas |
+| "Tidak dapat dipulihkan secara forensik" | Berbeda dari "tidak ada lagi di berkas yang kita kendalikan"; pernyataan forensik menuntut pengukuran, bukan asumsi |
+| "Cadangan sudah bersih" | Hanya sah bila setiap cadangan dan setiap platform sinkronisasi benar-benar sudah diperiksa dan dihapus |
+| "Penghapusan terverifikasi" | Hanya sah bila verifikasi benar-benar dijalankan dan hasilnya dicatat |
+
+**4. Jawaban MVP bersifat prosedural, bukan kriptografis.** Karena jaminan fisik tidak tersedia tanpa enkripsi khusus media, yang dikerjakan MVP adalah: **kenali** setiap lokasi salinan, **batasi** lokasi penyimpanan, **hapus** seluruh salinan yang dikenal pada setiap tahap, dan **catat** lokasi yang belum terjangkau sebagai keterbatasan yang belum diselesaikan. Cara ini mengurangi sisa data; ia **tidak** menjamin penghapusan fisik, dan itu harus diucapkan apa adanya.
+
+**5. Lokasi yang harus diperiksa pada setiap pencabutan persetujuan:**
+
+1. Berkas `facelink.db`, `facelink.db-wal`, dan `facelink.db-shm`.
+2. Setiap salinan cadangan database beserta berkas `-wal` dan `-shm` pada salinan itu.
+3. Cache lapisan kamera dan antarmuka, termasuk berkas sementara hasil dekode gambar.
+4. Berkas log dan berkas kesalahan — yang **tidak** boleh pernah memuat isi JPEG, embedding, atau nilai biometrik.
+5. Media penyimpanan itu sendiri, yang **tidak** dapat dibersihkan aplikasi.
+
+**6. Keterbatasan ini bukan alasan menolak pencabutan persetujuan.** Peserta yang mencabut persetujuannya tetap dilayani seketika (§5d.4 butir 5); keterbatasan jaminan fisik dicatat sebagai keterbatasan sistem, bukan dibebankan kepada peserta. **Absensi manual tetap sah dan operasional** selama proses ini berjalan.
+
 ## 6. Pengendalian akses dan transportasi
 
 - Operator hanya mendapat hak sesuai kebutuhannya; token perangkat tidak boleh digunakan untuk endpoint admin.
@@ -164,6 +232,8 @@ Satu hal yang harus dinyatakan jujur kepada peserta dan pemilik project: **kehil
 - **Jika template tidak dapat dibaca, bedakan kondisinya lebih dahulu (§5d.1) dan jangan menghapus apa pun selama kunci hanya sementara tidak tersedia atau masih ada salinan yang belum diuji (§5d.2).** Kegagalan dekripsi bukan bukti kehilangan permanen.
 - **Insiden kunci memiliki prosedur tersendiri pada §5d.3**, termasuk larangan membangkitkan kunci baru untuk "memperbaiki" keadaan dan larangan memindahkan kunci lewat Git, surel, penyimpanan awan, atau lampiran pesan.
 - **Selama template tidak tersedia, absensi manual tetap berjalan (§5d.5)** dan kehadiran tidak boleh dihambat karena ketiadaan template.
+- **Kegagalan layanan biometrik bukan kegagalan seluruh backend (§5e).** Laporkan kesiapan kedua layanan secara terpisah; jangan menghentikan jalur absensi manual karena kunci bermasalah, dan jangan melumpuhkan pemeriksaan keamanan agar layanan terlihat hidup.
+- **Jangan menyatakan penghapusan selesai melebihi bukti yang ada (§5f).** Sebut berkas yang benar-benar dihapus dan sebut lokasi yang belum terjangkau; jangan memakai kata "permanen" atau "forensik" tanpa pengukuran.
 - Jangan menyembunyikan keterbatasan akurasi atau pengujian dengan kacamata dalam presentasi.
 
 ## 8. Syarat keamanan sebelum demo
@@ -177,7 +247,10 @@ Satu hal yang harus dinyatakan jujur kepada peserta dan pemilik project: **kehil
 - [ ] Berkas kunci tersedia, terlindungi DPAPI, dan **tidak** berada di dalam folder yang disinkronkan ke awan.
 - [ ] Backend menolak menyala dengan pesan jelas bila kunci tidak ada, dan **tidak** membuat kunci baru sendiri (D-030 butir 6).
 - [ ] Penyalinan berkas kunci ke mesin lain (simulasi penggantian perangkat) diuji dan hasilnya dicatat apa adanya, termasuk bila gagal.
-- [ ] **Ketiga kondisi §5d.1 dapat dibedakan pada mesin nyata:** kunci sementara tidak tersedia, kunci ada tetapi tidak dapat dipakai, dan kunci dipastikan tidak dapat dipulihkan. Hasilnya dicatat apa adanya.
+- [ ] **Ketiga kondisi §5d.1 dapat dibedakan pada mesin nyata:** kunci sementara tidak tersedia, kunci ada tetapi tidak dapat dipakai, dan kunci dipastikan tidak dapat dipulihkan.
+- [ ] **Kesiapan kedua layanan terbukti terpisah (§5e):** dengan kunci sengaja dirusak, absensi manual, kelola peserta, autentikasi, dan pencatatan audit tetap berjalan, sementara endpoint biometrik menolak dengan alasan yang jelas.
+- [ ] **Gagal-aman tetap bekerja (§5e butir 4):** pemeriksaan integritas database, autentikasi operator, dan otorisasi endpoint manual masih menolak ketika syaratnya tidak terpenuhi.
+- [ ] **Keterbatasan penghapusan diuji dan dicatat (§5f):** setelah urutan pembersihan, periksa isi berkas database, `-wal`, `-shm`, dan salinan cadangan, lalu catat apa yang masih dapat ditemukan **tanpa** mengklaim penghapusan fisik. Hasilnya dicatat apa adanya.
 - [ ] **Kegagalan dekripsi sementara tidak menghapus template** — diuji dengan mengunci/menyembunyikan berkas kunci lalu memastikan jumlah baris `face_templates` tidak berubah.
 - [ ] Batas DPAPI dijelaskan kepada pemilik project dengan kalimat §5b, bukan diringkas menjadi "kunci sudah terenkripsi".
 - [ ] Gagal koneksi, wajah asing, dan hasil ambigu tidak memproduksi check-in.
@@ -188,11 +261,11 @@ Satu hal yang harus dinyatakan jujur kepada peserta dan pemilik project: **kehil
 
 | Dokumen | Bagian yang mengikat |
 |---|---|
-| `docs/DECISIONS.md` | D-015 (template terenkripsi, tanpa foto mentah), D-022 (AES-256-GCM per baris), **D-030 (kebijakan kunci — USULAN)**, D-023 (kontrak kamera JPEG), D-025 (lisensi bobot model), D-027 (Go pemilik keputusan dan database), D-028 (Go sumber kebenaran, UI bukan penentu), D-029 (liveness terpisah) |
+| `docs/DECISIONS.md` | D-015 (template terenkripsi, tanpa foto mentah), D-022 (AES-256-GCM per baris), **D-030 (kebijakan kunci — DISETUJUI pada FL-004S dengan dua klarifikasi wajib)**, D-023 (kontrak kamera JPEG), D-025 (lisensi bobot model), D-027 (Go pemilik keputusan dan database), D-028 (Go sumber kebenaran, UI bukan penentu), D-029 (liveness terpisah) |
 | `docs/DATA_MODEL.md` | §4.12 `face_templates` (kolom, AAD, perilaku dekripsi gagal, penghapusan keras), §5.3–§5.4 (penghapusan dan pencabutan), §6, §7.1–§7.3 (WAL dan pencadangan), §11 butir 4–7 (larangan menyimpan kunci, cadangan, dan larangan menulis `face_templates` sebelum D-030) |
 | `docs/API_CONTRACT.md` | §6.7 (penanganan gambar), §6.8 (pemisahan tanggung jawab, kunci dimiliki Go), §7 (status kegagalan wajah) |
-| `docs/OPEN_QUESTIONS.md` | Q-16 (pengelolaan kunci — **blocker** penyimpanan biometrik, usulan ada di D-030), Q-07 (angka ambang kalibrasi), Q-18 (batas laju/ukuran gambar) |
+| `docs/OPEN_QUESTIONS.md` | Q-16 (**DIPUTUSKAN** untuk rancangan MVP melalui D-030; implementasi dan pengujian masih tertunda), Q-07 (angka ambang kalibrasi — tetap terbuka), Q-18 (batas laju/ukuran gambar — tetap terbuka) |
 
-Tidak ada angka ambang kecocokan yang ditetapkan di dokumen ini. Kebijakan pengelolaan kunci pada §5a–§5d berstatus **usulan** sampai pemilik project menyetujui D-030. **Periode pemulihan 30 hari pada §5d adalah batas waktu upaya operator, bukan jaminan pemulihan kunci.**
+Tidak ada angka ambang kecocokan yang ditetapkan di dokumen ini; Q-07 tetap pekerjaan kalibrasi pada fase AI Engine. Kebijakan pengelolaan kunci pada §5a–§5f **berlaku** sejak D-030 disetujui pemilik project pada FL-004S, **tetapi belum diimplementasikan dan belum diuji**. **Periode pemulihan 30 hari pada §5d adalah batas waktu upaya operator, bukan jaminan pemulihan kunci**, dan **penghapusan pada §5f tidak menjamin data hilang secara fisik dari media penyimpanan**.
 
 Lihat pula `TEST_PLAN.md`, `FACE_ENGINE.md`, dan `REFERENCES.md`.
