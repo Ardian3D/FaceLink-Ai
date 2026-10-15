@@ -43,9 +43,55 @@ Data wajah dan template biometrik bersifat sangat sensitif. Di Indonesia, **UU N
 
 - Tentukan umur simpan **sebelum** pengambilan data asli. Prinsip awal: simpan seminimal mungkin, hapus sesegera mungkin setelah presentasi dan evaluasi selesai.
 - Template biometrik disimpan **terenkripsi AES-256-GCM per baris** (D-022): nonce acak kriptografis per baris, tag autentikasi diverifikasi sebelum dekripsi, dan dekripsi yang gagal **tidak** diganti dengan tebakan. Satu-satunya lokasi penyimpanan biometrik adalah tabel `face_templates` (`docs/DATA_MODEL.md` §4.12).
-- Kunci enkripsi **tidak** boleh berada di dalam database, di dalam commit, atau di berkas konfigurasi yang ikut ter-commit. Bentuk penyimpanannya sudah final, tetapi **lokasi, rotasi, dan pemulihan kunci belum ditetapkan —** Q-16 **masih terbuka dan menghambat implementasi penyimpanan biometrik.** Jangan menuliskan atau mengasumsikan kebijakan kunci sebelum pemilik project menetapkannya.
+- Kunci enkripsi **tidak** boleh berada di dalam database, di dalam commit, atau di berkas konfigurasi yang ikut ter-commit. Bentuk penyimpanan final (AES-256-GCM per baris, D-022); kebijakan pengelolaannya diusulkan pada **D-030 (USULAN, menunggu persetujuan pemilik project)** dan dirinci pada §5a–§5d di bawah. Sampai D-030 disetujui, **Q-16 tetap terbuka dan implementasi penyimpanan biometrik tetap terhambat.**
 - Enkripsi template bukan enkripsi seluruh berkas database: rekap kehadiran dan nama peserta tetap terbaca bagi siapa pun yang memegang berkas SQLite. Jangan mengklaim sebaliknya.
 - Cadangan data, jika benar-benar dibutuhkan, harus tunduk pada retensi/penghapusan yang sama; jangan menyisakan template yang sudah dicabut di backup tanpa kebijakan.
+- **Pencabutan persetujuan tetap merupakan penghapusan, bukan penonaktifan.** Kunci tidak menyimpan salinan template, sehingga penghapusan pada `face_templates` (`docs/DATA_MODEL.md` §5.3) bersifat final dan tidak dapat dibatalkan dengan memulihkan kunci (D-030 butir 7).
+- **Cadangan database bukan cadangan biometrik.** Berkas `facelink.db`, `-wal`, dan `-shm` hanya berguna bersama berkas kunci terlindungi. Cadangan yang hanya berisi database harus dijelaskan apa adanya kepada pemilik project, bukan disajikan sebagai pemulihan penuh.
+
+### 5a. Kebijakan kunci yang diusulkan (D-030, belum disetujui)
+
+Bagian ini memuat **usulan** yang menjawab Q-16. Berlaku sebagai kebijakan hanya setelah status D-030 berubah menjadi DISETUJUI.
+
+1. **Pemilik kunci adalah backend Go.** Python tidak memegang kunci, tidak menerima kunci, dan tidak mendekripsi template. Ini memperluas D-027 dan `docs/API_CONTRACT.md` §6.8.
+2. **Lokasi penyimpanan:** berkas kunci terlindungi di `%LOCALAPPDATA%\FaceLink\keys\` pada akun Windows yang menjalankan backend, dengan ACL yang hanya mengizinkan akun itu. Jangan memakai folder yang disinkronkan ke penyimpanan awan.
+3. **Bentuk perlindungan:** materi kunci dibungkus **Windows DPAPI mode pengguna** (`CryptProtectData`, tanpa `CRYPTPROTECT_LOCAL_MACHINE`). Mode mesin **ditolak** karena akan membuka kunci bagi setiap pengguna mesin tersebut.
+4. **Satu pintu akses:** seluruh kode memakai antarmuka `KeyProvider` di Go untuk mengambil kunci aktif dan kunci berdasarkan versi. Tidak ada modul lain yang membaca berkas kunci langsung, dan tidak ada operasi yang mengembalikan kunci dalam bentuk yang dapat dicetak ke log.
+5. **Penamaan versi:** `key_version` adalah **teks**, dimulai dari `'1'`, naik bilangan bulat. Nilai ini menjadi bagian AAD (D-022), sehingga baris dengan versi `'1'` tidak dapat dibaca memakai kunci berlabel `'2'`.
+6. **Tidak ada kunci default, tidak ada kunci contoh, dan tidak ada kunci yang dibangkitkan diam-diam.** Bila kunci aktif tidak ada saat pertama kali dibutuhkan, penyalaan backend **gagal terang-terangan** dengan instruksi menyiapkan kunci, bukan dengan membuat kunci baru. Kunci yang dibuat otomatis pada mesin yang salah adalah cara kehilangan template secara diam-diam.
+7. **Tidak ada kunci pemulihan otomatis.** Yang dapat dipulihkan adalah keberadaan sistem, bukan data biometrik. **Periode pemulihan ditetapkan 30 hari** sejak tanggal pemulihan aktif terakhir yang tercatat pada `audit_events`. Di luar periode itu, template dianggap tidak dapat dipulihkan.
+
+### 5b. Batas DPAPI yang harus diakui
+
+**Jangan menganggap DPAPI menjamin keamanan terhadap semua jenis serangan.**
+
+| Batas | Arti bagi project ini |
+|---|---|
+| Aplikasi apa pun yang berjalan dengan kredensial pengguna yang sama dapat membuka blob | DPAPI melindungi dari **pengguna lain di mesin yang sama** dan dari **berkas yang dicuri lalu dibuka di mesin lain**. Ia **tidak** melindungi dari malware di sesi pengguna yang sama, dan tidak melindungi dari operator yang menyalahgunakan mesinnya |
+| Profil **roaming** dapat didekripsi dari komputer lain | Bila akun Windows memakai profil roaming di domain, kunci ikut berpindah. Asumsi "tidak ada profil roaming" harus **diverifikasi** pada mesin demo, bukan diandaikan |
+| Materi kunci berada di dalam profil pengguna | Bila profil tidak termuat atau sudah direset, dekripsi **gagal**; template lama tidak dapat dibaca |
+| Cakupan pengguna, bukan cakupan mesin | Disengaja. Cakupan mesin akan membuka kunci bagi semua pengguna mesin dan karena itu **dilarang** |
+
+Kesimpulan yang harus disampaikan tanpa diperhalus: **AES-256-GCM melindungi isi database bila berkasnya bocor; DPAPI melindungi kunci dari pengguna lain dan dari pencurian berkas. Tidak ada lapisan di rancangan ini yang melindungi template biometrik dari akun Windows yang sudah dikuasai penyerang.** MVP tidak memiliki jawaban untuk kondisi itu.
+
+### 5c. Dampak kunci terhadap SQLite WAL dan cadangan
+
+1. Berkas `facelink.db`, `facelink.db-wal`, dan `facelink.db-shm` tetap diperlakukan sebagai satu kesatuan (`docs/DATA_MODEL.md` §7.1).
+2. Berkas kunci adalah **berkas keempat** yang harus ikut dipindahkan. Menyalin tiga berkas database tanpa kunci menghasilkan database yang berisi kolom `ciphertext` yang tidak dapat dibaca.
+3. Titik periksa WAL (`PRAGMA wal_checkpoint(TRUNCATE)`) **tidak** bergantung pada kunci dan tidak mengubah isi `ciphertext`. Menjalankannya tidak dapat "membuka" template dan tidak dapat menutup kunci yang bocor.
+4. Karena `synchronous=NORMAL` (`docs/DATA_MODEL.md` §13 butir 2), kegagalan daya dapat menghilangkan transaksi terakhir. Bila kunci juga hilang pada kejadian yang sama, tidak ada cara memisahkan keduanya setelah fakta.
+5. Cadangan **tidak boleh** memuat template dari peserta yang persetujuannya sudah dicabut. Cadangan lama harus mengikuti retensi yang sama (`docs/SECURITY_PRIVACY.md` §5 butir 5), bukan menyimpannya sebagai arsip.
+
+### 5d. Kehilangan kunci dan enrollment ulang
+
+1. Bila kunci tidak dapat dipulihkan dan periode 30 hari terlampaui, template dianggap hilang permanen. Backend **tidak** mencoba menebak dan **tidak** membuat template tironan dari potret lama.
+2. Baris `face_templates` yang tidak dapat didekripsi dihapus dan peristiwanya dicatat pada `audit_events`, tanpa menyalin nilai embedding atau kunci ke dalam catatan audit.
+3. Peserta **diminta ulang** persetujuannya (`docs/PRD.md`, `docs/SECURITY_PRIVACY.md` §3) sebelum enrollment baru. Persetujuan lama tidak diwariskan ke template baru.
+4. Selama template tidak tersedia, peserta **tetap dapat hadir** melalui absensi manual (`docs/API_CONTRACT.md` §5.8). Ketiadaan template bukan alasan menghalangi kehadiran.
+5. Perpindahan mesin hanya lewat penyalinan berkas kunci terlindungi oleh operator dan harus dicatat pada `audit_events`. **Dilarang** memindahkan kunci lewat Git, surel, penyimpanan awan, atau lampiran pesan.
+6. Rotasi kunci **disiapkan tetapi belum diaktifkan** (D-030 butir 6). Bila nanti dijalankan, kunci lama dihapus hanya setelah tidak ada baris yang menunjuk versinya.
+
+Satu hal yang harus dinyatakan jujur kepada peserta dan pemilik project: **kehilangan kunci berarti kehilangan data biometrik, dan satu-satunya jalan kembali adalah mendaftar ulang dengan persetujuan baru.**
 - Foto JPEG pemindaian rutin tidak disimpan secara default. Cukup simpan hasil status dan metadata seperlunya.
 - Catatan audit menunjukkan tindakan tanpa merekam informasi wajah atau nilai embedding.
 
@@ -72,6 +118,10 @@ Data wajah dan template biometrik bersifat sangat sensitif. Di Indonesia, **UU N
 - [ ] Token operator dan perangkat memiliki izin berbeda.
 - [ ] Foto mentah tidak ditahan tanpa alasan/izin.
 - [ ] Penghapusan template teruji pada disk dan cache.
+- [ ] Berkas kunci tersedia, terlindungi DPAPI, dan **tidak** berada di dalam folder yang disinkronkan ke awan.
+- [ ] Backend menolak menyala dengan pesan jelas bila kunci tidak ada, dan **tidak** membuat kunci baru sendiri (D-030 butir 6).
+- [ ] Penyalinan berkas kunci ke mesin lain (simulasi penggantian perangkat) diuji dan hasilnya dicatat apa adanya, termasuk bila gagal.
+- [ ] Batas DPAPI dijelaskan kepada pemilik project dengan kalimat §5b, bukan diringkas menjadi "kunci sudah terenkripsi".
 - [ ] Gagal koneksi, wajah asing, dan hasil ambigu tidak memproduksi check-in.
 - [ ] Pembatasan keamanan kamera/jaringan lokal dan kekurangan anti-spoofing dijelaskan.
 - [ ] Lisensi model pihak ketiga ditinjau.
@@ -80,11 +130,11 @@ Data wajah dan template biometrik bersifat sangat sensitif. Di Indonesia, **UU N
 
 | Dokumen | Bagian yang mengikat |
 |---|---|
-| `docs/DECISIONS.md` | D-015 (template terenkripsi, tanpa foto mentah), D-022 (AES-256-GCM per baris), D-023 (kontrak kamera JPEG), D-025 (lisensi bobot model), D-027 (Go pemilik keputusan dan database), D-029 (liveness terpisah) |
-| `docs/DATA_MODEL.md` | §4.12 `face_templates` (kolom, AAD, perilaku dekripsi gagal, penghapusan keras), §5.3–§5.4, §6 |
-| `docs/API_CONTRACT.md` | §6.7 (penanganan gambar), §6.8 (pemisahan tanggung jawab), §7 (status kegagalan wajah) |
-| `docs/OPEN_QUESTIONS.md` | Q-16 (pengelolaan kunci — **blocker** implementasi penyimpanan biometrik), Q-07 (angka ambang kalibrasi), Q-18 (batas laju/ukuran gambar) |
+| `docs/DECISIONS.md` | D-015 (template terenkripsi, tanpa foto mentah), D-022 (AES-256-GCM per baris), **D-030 (kebijakan kunci — USULAN)**, D-023 (kontrak kamera JPEG), D-025 (lisensi bobot model), D-027 (Go pemilik keputusan dan database), D-029 (liveness terpisah) |
+| `docs/DATA_MODEL.md` | §4.12 `face_templates` (kolom, AAD, perilaku dekripsi gagal, penghapusan keras), §5.3–§5.4, §6, §7.1–§7.3 (WAL dan pencadangan), §11 butir 4 (larangan menyimpan kunci) |
+| `docs/API_CONTRACT.md` | §6.7 (penanganan gambar), §6.8 (pemisahan tanggung jawab, kunci dimiliki Go), §7 (status kegagalan wajah) |
+| `docs/OPEN_QUESTIONS.md` | Q-16 (pengelolaan kunci — **blocker** penyimpanan biometrik, usulan ada di D-030), Q-07 (angka ambang kalibrasi), Q-18 (batas laju/ukuran gambar) |
 
-Tidak ada angka ambang kecocokan maupun kebijakan pengelolaan kunci yang ditetapkan di dokumen ini; keduanya tetap tugas fase terkait.
+Tidak ada angka ambang kecocokan yang ditetapkan di dokumen ini. Kebijakan pengelolaan kunci pada §5a–§5d berstatus **usulan** sampai pemilik project menyetujui D-030.
 
 Lihat pula `TEST_PLAN.md`, `FACE_ENGINE.md`, dan `REFERENCES.md`.

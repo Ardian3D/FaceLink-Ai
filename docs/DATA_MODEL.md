@@ -290,7 +290,7 @@ Satu-satunya tempat data biometrik disimpan, dan hanya dalam bentuk terenkripsi 
 | `auth_tag` | BLOB | tidak | 16 byte tag autentikasi |
 | `aad` | TEXT | tidak | Nilai AAD yang dipakai, untuk pemeriksaan ulang |
 | `algorithm` | TEXT | tidak | `CHECK (algorithm = 'AES-256-GCM')` |
-| `key_version` | TEXT | tidak | Menunjuk kunci enkripsi aktif saat baris ditulis |
+| `key_version` | TEXT | tidak | Menunjuk kunci enkripsi aktif saat baris ditulis. Versi pertama bernilai teks `'1'`; nilainya masuk ke AAD |
 | `embedding_dim` | INTEGER | tidak | Dimensi vektor asli, untuk verifikasi setelah dekripsi |
 | `model_id` | TEXT | tidak | Misal `sface` |
 | `model_version` | TEXT | tidak | Versi bobot; template hanya dicocokkan dengan versi yang sama |
@@ -301,9 +301,10 @@ Satu-satunya tempat data biometrik disimpan, dan hanya dalam bentuk terenkripsi 
 - **Unik:** `uq_face_templates_person_model` pada `(person_id, model_id, model_version)` — mencegah template ganda untuk model yang sama.
 - **Indeks:** `idx_face_templates_person`, `idx_face_templates_key_version`.
 - **AAD yang diikat (ditulis apa adanya pada kolom `aad` agar dapat diverifikasi ulang):** gabungan berurutan tanpa pemisah ambigu, misalnya `person_id || '|' || model_id || '|' || model_version || '|' || key_version`. Mengikat AAD ke identitas dan versi model membuat ciphertext tidak dapat dipindahkan ke orang lain atau dipakai dengan model lain tanpa gagal verifikasi.
-- **Perilaku saat dekripsi gagal:** baris **tidak** dipakai dan **tidak** diganti dengan tebakan. Backend menandai kegagalan, menulis audit, dan mengembalikan hasil “tidak dapat diverifikasi” kepada operator. Tidak ada kunci pengganti otomatis dan tidak ada pembuatan template baru secara diam-diam.
+- **Perilaku saat dekripsi gagal:** baris **tidak** dipakai dan **tidak** diganti dengan tebakan. Backend menandai kegagalan, menulis audit, dan mengembalikan hasil “tidak dapat diverifikasi” kepada operator. Tidak ada kunci pengganti otomatis dan tidak ada pembuatan template baru secara diam-diam. Kunci yang hilang tidak menghasilkan template baru; peserta harus mendaftar ulang dengan persetujuan baru (`docs/SECURITY_PRIVACY.md` §5d).
 - **Penghapusan:** pencabutan persetujuan dan penghapusan peserta **menghapus baris ini** (bukan menandai). Template tidak dapat dipulihkan setelah dihapus karena kunci terpisah tidak menyimpan salinan.
 - **Retensi:** selama persetujuan aktif. Bila persetujuan dicabut, baris harus terhapus pada transaksi yang sama.
+- **Pengelolaan kunci (usulan D-030, belum disetujui):** `key_version` diisi kunci aktif saat penulisan; versi pertama bernilai teks `'1'`. Kunci disimpan di luar database dan di luar Git, dibungkus DPAPI cakupan pengguna, dan hanya diakses lewat antarmuka `KeyProvider` di Go. Indeks `idx_face_templates_key_version` ada agar penghapusan kunci lama setelah rotasi dapat diperiksa terhadap baris yang menunjuk versinya. Kebijakan penuh: `docs/SECURITY_PRIVACY.md` §5a–§5d.
 - **Peringatan lisensi model:** pemilihan `model_id`/`model_version` dibatasi pada bobot dengan ketentuan penggunaan yang sesuai (D-025). Jangan menambahkan model tanpa memeriksa lisensi.
 
 ### 4.13 `devices`
@@ -584,6 +585,9 @@ Strategi:
 2. Enkripsi tingkat aplikasi (D-022) melindungi template biometrik meskipun berkas database tersalin. **Tidak** ada klaim bahwa seluruh isi database terenkripsi: rekap kehadiran dan nama peserta tetap terbaca oleh siapa pun yang memiliki berkasnya. Ini harus dinyatakan jujur kepada pemilik proyek.
 3. Bila kelak seluruh berkas perlu terenkripsi, itu keputusan baru (misalnya SQLCipher), bukan asumsi implisit dari dokumen ini.
 4. Jangan menyimpan kunci enkripsi di dalam database, di dalam repositori, atau di dalam variabel lingkungan yang tercatat pada berkas konfigurasi yang ikut ter-commit.
+5. Kunci enkripsi berada di luar berkas database, sehingga **menyalin `facelink.db`, `-wal`, dan `-shm` saja tidak pernah cukup** untuk memulihkan template. Pencadangan (`docs/DATA_MODEL.md` §7.3) harus diperlakukan sebagai satu kesatuan: tiga berkas database **plus** berkas kunci terlindungi. Cadangan yang tidak memuat kunci harus dijelaskan sebagai cadangan kehadiran, bukan cadangan biometrik.
+6. `PRAGMA wal_checkpoint(TRUNCATE)` dan `VACUUM` **tidak** bergantung pada kunci dan tidak mengubah isi kolom `ciphertext`. Keduanya tidak dapat memulihkan template yang kuncinya sudah hilang, dan tidak boleh diusulkan sebagai cara pemulihan.
+7. Kebijakan kunci lengkap (lokasi, perlindungan, rotasi, pemulihan) ada di `docs/SECURITY_PRIVACY.md` §5a–§5d sebagai **usulan D-030**. Selama D-030 belum disetujui, tabel ini **tidak boleh** ditulis oleh kode apa pun.
 
 ## 12. Pengujian basis data yang harus ada saat implementasi
 

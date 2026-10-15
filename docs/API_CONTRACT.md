@@ -830,7 +830,7 @@ Aturan percobaan ulang:
 | Pemeriksaan konsen, keanggotaan kelas, status sesi, perangkat | **Go** |
 | Penulisan seluruh tabel database | **Go** |
 | Idempotensi dan audit | **Go** |
-| Penyimpanan template terenkripsi | **Go** (kunci di luar database dan di luar Git; bentuk penyimpanan AES-256-GCM final, pengelolaan kunci masih Q-16) |
+| Penyimpanan template terenkripsi | **Go** (kunci di luar database dan di luar Git; bentuk penyimpanan AES-256-GCM final, pengelolaan kunci diusulkan pada **D-030 (USULAN)** dan dirinci di `docs/SECURITY_PRIVACY.md` §5a–§5d) |
 
 ## 7. Status kegagalan pengenalan wajah dan pemisahannya dari error HTTP
 
@@ -904,11 +904,12 @@ Daftar berikut harus terwujud sebagai pengujian saat implementasi. **Belum ada p
 
 ## 10. Hal yang belum disetujui atau menunggu keputusan
 
-1. **Angka batas** ukuran JPEG, resolusi maksimum, batas laju, dan `retry_after_hint_ms` masih kandidat dan harus **diukur** (Q-18), bukan ditetapkan dari perkiraan.
-2. **Ambang kecocokan dan margin** belum ada (Q-07). Kontrak ini hanya menetapkan bahwa ambangnya milik Go dan harus terkalibrasi.
-3. **Masa berlaku token** operator dan perangkat, serta kebijakan rotasi, masih perlu keputusan.
-4. **Akun peserta** (D-013 masih USULAN) akan menambah modul autentikasi kedua bila disetujui.
-5. **Liveness** tidak dijanjikan ada pada MVP (D-029). Bila mekanisme dipilih, ia menambah endpoint atau kolom baru.
-6. **Halaman pengelolaan perangkat di aplikasi** belum masuk PRD; endpointnya sudah disiapkan agar tidak menghambat.
-7. **Kebijakan retensi catatan kehadiran** dan hubungannya dengan penghapusan peserta belum diputuskan (`docs/OPEN_QUESTIONS.md`).
-8. **WebSocket** belum diaktifkan (D-021); bila kebutuhan muncul, ia akan menjadi modul baru, bukan perubahan pada endpoint rekap.
+1. **Pengelolaan kunci biometrik (Q-16).** Usulan lengkap ada sebagai **D-030 (USULAN)** di `docs/DECISIONS.md` dan `docs/SECURITY_PRIVACY.md` §5a–§5d. **Status: belum disetujui**, sehingga tabel `face_templates` masih tidak boleh ditulis. Implementasi menunggu keputusan pemilik project — jangan menganggap usulan sebagai izin.
+2. **Angka batas** ukuran JPEG, resolusi maksimum, batas laju, dan `retry_after_hint_ms` masih kandidat dan harus **diukur** (Q-18), bukan ditetapkan dari perkiraan.
+3. **Ambang kecocokan dan margin** belum ada (Q-07). Kontrak ini hanya menetapkan bahwa ambangnya milik Go dan harus terkalibrasi.
+4. **Masa berlaku token** operator dan perangkat, serta kebijakan rotasi, masih perlu keputusan.
+5. **Akun peserta** (D-013 masih USULAN) akan menambah modul autentikasi kedua bila disetujui.
+6. **Liveness** tidak dijanjikan ada pada MVP (D-029). Bila mekanisme dipilih, ia menambah endpoint atau kolom baru.
+7. **Halaman pengelolaan perangkat di aplikasi** belum masuk PRD; endpointnya sudah disiapkan agar tidak menghambat.
+8. **Kebijakan retensi catatan kehadiran** dan hubungannya dengan penghapusan peserta belum diputuskan (`docs/OPEN_QUESTIONS.md`).
+9. **WebSocket** belum diaktifkan (D-021); bila kebutuhan muncul, ia akan menjadi modul baru, bukan perubahan pada endpoint rekap.

@@ -19,11 +19,19 @@ Belum semua rancangan merupakan keputusan final. Pertanyaan berikut dijawab saat
 | Q-13 | Kode peserta demo memakai NIM asli atau kode fiktif? | Kode sintetis untuk demo/publikasi | Fase 1 |
 | Q-14 | Pembaruan realtime dengan polling atau WebSocket? | **DIPUTUSKAN pada FL-003: polling interval dengan `ETag` lebih dahulu (D-021 DISETUJUI)**; WebSocket hanya setelah kebutuhan pembaruan seketika terbukti | Fase 4 |
 | Q-15 | Branding aplikasi dan nama paket Android? | FaceLink AI, dipastikan ketika app disiapkan | Fase 3 |
-| Q-16 | Bagaimana kunci enkripsi template biometrik dikelola (lokasi, rotasi, pemulihan)? | **Baru dari FL-002.** Bentuk penyimpanan sudah final (AES-256-GCM per baris, AAD mengikat `person_id`+`model_id`+`key_version`; D-022 DISETUJUI), tetapi **pengelolaan kunci belum ditetapkan**: kunci dari konfigurasi lokal di luar Git, rotasi, dan pemulihan masih terbuka | Fase 2 |
+| Q-16 | Bagaimana kunci enkripsi template biometrik dikelola (lokasi, rotasi, pemulihan)? | **Baru dari FL-002.** Bentuk penyimpanan sudah final (AES-256-GCM per baris, AAD mengikat `person_id`+`model_id`+`model_version`+`key_version`; D-022 DISETUJUI). **FL-004 mengajukan jawabannya sebagai D-030 (USULAN):** kunci di luar database dan di luar Git, dibungkus DPAPI cakupan pengguna di `%LOCALAPPDATA%\FaceLink\keys\`, akses lewat `KeyProvider` Go, `key_version` pertama `'1'`, rotasi disiapkan tetapi belum aktif, tanpa kunci pemulihan otomatis, dan periode pemulihan 30 hari. **Belum disetujui — Q-16 tetap TERBUKA dan tetap menghambat implementasi `face_templates`.** | Fase 2 (menunggu persetujuan pemilik) |
 | Q-17 | Apakah deteksi wajah dijalankan di ESP32-S3 untuk menghemat bandwidth, atau gambar dikirim utuh ke backend? | **Baru dari FL-002.** Usulan: kirim utuh dulu; deteksi di perangkat dievaluasi belakangan | Fase 5 |
 | Q-18 | Batas laju dan batas ukuran unggahan gambar dari perangkat kamera? | **Baru dari FL-002.** Belum ada angka; harus diukur, bukan dikira-kira | Fase 1 |
 
 Setelah diputuskan, buat/perbarui entri di `DECISIONS.md` dan sesuaikan `PROJECT_STATE.md`.
+
+## Catatan FL-004 (15 Oktober 2026)
+
+FL-004 **mengajukan jawaban** untuk Q-16 melalui **D-030 berstatus USULAN**: kunci AES-256-GCM disimpan di luar database dan di luar Git, dibungkus Windows DPAPI cakupan pengguna, diakses lewat satu antarmuka `KeyProvider` di Go, dengan rotasi yang disiapkan tetapi belum diaktifkan dan tanpa kunci pemulihan otomatis. Rinciannya ada di `docs/SECURITY_PRIVACY.md` §5a–§5d dan `docs/DECISIONS.md`.
+
+**FL-004 tidak menutup Q-16.** Usulan bukan keputusan; sesuai protokol perubahan keputusan dan `AGENTS.md` §1 butir 5, status ditentukan pemilik project. **Q-16 tetap terbuka dan `face_templates` tetap tidak boleh diimplementasikan** sampai D-030 disetujui. Q-07 dan Q-18 **juga tetap terbuka** dan tidak diisi angka apa pun oleh FL-004.
+
+Satu temuan FL-004 yang perlu dicatat terpisah: **DPAPI tidak menjamin keamanan terhadap semua jenis serangan** — ia terikat pada akun Windows, permudah dibaca oleh program lain yang berjalan dengan kredensial yang sama, dan pada profil roaming dapat didekripsi dari komputer lain. Batas ini dicatat di `docs/SECURITY_PRIVACY.md` §5b dan harus dijelaskan apa adanya, bukan diringkas menjadi "kunci sudah terenkripsi".
 
 ## Catatan FL-003 (15 Oktober 2026)
 
