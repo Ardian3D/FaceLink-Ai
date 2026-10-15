@@ -6,6 +6,7 @@ Daftar ini **usulan pembagian tugas**, bukan GitHub Issues yang telah dibuat. Ke
 |---|---|---|---|
 | FL-001 | Rapikan repo, dokumen, `.gitignore`, pemeriksaan rahasia | Review pemilik | Tidak ada rahasia/data biometrik di Git |
 | FL-002 | Putuskan stack Go/Python dan PostgreSQL/SQLite | FL-001 | Status D-010/D-011 diubah dengan persetujuan |
+| FL-003 | Tetapkan kontrak API, model data, dan stack final MVP | FL-002 | `API_CONTRACT.md` v1.0 dan `DATA_MODEL.md` (15 tabel) selesai; D-010/D-012/D-020–D-023/D-025–D-028 DISETUJUI, D-019 DITOLAK, D-011 DITUNDA; masih perlu review pemilik sebelum di-commit (**dokumen saja, bukan izin implementasi**) |
 | FL-010 | Tetapkan peran, izin, dan matriks otorisasi sebelum kode backend | FL-002 | Peran operator vs perangkat tertulis dan disetujui; menjadi acuan FL-013 |
 | FL-011 | Awal backend dan endpoint kesehatan | FL-002 | Server lokal berjalan; tes kesehatan lulus |
 | FL-012 | Skema dan migrasi operator, orang, kelas, consent | FL-011 | Migrasi diuji; batas unik berfungsi |

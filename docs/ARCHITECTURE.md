@@ -1,15 +1,15 @@
 # Arsitektur Teknis FaceLink AI
 
-**Status:** Usulan v0.2, belum ada kode/deployment yang telah diverifikasi.  
+**Status:** Spesifikasi arsitektur v0.3 untuk stack yang **sudah disetujui pada FL-003**; belum ada kode/deployment yang telah diverifikasi.  
 **Gaya rancangan:** modular, lokal terlebih dahulu, biaya perangkat lunak Rp0, kamera dapat diganti.
 
 ## 1. Prinsip desain
 
-- Mulai dari **satu backend modular** dan **satu pekerja AI lokal** bila Go dipilih; hindari microservices berlebihan untuk tugas kelas.
-- Pisahkan **keputusan absensi** dari **hasil pengenalan wajah**. AI mengusulkan identitas; backend memutuskan apakah check-in legal.
+- Backend utama adalah **Go + `chi`**, dan pengenalan wajah dijalankan oleh **AI Engine Python yang terpisah**. Backend tetap modular; jangan menambah microservice lain untuk tugas satu kelas.
+- Pisahkan **keputusan absensi** dari **hasil pengenalan wajah**. AI Engine mengusulkan identitas dan skor; backend Go yang memutuskan apakah check-in legal (D-027).
 - Gunakan antarmuka kamera seragam agar webcam pada fase software dapat diganti ESP32-S3 CAM tanpa mengubah domain absensi.
 - Jangan membuat ketergantungan pada cloud, penyedia AI berbayar, atau OmO saat aplikasi digunakan.
-- Semua data wajah tetap di lingkungan lokal; pertimbangkan perlindungan koneksi bila perangkat berada pada jaringan bersama.
+- Semua data wajah tetap di lingkungan lokal; AI Engine hanya boleh mendengarkan di `127.0.0.1` atau IPC, tidak pernah terbuka pada jaringan.
 
 ## 2. Gambaran deployment lokal
 
@@ -18,14 +18,16 @@
              |
      Wi-Fi lokal tepercaya
              |
-       [API Backend]
-      (Go, kandidat)
+       [API Backend - Go + chi]
+      (`/api/v1`, pemilik keputusan domain)
        |       |       \
-       |       |        [Database lokal]
+       |       |        [Database lokal: SQLite WAL]
        |       |
-       |  [Aturan sesi, izin, absensi dan laporan]
+       |  [Aturan sesi, izin, konsen, absensi, audit, laporan]
        |
- [Pekerja AI Python lokal]
+       |  loopback 127.0.0.1 : kontrak internal (API_CONTRACT.md seksi 6)
+       v
+ [AI Engine - Python + OpenCV]
        |
  [OpenCV: kualitas, deteksi, embedding, pencocokan]
        ^
@@ -33,20 +35,22 @@
  [Adapter kamera: webcam sekarang / ESP32 nanti]
 ```
 
-Diagram adalah **rancangan tanggung jawab**, bukan pernyataan bahwa service sudah berjalan. Untuk keamanan jaringan, permintaan kamera sebaiknya masuk melalui endpoint backend berautentikasi, dan **backend-lah** yang memanggil pekerja AI secara internal.
+Diagram adalah **rancangan tanggung jawab**, bukan pernyataan bahwa service sudah berjalan. Untuk keamanan jaringan, permintaan kamera harus masuk melalui endpoint backend berautentikasi, dan **backend-lah** yang memanggil AI Engine secara internal. Pembagian tanggung jawab lengkap ada pada `docs/API_CONTRACT.md` seksi 6.8.
+
+> **Catatan historis:** sebelum FL-003, dokumen ini pernah mengusulkan **satu backend Python + FastAPI** (D-019). Usulan itu **DITOLAK** oleh pemilik project. Alasan lengkapnya dipindahkan ke bagian catatan historis dan **tidak berlaku** untuk implementasi.
 
 ## 3. Pembagian tanggung jawab
 
 | Komponen | Tanggung jawab | Bukan tanggung jawabnya |
 |---|---|---|
 | Aplikasi React Native | Login, kelola sesi, tampilan roster, status, laporan, consent UI | Menentukan identitas dari gambar secara independen |
-| API backend | Autentikasi, otorisasi, sesi, persetujuan, check-in idempoten, audit, laporan | Melatih model atau menyimpan foto mentah permanen |
-| Mesin AI Python | Cek kualitas, deteksi satu wajah, ekstrak embedding, cocokkan kandidat, alasan gagal | Mengubah catatan kehadiran langsung |
+| API backend (**Go + `chi`**) | Autentikasi, otorisasi, sesi, persetujuan, check-in idempoten, keputusan hadir, audit, laporan, seluruh penulisan database | Melatih model, menyimpan foto mentah permanen, atau mengimplementasikan visi komputer |
+| **AI Engine Python** (proses terpisah, loopback/IPC) | Cek kualitas, deteksi satu wajah, ekstrak embedding, cocokkan kandidat, kembalikan skor dan alasan gagal | Mengubah catatan kehadiran, menulis database, atau membuka port jaringan |
 | Database | Data pengguna, peserta, kelas, persetujuan, sesi, catatan dan metadata template terlindungi | Menjadi lokasi dump gambar/raw secret di Git |
 | Adapter kamera | Menyediakan frame, waktu tangkap, identitas perangkat dan status | Menentukan kebijakan absensi |
 | ESP32-S3 CAM (nanti) | Menangkap JPEG, autentikasi perangkat, LED/buzzer | Menjalankan seluruh model AI besar atau menyimpan database kelas |
 
-## 4. Modul backend yang diusulkan
+## 4. Modul backend Go (disetujui untuk dirancang)
 
 - `auth`: identitas operator, login, token/sesi, pemeriksaan hak akses.
 - `people`: profil peserta demo, kode unik, status peserta.
@@ -102,31 +106,36 @@ FaceLink-AI/                      # ← kondisi FL-001: hanya berkas di bawah in
 
 > **Catatan FL-001 (15 Oktober 2026):** pada saat fondasi dokumentasi dibuat, hanya `README.md`, `AGENTS.md`, `PROJECT_STATE.md`, `.gitignore`, `docs/`, dan `research/` yang benar-benar ada. Folder `apps/`, `services/`, `firmware/`, dan `tests/` sengaja **belum dibuat**; keberadaannya di atas hanya rencana. Jangan menafsirkan diagram ini sebagai bukti implementasi. Nama dan struktur akhir menunggu review arsitektur.
 
-## 9. Pilihan yang belum final
+## 9. Status keputusan setelah FL-003
 
-Status per **FL-002 (15 Oktober 2026)**. Analisis lengkap pada §11–§13.
+Status per **FL-003 (15 Oktober 2026)**. Tabel ini merangkum keputusan yang **sudah berlaku**; teks keputusan yang mengikat tetap hanya ada di `docs/DECISIONS.md`. Analisis FL-002 yang ditolak dipindahkan ke §11 dan §12 sebagai catatan historis.
 
-| Pertanyaan | Status setelah FL-002 |
+| Pertanyaan | Status setelah FL-003 |
 |---|---|
-| Go + Python vs Python saja | **Ada rekomendasi** (D-019): satu backend Python + FastAPI. Menunggu persetujuan pemilik. |
-| PostgreSQL vs SQLite | **Ada rekomendasi** (D-020): SQLite mode WAL lebih dahulu, jalur migrasi ke PostgreSQL disiapkan. Menunggu persetujuan. |
-| Polling lebih dahulu atau WebSocket langsung | **Ada rekomendasi** (D-021): polling interval dengan `ETag` lebih dahulu; WebSocket sebagai peningkatan opsional. Menunggu persetujuan. |
-| Format otorisasi internal dan penyimpanan template | **Ada rekomendasi** (D-022 untuk penyimpanan template terenkripsi; format autentikasi mengikuti `API_CONTRACT.md` §4). Menunggu persetujuan. |
-| Versi model AI, toleransi matching dan jumlah sampel | **Masih terbuka** — tetap Q-07; hanya dapat ditetapkan setelah pengukuran memakai model terpilih dan peserta uji. Jangan mengarang ambang. |
+| Go + Python vs Python saja | **DIPUTUSKAN** (D-010 DISETUJUI): **Go + `chi`** sebagai backend utama, **Python sebagai AI Engine terpisah**. D-019 DITOLAK. |
+| PostgreSQL vs SQLite | **DIPUTUSKAN** (D-020 DISETUJUI): SQLite mode WAL lebih dahulu; D-011 (PostgreSQL awal) DITUNDA dengan skema tetap portabel. |
+| Polling lebih dahulu atau WebSocket langsung | **DIPUTUSKAN** (D-021 DISETUJUI): polling interval dengan `ETag` lebih dahulu; WebSocket sebagai peningkatan setelah kebutuhan terbukti. |
+| Format otorisasi internal dan penyimpanan template | **Sebagian diputuskan**: penyimpanan template memakai AES-256-GCM per baris (D-022 DISETUJUI) dengan kunci di luar database dan di luar Git; format autentikasi internal mengikuti `API_CONTRACT.md` §6. **Pengelolaan kunci (lokasi, rotasi, pemulihan) tetap terbuka — Q-16.** |
+| Versi model AI, toleransi matching dan jumlah sampel | **Masih terbuka** — YuNet + SFace sudah final (D-012), tetapi angka ambang tetap Q-07; hanya dapat ditetapkan setelah pengukuran memakai peserta uji. Jangan mengarang ambang. |
 
-Lihat `DECISIONS.md` dan `OPEN_QUESTIONS.md`; jangan menganggap usulan sebagai keputusan yang sudah disahkan.
+Lihat `DECISIONS.md` dan `OPEN_QUESTIONS.md`. Konsekuensi yang berlaku:
+
+- Proses backend adalah Go; Python hanya berjalan sebagai AI Engine lokal di balik kontrak internal `docs/API_CONTRACT.md` §6, tanpa akses ke database.
+- Seluruh keputusan kehadiran, penulisan database, dan audit adalah tanggung jawab Go (D-026, D-027).
 
 ## 10. Jalur ekspansi masa depan
 
 Pertahankan konsep umum `person`, `group/class`, `session`, `device`, dan `attendance` sehingga nantinya kelas bisa dipetakan ke departemen/organisasi. **Tidak perlu** membangun multi-tenant, organisasi bertingkat, penggajian, atau manajemen cabang sekarang. Cloud baru dievaluasi setelah sistem lokal selesai dan diuji.
 
-## 11. Analisis keputusan FL-002
+## 11. Catatan historis FL-002
 
-Bagian ini memuat **perbandingan dan alasan** yang mendasari usulan D-019 sampai D-023. Semuanya masih **USULAN** dan belum mengikat. Angka atau klaim di bawah hanya boleh dianggap bukti bila disertai hasil pengukuran yang dapat diulang pada mesin pengembang.
+§11.1 di bawah adalah **catatan keputusan historis** untuk usulan yang **ditolak** (D-019), dipertahankan agar alasan penolakannya dapat ditelusuri; jangan memakainya untuk merancang kode. §11.2–§11.6 menjelaskan pilihan yang **benar-benar dipakai**, sehingga tetap menjadi acuan.
 
-### 11.1 Bahasa backend: Python saja vs Go + Python
+### 11.1 Catatan historis: bahasa backend (D-019 DITOLAK, arsitektur berlaku = Go + Python)
 
-| Aspek | Satu backend Python (FastAPI) — **diusulkan** | Go + Python (D-010 lama) |
+> Ringkasan: arsitektur yang berlaku adalah diagram §2 — backend **Go + `chi`** dengan **Python sebagai AI Engine terpisah**. Tabel di bawah hanya mencatat perbandingan yang mendasari penolakan D-019; angka di dalamnya belum diukur pada mesin pengembang dan tidak boleh dianggap bukti.
+
+| Aspek | Satu backend Python (FastAPI) — **ditolak (D-019)** | Go + Python — **dipakai (D-010)** |
 |---|---|---|
 | Jumlah proses yang harus dijalankan | 1 proses aplikasi | 2 proses + 1 kontrak internal |
 | Pustaka pengenalan wajah | Native satu bahasa; `opencv-python` dan model ONNX dipanggil langsung dari proses backend | Wajib kontrak HTTP/IPC Go↔Python, timeout, dan pemetaan galat |
@@ -135,9 +144,9 @@ Bagian ini memuat **perbandingan dan alasan** yang mendasari usulan D-019 sampai
 | Risiko terbesar | Throughput HTTP lebih rendah pada beban sangat besar | Kompleksitas integrasi dan titik gagal bertambah tanpa manfaat terukur pada beban MVP |
 | Biaya lisensi | Rp0 | Rp0 |
 
-**Rekomendasi:** mulai dengan **satu backend Python** dan pertahankan batas modul di dalamnya. Pembagian bahasa tetap mungkin dilakukan **setelah** ada pengukuran yang menunjukkan Python menjadi penghambat, dan karena itu rancangan modul harus tetap memisahkan `face_engine` dari lapisan HTTP agar pemindahan nanti tidak membongkar domain absensi.
+**Isi rekomendasi lama (arsip):** mulai dengan satu backend Python dan pertahankan batas modul di dalamnya. **Rekomendasi ini tidak dipakai.**
 
-**Alasan utama:** keuntungan performa Go tidak menjadi faktor penentu pada skala satu kelas, sedangkan biaya pemeliharaan dua bahasa nyata sejak hari pertama. Pekerjaan akademik juga lebih mudah dipertanggungjawabkan bila hanya ada satu jalur proses yang perlu diuji.
+**Alasan penolakan (keputusan pemilik project, FL-003):** batas kepercayaan harus tegas — keputusan kehadiran, penulisan database, dan audit berada di proses yang tidak memuat dependensi visi komputer, sementara AI Engine dapat dimatikan, diuji, dan diganti tanpa membongkar backend. Biaya memelihara dua bahasa diterima secara sadar, dan rantai pengujiannya sudah ditetapkan pada `docs/API_CONTRACT.md` §9. Keuntungan performa Go bukan faktor penentu pada skala satu kelas.
 
 ### 11.2 Database: SQLite vs PostgreSQL
 
@@ -174,8 +183,8 @@ Bagian ini memuat **perbandingan dan alasan** yang mendasari usulan D-019 sampai
 
 ### 11.5 Keamanan penyimpanan template biometrik
 
-- Template disimpan sebagai **ciphertext** dengan `nonce` per baris (AES-GCM melalui pustaka `cryptography`, lisensi Apache-2.0/BSD); kunci berasal dari konfigurasi lokal, **tidak** masuk repository.
-- Data tambahan yang ikut diautentikasi: `person_id`, `model_id`, `model_version`, sehingga ciphertext tidak dapat dipindahkan antaridentitas tanpa terdeteksi.
+- Template disimpan sebagai **ciphertext** dengan `nonce` per baris (AES-256-GCM; D-022). Karena backend MVP adalah **Go** (D-010), implementasi enkripsi berada di Go — pustaka Python `cryptography` yang disebut pada draf FL-002 **bukan** jalur yang dipakai. Kunci berasal dari konfigurasi lokal, **tidak** masuk database maupun repositori.
+- Data tambahan yang ikut diautentikasi: `person_id`, `model_id`, dan `key_version` sesuai `docs/DATA_MODEL.md` §4.12, sehingga ciphertext tidak dapat dipindahkan antaridentitas tanpa terdeteksi.
 - Enkripsi tingkat aplikasi dipilih daripada enkripsi seluruh berkas database agar kebijakan dapat diuji per baris dan agar penghapusan template saat persetujuan dicabut dapat diverifikasi langsung.
 - Hasil ini hanya berlaku bila pengelolaan kunci benar; **pengelolaan kunci masih menjadi pertanyaan terbuka** (Q-16).
 - Jangan pernah menulis gambar wajah, embedding, kunci, atau token ke log.
@@ -186,11 +195,13 @@ Bagian ini memuat **perbandingan dan alasan** yang mendasari usulan D-019 sampai
 - Rujukan penilaian yang benar adalah kerangka PAD (contoh ISO/IEC 30107-3) untuk **cara melaporkan** hasil, bukan untuk mengklaim sertifikasi.
 - Konsekuensi arsitektur: kecocokan ambigu atau keyakinan rendah selalu mengarah ke `manual_review`; absensi otomatis tidak pernah menjadi satu-satunya jalur, dan koreksi operator selalu tersedia.
 
-## 12. Diagram arsitektur MVP (usulan setelah FL-002)
+## 12. Catatan historis: diagram FL-002 untuk D-019 (**tidak berlaku**)
 
-Menggantikan diagram §2 **bila** D-019 disetujui. Bila D-010 dipertahankan, diagram §2 yang berlaku.
+> Diagram yang **berlaku** adalah §2 (Go + `chi` dan AI Engine Python). Blok di bawah adalah arsip diagram usulan satu-backend-Python yang **ditolak** pada FL-003; jangan memakainya untuk merancang kode, konfigurasi, atau pengujian.
 
 ```text
+        ARSIP — DIAGRAM D-019 YANG DITOLAK — JANGAN DIPAKAI UNTUK MERANCANG KODE
+
         [Aplikasi React Native operator]
                     |
           Wi-Fi lokal (HTTP + token)
@@ -230,7 +241,9 @@ Menggantikan diagram §2 **bila** D-019 disetujui. Bila D-010 dipertahankan, dia
                               ke endpoint perangkat terautentikasi
 ```
 
-**Catatan penting:** garis ke `adapter_esp32` **belum ada implementasinya**. Yang dirancang sekarang hanyalah kontraknya, agar ESP32 tidak perlu diubah dari sisi domain absensi saat benar-benar dipasang.
+> **Peringatan pembacaan:** blok di atas menggambarkan arsitektur yang **TIDAK BERLAKU** (D-019 DITOLAK). Diagram arsitektur yang berlaku ada di **§2**. Alasan penolakan dicatat di §11.1 dan `docs/DECISIONS.md` D-019.
+
+**Catatan penting:** garis ke `adapter_esp32` **belum ada implementasinya**. Yang dirancang sekarang hanyalah kontraknya, agar ESP32 tidak perlu diubah dari sisi domain absensi saat benar-benar dipasang. Perhatikan juga bahwa diagram arsip di atas menempatkan FastAPI sebagai backend publik dan `face_engine` di dalam proses yang sama — **keduanya tidak sesuai** dengan keputusan FL-003.
 
 ## 13. Rencana migrasi webcam laptop → kamera IoT
 
@@ -257,11 +270,13 @@ Prinsip: **domain absensi tidak boleh mengetahui jenis kamera**. Semua sumber ga
 
 | Kategori | Uraian |
 |---|---|
-| Risiko teknis | Model yang dipilih belum diukur pada peserta nyata; ambang matching belum ada angkanya dan **tidak boleh diarang**. |
+| Risiko teknis | Model yang dipilih belum diukur pada peserta nyata; ambang matching belum ada angkanya dan **tidak boleh diarang** (Q-07, kalibrasi fase AI Engine). |
 | Risiko teknis | Beban penulisan bersamaan pada SQLite belum diuji untuk skenario antrean kios. |
-| Risiko operasional | Pengelolaan kunci enkripsi template belum ditetapkan. |
+| Risiko operasional | Pengelolaan kunci enkripsi template belum ditetapkan (Q-16) dan **menghambat implementasi `face_templates`**. |
 | Risiko privasi | Spoofing tidak tertangani secara kuat; verifikasi manual wajib tetap tersedia. |
 | Risiko proyek | Repositori belum memiliki `LICENSE` (D-017), sehingga ketentuan penggunaan karya belum jelas. |
-| Biaya | Seluruh komponen yang diusulkan berlisensi permisif dan **Rp0**: Python, FastAPI, OpenCV, ONNX Runtime, SQLite, React Native/Expo, pustaka `cryptography`, model YuNet/SFace. |
+| Biaya | Komponen arsitektur yang berlaku berlisensi permisif dan **Rp0**: Go + `chi`, Python + OpenCV (YuNet/SFace), ONNX Runtime, SQLite, React Native/Expo. `cryptography` (Python) **tidak dipakai** — enkripsi template dilakukan di Go memakai pustaka standar `crypto/aes` + `crypto/cipher` (D-022, `docs/API_CONTRACT.md` §6.7). FastAPI sebagai server backend juga tidak dipakai (D-019 DITOLAK). |
 
-Pertanyaan yang harus dijawab pemilik sebelum implementasi: lihat daftar persetujuan pada laporan FL-002 dan `OPEN_QUESTIONS.md`.
+Kontrak yang mengikat dan berlaku satu arah dari dokumen ini: `docs/API_CONTRACT.md` (API + kontrak internal Go↔Python) dan `docs/DATA_MODEL.md` (skema 15 tabel, SQLite WAL, migrasi berversi). Bila dokumen ini berbeda dengan keduanya, **kontrak yang menang** dan dokumen ini harus diperbaiki.
+
+Pertanyaan yang harus dijawab pemilik sebelum implementasi: `docs/OPEN_QUESTIONS.md` — terutama **Q-16** (pengelolaan kunci, penghambat penyimpanan biometrik) dan **Q-07** (angka ambang kecocokan, kalibrasi fase AI Engine).
