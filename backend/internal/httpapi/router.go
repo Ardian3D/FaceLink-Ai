@@ -1,0 +1,312 @@
+package httpapi
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"time"
+
+	"github.com/Ardian3D/FaceLink-Ai/backend/internal/database"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+)
+
+// NewRouter memasang seluruh middleware dan rute MVP.
+//
+// Urutan middleware mengikuti docs/API_CONTRACT.md §1.4: RequestID lebih dahulu
+// agar setiap catatan log dan audit memiliki penautan, lalu Recoverer, lalu
+// batas waktu, lalu body limit, lalu logging akses.
+func NewRouter(s Server) http.Handler {
+	r := chi.NewRouter()
+
+	r.Use(middleware.RequestID)
+	r.Use(echoRequestID)
+	r.Use(recoverer(s))
+	r.Use(timeout(s))
+	r.Use(bodyLimit(s))
+	r.Use(accessLog(s))
+
+	r.Route("/api/v1", func(r chi.Router) {
+		r.Get("/healthz", s.handleHealthz)
+		r.Get("/readyz", s.handleReadyz)
+
+		r.NotFound(notFoundJSON)
+		r.MethodNotAllowed(methodNotAllowedJSON)
+	})
+
+	// Rute tidak dikenal tetap dijawab JSON, bukan halaman HTML bawaan Go.
+	r.NotFound(notFoundJSON)
+
+	return r
+}
+
+// echoRequestID memastikan setiap respons memuat penautan permintaan, baik
+// ketika klien sudah mengirim X-Request-Id maupun ketika Chi yang membuatnya
+// (docs/API_CONTRACT.md §1.4 butir 1).
+func echoRequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if id := middleware.GetReqID(r.Context()); id != "" {
+			w.Header().Set("X-Request-Id", id)
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// recoverer menangkap panic di handler. Kontrak API §1.4 butir 3 mewajibkan
+// panic tidak membocorkan jejak tumpukan kepada klien.
+func recoverer(s Server) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			defer func() {
+				if rec := recover(); rec != nil {
+					s.logger().Error("panic pada handler",
+						"request_id", middleware.GetReqID(r.Context()),
+						"method", r.Method,
+						"path", normalizePath(r.URL.Path),
+						"error", fmt.Sprint(rec),
+					)
+					writeJSON(w, http.StatusInternalServerError, errorPayload{
+						Code:      "INTERNAL_ERROR",
+						Message:   "Terjadi kesalahan internal.",
+						RequestID: middleware.GetReqID(r.Context()),
+					})
+				}
+			}()
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// timeout membatasi durasi satu permintaan. Bila batas tercapai, klien menerima
+// 503 PROCESSING_TIMEOUT alih-alih menunggu tanpa batas.
+func timeout(s Server) func(http.Handler) http.Handler {
+	d := s.Config.RequestTimeout
+	if d <= 0 {
+		d = DefaultRequestTimeout
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ctx, cancel := context.WithTimeout(r.Context(), d)
+			defer cancel()
+
+			done := make(chan struct{})
+			tw := &timeoutWriter{ResponseWriter: w, status: http.StatusOK}
+
+			go func() {
+				defer close(done)
+				next.ServeHTTP(tw, r.WithContext(ctx))
+			}()
+
+			select {
+			case <-done:
+			case <-ctx.Done():
+				// Batas waktu hanya menjawab bila handler belum mengirim respons
+				// apa pun; respons yang sudah dimulai tidak boleh ditimpa.
+				if ctx.Err() == context.DeadlineExceeded && !tw.committed() {
+					writeJSON(w, http.StatusServiceUnavailable, errorPayload{
+						Code:      "PROCESSING_TIMEOUT",
+						Message:   "Permintaan melebihi batas waktu proses.",
+						RequestID: middleware.GetReqID(r.Context()),
+					})
+				}
+			}
+		})
+	}
+}
+
+// bodyLimit menolak badan permintaan yang melebihi batas ukuran sebelum dibaca
+// seluruhnya (docs/API_CONTRACT.md §1.1 butir 10).
+func bodyLimit(s Server) func(http.Handler) http.Handler {
+	limit := s.Config.MaxBodyBytes
+	if limit <= 0 {
+		limit = DefaultMaxBodyBytes
+	}
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Body != nil {
+				r.Body = http.MaxBytesReader(w, r.Body, limit)
+			}
+			if r.ContentLength > limit {
+				// Ditolak sebelum handler melihat badan permintaan: koneksi ditutup
+				// agar sisa kiriman tidak menahan sumber daya
+				// (docs/API_CONTRACT.md §1.1 butir 10).
+				w.Header().Set("Connection", "close")
+				writeJSON(w, http.StatusRequestEntityTooLarge, errorPayload{
+					Code:      "PAYLOAD_TOO_LARGE",
+					Message:   "Ukuran permintaan melebihi batas yang diizinkan.",
+					RequestID: middleware.GetReqID(r.Context()),
+				})
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// accessLog mencatat satu baris ringkas per permintaan. Nilai yang dicatat
+// dibatasi pada metode, jalur, status, durasi, dan request id; parameter kueri
+// tidak dicatat agar data peserta tidak masuk log (AGENTS.md §3).
+func accessLog(s Server) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+			sw := &statusWriter{ResponseWriter: w}
+			next.ServeHTTP(sw, r)
+
+			if sw.code == 0 {
+				sw.code = http.StatusOK
+			}
+			s.logger().Info("permintaan http",
+				"request_id", middleware.GetReqID(r.Context()),
+				"method", r.Method,
+				"path", normalizePath(r.URL.Path),
+				"status", sw.code,
+				"duration_ms", time.Since(start).Milliseconds(),
+			)
+		})
+	}
+}
+
+// handleHealthz menjawab liveness. Kontrak API §5.12 menegaskan badan respons
+// tidak boleh memuat jalur berkas, versi pustaka internal, nama basis data, atau
+// status perangkat.
+func (s Server) handleHealthz(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, healthzPayload{
+		Status:  "ok",
+		Version: s.Config.Version,
+		Time:    time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+// handleReadyz menjawab kesiapan. Pembacaan harus ringan: PRAGMA
+// integrity_check penuh tidak dijalankan di sini (docs/API_CONTRACT.md §5.12).
+func (s Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+
+	payload := readyzPayload{
+		Database:   "unavailable",
+		AIEngine:   "unavailable",
+		Migrations: "unknown",
+		WAL:        walPayload{JournalMode: "unknown"},
+	}
+
+	code := http.StatusServiceUnavailable
+	var failure string
+
+	if s.DB != nil {
+		if err := s.DB.Ping(ctx); err != nil {
+			failure = "DATABASE_BUSY"
+		} else {
+			payload.Database = "ok"
+			mode, err := s.DB.JournalMode(ctx)
+			if err != nil {
+				failure = "DATABASE_BUSY"
+			} else {
+				payload.WAL.JournalMode = mode
+				if mode != database.JournalModeWAL {
+					failure = "DATABASE_BUSY"
+					payload.Database = "degraded"
+				}
+			}
+		}
+	} else {
+		failure = "DATABASE_BUSY"
+	}
+
+	if s.Migrations.Available > 0 || s.Migrations.CurrentVersion > 0 {
+		if s.Migrations.AppliedPending() {
+			payload.Migrations = "pending"
+			if failure == "" {
+				failure = "MIGRATIONS_PENDING"
+			}
+		} else {
+			payload.Migrations = "applied"
+		}
+	}
+
+	if s.Config.AIEngineURL == "" {
+		payload.AIEngine = "unavailable"
+	} else if err := probeAIEngine(ctx, s.Config.AIEngineURL); err != nil {
+		payload.AIEngine = "unavailable"
+		// Mesin AI yang belum siap tidak menggagalkan kesiapan backend:
+		// absensi manual harus tetap berjalan (docs/SECURITY_PRIVACY.md §5e).
+	} else {
+		payload.AIEngine = "ok"
+	}
+
+	if payload.Database == "ok" && !s.Migrations.AppliedPending() {
+		code = http.StatusOK
+	}
+
+	if code != http.StatusOK {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.WriteHeader(code)
+		writeJSONBody(w, readyzError{
+			Code:      failure,
+			Message:   readinessMessage(failure),
+			RequestID: middleware.GetReqID(r.Context()),
+			Details:   payload,
+		})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, readyzPayload{
+		Status:     "ready",
+		Database:   payload.Database,
+		AIEngine:   payload.AIEngine,
+		Migrations: payload.Migrations,
+		WAL:        payload.WAL,
+	})
+}
+
+func readinessMessage(code string) string {
+	switch code {
+	case "DATABASE_BUSY":
+		return "Basis data belum dapat melayani permintaan."
+	case "AI_ENGINE_UNAVAILABLE":
+		return "Mesin AI lokal belum tersedia; absensi manual tetap dapat dilakukan."
+	case "MIGRATIONS_PENDING":
+		return "Migrasi skema belum diterapkan."
+	default:
+		return "Layanan belum siap melayani permintaan."
+	}
+}
+
+func probeAIEngine(ctx context.Context, baseURL string) error {
+	url := baseURL
+	if url[len(url)-1] != '/' {
+		url += "/"
+	}
+	url += "healthz"
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	resp, err := (&http.Client{Timeout: 2 * time.Second}).Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("mesin AI menjawab status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+func notFoundJSON(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusNotFound, errorPayload{
+		Code:      "NOT_FOUND",
+		Message:   "Sumber daya tidak ditemukan.",
+		RequestID: middleware.GetReqID(r.Context()),
+	})
+}
+
+func methodNotAllowedJSON(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusMethodNotAllowed, errorPayload{
+		Code:      "METHOD_NOT_ALLOWED",
+		Message:   "Metode HTTP tidak diizinkan untuk jalur ini.",
+		RequestID: middleware.GetReqID(r.Context()),
+	})
+}

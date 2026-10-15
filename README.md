@@ -50,7 +50,7 @@ Proyek ini adalah **prototipe akademik**, bukan alat pengawasan massal atau sist
 | 12 | [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md) dan [`docs/REFERENCES.md`](docs/REFERENCES.md) | Keputusan terbuka dan bacaan teknis |
 | — | [`research/README.md`](research/README.md) | Tempat terpisah untuk jurnal/riset akademik tim |
 
-## Kandidat teknologi (stack final MVP setelah FL-003; belum ada kode)
+## Kandidat teknologi (stack final MVP setelah FL-003)
 
 - **Aplikasi:** React Native + Expo + TypeScript, Android lebih dahulu.
 - **Backend:** **Go + `chi`** sebagai backend utama dan pemilik keputusan domain (D-010 DISETUJUI). Python tetap dipakai, tetapi hanya sebagai **mesin pengenalan wajah terpisah**, bukan backend publik; satu backend Python + FastAPI ditolak (D-019).
@@ -59,6 +59,20 @@ Proyek ini adalah **prototipe akademik**, bukan alat pengawasan massal atau sist
 - **Perangkat kamera:** webcam selama development; ESP32-S3 CAM setelah software bekerja, sebagai klien pengunggah JPEG (D-023), bukan host model AI.
 
 Kontrak dan skema rinci ada di [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) dan [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md). **Persetujuan stack ini adalah persetujuan arsitektur, bukan izin implementasi.**
+
+## Kode yang sudah ada (FL-005)
+
+Satu bagian sudah benar-benar ditulis dan diuji: **fondasi backend Go** di folder [`backend/`](backend/README.md). Isinya kerangka layanan, basis data SQLite mode WAL, migrasi SQL berversi, log JSON, dan dua titik kesehatan `GET /api/v1/healthz` serta `GET /api/v1/readyz`. Belum ada autentikasi, endpoint absensi, maupun kode biometrik.
+
+```powershell
+cd backend
+go run ./cmd/server -migrate   # terapkan migrasi
+go run ./cmd/server            # jalankan, mendengarkan di 127.0.0.1:8080
+```
+
+Seluruh variabel lingkungan didokumentasikan pada [`.env.example`](.env.example). Petunjuk lengkap, termasuk cara menjalankan pengujian, ada di [`backend/README.md`](backend/README.md).
+
+> Aplikasi React Native, mesin AI Python, dan firmware ESP32 **belum dimulai**. Jangan membaca keberadaan folder `backend/` sebagai tanda fitur absensi sudah bekerja.
 
 ## Catatan asal README
 
