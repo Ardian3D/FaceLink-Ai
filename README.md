@@ -2,7 +2,7 @@
 
 > Sistem absensi otomatis berbasis pengenalan wajah, kamera IoT, dan aplikasi React Native. Dibangun secara lokal terlebih dahulu, dengan perhatian khusus pada privasi dan kemudahan pengembangan.
 
-**Status:** Fondasi dokumentasi versi 0.2 — **belum ada implementasi aplikasi**.  
+**Status:** Fondasi dokumentasi versi 0.3 — **belum ada implementasi aplikasi**.  
 **Lingkup:** Prototipe tugas kampus berskala kecil: satu kelas, satu terminal kamera, dan sekitar 5–10 peserta sukarela yang memberikan persetujuan.  
 **Biaya:** Seluruh perangkat lunak dan pemrosesan AI lokal harus dapat berjalan dengan biaya lisensi/layanan **Rp0**. Anggaran hardware maksimal **Rp1.000.000**.  
 **Cloud:** Google Cloud dan layanan cloud lain ditunda sampai sistem lokal selesai diuji serta mendapat persetujuan pengembang.  
@@ -50,13 +50,15 @@ Proyek ini adalah **prototipe akademik**, bukan alat pengawasan massal atau sist
 | 12 | [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md) dan [`docs/REFERENCES.md`](docs/REFERENCES.md) | Keputusan terbuka dan bacaan teknis |
 | — | [`research/README.md`](research/README.md) | Tempat terpisah untuk jurnal/riset akademik tim |
 
-## Kandidat teknologi (belum semuanya diputuskan)
+## Kandidat teknologi (stack final MVP setelah FL-003; belum ada kode)
 
 - **Aplikasi:** React Native + Expo + TypeScript, Android lebih dahulu.
-- **Backend:** Go + `chi` sebagai kandidat utama; alternatif Python bila kompleksitas perlu dipangkas.
-- **AI lokal:** Python + OpenCV, dengan kandidat YuNet dan SFace; model, lisensi berkas, dan ambang kecocokan perlu ditinjau.
-- **Database:** PostgreSQL lokal atau SQLite, diputuskan sebelum migrasi database pertama.
-- **Perangkat kamera:** webcam selama development; ESP32-S3 CAM setelah software bekerja.
+- **Backend:** **Go + `chi`** sebagai backend utama dan pemilik keputusan domain (D-010 DISETUJUI). Python tetap dipakai, tetapi hanya sebagai **mesin pengenalan wajah terpisah**, bukan backend publik; satu backend Python + FastAPI ditolak (D-019).
+- **AI lokal:** Python + OpenCV dengan **YuNet** (deteksi) dan **SFace** (pengenalan) sebagai model MVP (D-012); bobot berlisensi non-permisif seperti InsightFace/ArcFace tidak dipakai (D-025). **Ambang kecocokan belum ditetapkan** dan harus dikalibrasi pada peserta uji.
+- **Database:** **SQLite mode WAL** untuk MVP (D-020), dengan skema dan migrasi tetap portabel ke PostgreSQL; PostgreSQL awal ditunda (D-011). Migrasi dijalankan dari sisi Go (D-026).
+- **Perangkat kamera:** webcam selama development; ESP32-S3 CAM setelah software bekerja, sebagai klien pengunggah JPEG (D-023), bukan host model AI.
+
+Kontrak dan skema rinci ada di [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) dan [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md). **Persetujuan stack ini adalah persetujuan arsitektur, bukan izin implementasi.**
 
 ## Catatan asal README
 
