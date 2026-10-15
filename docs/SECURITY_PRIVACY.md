@@ -59,7 +59,7 @@ Bagian ini memuat **usulan** yang menjawab Q-16. Berlaku sebagai kebijakan hanya
 4. **Satu pintu akses:** seluruh kode memakai antarmuka `KeyProvider` di Go untuk mengambil kunci aktif dan kunci berdasarkan versi. Tidak ada modul lain yang membaca berkas kunci langsung, dan tidak ada operasi yang mengembalikan kunci dalam bentuk yang dapat dicetak ke log.
 5. **Penamaan versi:** `key_version` adalah **teks**, dimulai dari `'1'`, naik bilangan bulat. Nilai ini menjadi bagian AAD (D-022), sehingga baris dengan versi `'1'` tidak dapat dibaca memakai kunci berlabel `'2'`.
 6. **Tidak ada kunci default, tidak ada kunci contoh, dan tidak ada kunci yang dibangkitkan diam-diam.** Bila kunci aktif tidak ada saat pertama kali dibutuhkan, penyalaan backend **gagal terang-terangan** dengan instruksi menyiapkan kunci, bukan dengan membuat kunci baru. Kunci yang dibuat otomatis pada mesin yang salah adalah cara kehilangan template secara diam-diam.
-7. **Tidak ada kunci pemulihan otomatis.** Yang dapat dipulihkan adalah keberadaan sistem, bukan data biometrik. **Periode pemulihan ditetapkan 30 hari** sejak tanggal pemulihan aktif terakhir yang tercatat pada `audit_events`. Di luar periode itu, template dianggap tidak dapat dipulihkan.
+7. **Tidak ada kunci pemulihan otomatis.** Yang dapat dipulihkan adalah keberadaan sistem, bukan data biometrik. Ketentuan **periode pemulihan 30 hari** dijelaskan pada §5d butir 1 dan **bukan** jaminan pemulihan kunci.
 
 ### 5b. Batas DPAPI yang harus diakui
 
@@ -82,16 +82,69 @@ Kesimpulan yang harus disampaikan tanpa diperhalus: **AES-256-GCM melindungi isi
 4. Karena `synchronous=NORMAL` (`docs/DATA_MODEL.md` §13 butir 2), kegagalan daya dapat menghilangkan transaksi terakhir. Bila kunci juga hilang pada kejadian yang sama, tidak ada cara memisahkan keduanya setelah fakta.
 5. Cadangan **tidak boleh** memuat template dari peserta yang persetujuannya sudah dicabut. Cadangan lama harus mengikuti retensi yang sama (`docs/SECURITY_PRIVACY.md` §5 butir 5), bukan menyimpannya sebagai arsip.
 
-### 5d. Kehilangan kunci dan enrollment ulang
+### 5d. Kondisi kunci, kegagalan dekripsi, dan enrollment ulang
 
-1. Bila kunci tidak dapat dipulihkan dan periode 30 hari terlampaui, template dianggap hilang permanen. Backend **tidak** mencoba menebak dan **tidak** membuat template tironan dari potret lama.
-2. Baris `face_templates` yang tidak dapat didekripsi dihapus dan peristiwanya dicatat pada `audit_events`, tanpa menyalin nilai embedding atau kunci ke dalam catatan audit.
-3. Peserta **diminta ulang** persetujuannya (`docs/PRD.md`, `docs/SECURITY_PRIVACY.md` §3) sebelum enrollment baru. Persetujuan lama tidak diwariskan ke template baru.
-4. Selama template tidak tersedia, peserta **tetap dapat hadir** melalui absensi manual (`docs/API_CONTRACT.md` §5.8). Ketiadaan template bukan alasan menghalangi kehadiran.
-5. Perpindahan mesin hanya lewat penyalinan berkas kunci terlindungi oleh operator dan harus dicatat pada `audit_events`. **Dilarang** memindahkan kunci lewat Git, surel, penyimpanan awan, atau lampiran pesan.
-6. Rotasi kunci **disiapkan tetapi belum diaktifkan** (D-030 butir 6). Bila nanti dijalankan, kunci lama dihapus hanya setelah tidak ada baris yang menunjuk versinya.
+**Periode pemulihan 30 hari bukan jaminan pemulihan.** Angka itu adalah batas waktu **upaya** operator sebelum template dinyatakan hilang, bukan masa berlaku yang menjamin template bisa dibaca kembali pada hari ke-29. Selama 30 hari itu tidak ada jaminan teknis apa pun: bila kunci hilang atau rusak secara permanen, menunggu sampai hari ke-29 tidak mengembalikan apa pun. Yang tersedia hanyalah kesempatan operator memeriksa apakah salinan kunci masih ada.
 
-Satu hal yang harus dinyatakan jujur kepada peserta dan pemilik project: **kehilangan kunci berarti kehilangan data biometrik, dan satu-satunya jalan kembali adalah mendaftar ulang dengan persetujuan baru.**
+#### 5d.1 Tiga kondisi yang harus dibedakan
+
+Kegagalan membaca template **tidak** boleh diperlakukan sebagai satu peristiwa tunggal. Backend wajib memisahkan tiga kondisi berikut sebelum mengambil tindakan apa pun.
+
+| Kondisi | Ciri yang tampak | Tindakan yang diizinkan |
+|---|---|---|
+| **A. Kunci sementara tidak tersedia** | Berkas kunci tidak ditemukan **atau** tidak dapat dibuka **saat ini** — profil pengguna belum termuat, berkas sedang terkunci proses lain, media sedang tidak terpasang, `KeyProvider` gagal karena I/O | **Jangan** menghapus apa pun. Tolak operasi yang membutuhkan template, catat `audit_events`, dan coba lagi setelah penyebabnya hilang. Template tetap utuh |
+| **B. Kunci ada tetapi tidak dapat dipakai** | Berkas kunci ada dan terbaca, tetapi hasil dekripsi gagal — `auth_tag` tidak cocok, AAD tidak cocok, `key_version` tidak memiliki kunci padanannya, atau berkas kunci rusak/terpotong | Karantina: tandai baris sebagai **tidak dapat didekripsi**, jangan tampilkan, jangan hitung sebagai cocok. Periksa salinan kunci lain **sebelum** menyimpulkan apa pun |
+| **C. Kunci dipastikan tidak dapat dipulihkan** | Operator telah memeriksa seluruh salinan kunci yang sah, periode 30 hari terlampaui, dan tidak ada cara memulihkan | Baru pada tahap ini penghapusan diizinkan (§5d.2) |
+
+Kesalahan yang paling merugikan adalah memperlakukan kondisi A atau B sebagai kondisi C. Menghapus template karena berkas kunci sedang terkunci — atau karena satu berkas kunci rusak padahal salinan lain masih sah — **tidak dapat dibatalkan** dan menghancurkan data biometrik yang masih dapat dipulihkan. Bila backend tidak sanggup memastikan perbedaannya, tindakan yang benar adalah **berhenti dan melaporkan**, bukan menghapus.
+
+#### 5d.2 Template tidak boleh langsung dihapus karena kegagalan sementara
+
+1. **Kegagalan dekripsi satu kali bukan bukti kehilangan permanen.** Penghapusan **dilarang** selama kondisi masih A atau B.
+2. **Ada masa tunggu wajib** antara kegagalan pertama dan penghapusan: minimal **30 hari** sejak kegagalan pertama tercatat, dan selama masa itu penyebabnya harus diperiksa berulang dengan hasil tercatat.
+3. **Pemeriksaan salinan kunci adalah syarat wajib** sebelum penghapusan. Selama masih ada salinan kunci sah yang belum diuji, penghapusan **dilarang**.
+4. **Penghapusan tidak pernah otomatis.** Ia dijalankan operator setelah kondisi C ditetapkan, tercatat pada `audit_events`, dan tidak boleh dipicu oleh tugas terjadwal tanpa campur tangan manusia.
+5. **Penghapusan hanya menyentuh baris `face_templates`.** Nama peserta, rekap kehadiran, dan catatan audit tidak ikut dihapus; kehadiran yang sudah tercatat tetap sah dan tidak boleh ditarik kembali hanya karena template hilang (D-028).
+6. **Karantina bersifat sementara dan tidak permanen.** Baris pada kondisi B tetap boleh ada. Baris tersebut tidak boleh dihitung sebagai template aktif pada pengecekan kehadiran, sehingga kehadirannya otomatis melalui jalur manual.
+
+#### 5d.3 Prosedur penanganan insiden kunci
+
+Diurutkan, dan setiap langkah dicatat pada `audit_events` **tanpa** menyimpan materi kunci atau nilai embedding.
+
+1. **Kenali dan hentikan.** Hentikan sementara jalur otomatis yang memakai template; hentikan backend bila ada kemungkinan kunci terpapar (misalnya berkas kunci keluar dari `%LOCALAPPDATA%`). Jangan menyembunyikan masalahnya.
+2. **Tentukan tingkatnya.** Bedakan: kunci tidak ditemukan (A), kunci ada tetapi tidak dapat dipakai (B), kunci diduga bocor, atau perangkat/mesin hilang. Klasifikasi ini menentukan langkah berikutnya; tidak semua insiden menuntut tindakan yang sama.
+3. **Amankan sebelum menyelidiki.** Bila bocor diduga: hentikan pemrosesan, amankan kredensial, dan periksa jangkauan; jangan terlebih dahulu membuat kunci baru (menghapus bukti, tidak menyelesaikan apa pun).
+4. **Periksa salinan kunci yang sah.** Bandingkan `key_version` yang dibutuhkan baris dengan versi yang tersedia; uji tiap salinan secara terpisah.
+5. **Nyatakan hasilnya apa adanya.** Pesan ke operator memakai bahasa yang benar: "template sementara tidak tersedia", "template tidak dapat didekripsi", atau "template dinyatakan tidak dapat dipulihkan". Jangan memakai kata "hilang permanen" untuk kondisi A atau B.
+6. **Putuskan pemulihan, rotasi, atau penghapusan** sesuai kondisi, dengan ketentuan §5d.2 untuk penghapusan.
+7. **Tetapkan dan catat jangkauannya.** Sebutkan berapa template terdampak, sejak kapan, dan apakah data non-biometrik ikut terpengaruh.
+8. **Pulihkan layanan tanpa biometrik lebih dulu.** Absensi manual dipakai selama template belum tersedia (§5d.4), agar kegiatan kelas tidak terhenti menunggu penyelesaian insiden.
+9. **Tinjau setelah selesai.** Perbarui kebijakan bila ada asumsi yang ternyata salah. Bila insiden menunjukkan batas DPAPI yang belum tercatat pada §5b, tambahkan ke tabel itu.
+
+Yang **dilarang** selama insiden: membangkitkan kunci baru diam-diam untuk "memperbaiki" keadaan (§5a butir 6), memindahkan kunci lewat Git, surel, penyimpanan awan, atau lampiran pesan, dan menyebarkan materi kunci ke catatan insiden.
+
+#### 5d.4 Enrollment ulang dan pencatatan persetujuan
+
+1. **Persetujuan baru, bukan persetujuan lama yang diwariskan.** Peserta **diminta ulang** persetujuannya (`docs/PRD.md`, §3) sebelum enrollment baru. Keikutsertaan sebelumnya tidak dianggap sebagai izin untuk pendaftaran berikutnya.
+2. **Penjelasan sebelum meminta.** Peserta diberi tahu lebih dulu: apa yang hilang, mengapa, apakah data lamanya masih ada, dan apa yang akan disimpan bila ia setuju. Tanpa penjelasan itu, persetujuan tidak sah.
+3. **Penolakan tidak boleh merugikan.** Peserta yang menolak mendaftar ulang tetap dapat hadir melalui absensi manual. Penolakan tidak boleh memengaruhi penilaian, keanggotaan, atau aksesnya.
+4. **Yang tercatat adalah faktanya, bukan wajahnya.** `audit_events` mencatat waktu, operator, dan **status** persetujuan (diberikan/ditolak/dicabut). Dilarang mencatat potret, embedding, atau materi kunci sebagai bukti persetujuan.
+5. **Pencabutan tetap berlaku seketika.** Bila peserta mencabut persetujuannya di tengah proses pemulihan, penghapusan template berjalan lebih dulu dan **tidak** menunggu masa tunggu §5d.2 — pencabutan adalah permintaan peserta, bukan diagnosis kegagalan.
+6. **Template lama tidak dihidupkan kembali.** Setelah kondisi C, tidak ada upaya mencocokkan wajah peserta dengan potret lama atau data lain untuk "mengembalikan" template; enrollment baru selalu diambil ulang.
+
+#### 5d.5 Absensi manual sebagai jalur tetap
+
+1. **Absensi manual bukan keadaan darurat sementara, melainkan jalur yang selalu tersedia** (`docs/API_CONTRACT.md` §5.8, `docs/PRD.md`). Ia harus sudah berfungsi sebelum template apa pun ditulis.
+2. Selama template tidak tersedia untuk seorang peserta — kondisi A, B, maupun C — kehadirannya dicatat melalui jalur manual dan **berlaku sama sahnya** seperti kehadiran otomatis.
+3. **Ketiadaan template tidak boleh menjadi alasan menolak kehadiran**, menandai peserta bermasalah, atau menahan hak apa pun.
+4. Bila jalur manual tidak dapat dipakai pada suatu sesi, sesi itu **tidak boleh** dilanjutkan dengan klaim otomatis yang tidak berdasar (D-028); kehadiran yang tidak dapat dipastikan dibiarkan tidak tercatat, bukan diisi tebakan.
+
+#### 5d.6 Cadangan, pemindahan, dan rotasi
+
+1. Perpindahan mesin hanya lewat penyalinan berkas kunci terlindungi oleh operator dan harus dicatat pada `audit_events`. **Dilarang** memindahkan kunci lewat Git, surel, penyimpanan awan, atau lampiran pesan.
+2. Rotasi kunci **disiapkan tetapi belum diaktifkan** (D-030 butir 6). Bila nanti dijalankan, kunci lama dihapus hanya setelah tidak ada baris yang menunjuk versinya — dan hanya setelah penghapusan itu sendiri ditinjau, karena baris yang masih menunjuk versi lama tidak dapat dibaca setelah kuncinya hilang.
+
+Satu hal yang harus dinyatakan jujur kepada peserta dan pemilik project: **kehilangan kunci berarti kehilangan data biometrik, dan satu-satunya jalan kembali adalah mendaftar ulang dengan persetujuan baru.** Namun kehilangan kunci **bukan** alasan menghapus template lebih cepat daripada kepastian; selama kondisi masih A atau B, yang benar adalah menunggu, memeriksa, dan melaporkan.
 - Foto JPEG pemindaian rutin tidak disimpan secara default. Cukup simpan hasil status dan metadata seperlunya.
 - Catatan audit menunjukkan tindakan tanpa merekam informasi wajah atau nilai embedding.
 
@@ -108,19 +161,24 @@ Satu hal yang harus dinyatakan jujur kepada peserta dan pemilik project: **kehil
 - Jika AI ragu, hentikan check-in otomatis; operator membantu verifikasi manual.
 - Jika server atau jaringan mati, jangan membuat catatan kehadiran sementara yang seolah-olah sudah sah.
 - Jika data berpotensi bocor, hentikan pemrosesan, amankan kredensial, cari jangkauan insiden dan lakukan penanganan sesuai ketentuan yang berlaku.
+- **Jika template tidak dapat dibaca, bedakan kondisinya lebih dahulu (§5d.1) dan jangan menghapus apa pun selama kunci hanya sementara tidak tersedia atau masih ada salinan yang belum diuji (§5d.2).** Kegagalan dekripsi bukan bukti kehilangan permanen.
+- **Insiden kunci memiliki prosedur tersendiri pada §5d.3**, termasuk larangan membangkitkan kunci baru untuk "memperbaiki" keadaan dan larangan memindahkan kunci lewat Git, surel, penyimpanan awan, atau lampiran pesan.
+- **Selama template tidak tersedia, absensi manual tetap berjalan (§5d.5)** dan kehadiran tidak boleh dihambat karena ketiadaan template.
 - Jangan menyembunyikan keterbatasan akurasi atau pengujian dengan kacamata dalam presentasi.
 
 ## 8. Syarat keamanan sebelum demo
 
 - [ ] Dokumen persetujuan tersedia dan dipahami peserta.
-- [ ] Jalur absensi manual berfungsi.
+- [ ] Jalur absensi manual berfungsi, termasuk ketika tidak ada satu pun template yang tersedia (§5d.5).
 - [ ] Data pribadi/bio tidak masuk Git, log, atau LLM API.
 - [ ] Token operator dan perangkat memiliki izin berbeda.
 - [ ] Foto mentah tidak ditahan tanpa alasan/izin.
-- [ ] Penghapusan template teruji pada disk dan cache.
+- [ ] Penghapusan template teruji pada disk, **cache**, **berkas `-wal`/`-shm`, dan salinan cadangan** (§5c, `docs/DATA_MODEL.md` §5.3).
 - [ ] Berkas kunci tersedia, terlindungi DPAPI, dan **tidak** berada di dalam folder yang disinkronkan ke awan.
 - [ ] Backend menolak menyala dengan pesan jelas bila kunci tidak ada, dan **tidak** membuat kunci baru sendiri (D-030 butir 6).
 - [ ] Penyalinan berkas kunci ke mesin lain (simulasi penggantian perangkat) diuji dan hasilnya dicatat apa adanya, termasuk bila gagal.
+- [ ] **Ketiga kondisi §5d.1 dapat dibedakan pada mesin nyata:** kunci sementara tidak tersedia, kunci ada tetapi tidak dapat dipakai, dan kunci dipastikan tidak dapat dipulihkan. Hasilnya dicatat apa adanya.
+- [ ] **Kegagalan dekripsi sementara tidak menghapus template** — diuji dengan mengunci/menyembunyikan berkas kunci lalu memastikan jumlah baris `face_templates` tidak berubah.
 - [ ] Batas DPAPI dijelaskan kepada pemilik project dengan kalimat §5b, bukan diringkas menjadi "kunci sudah terenkripsi".
 - [ ] Gagal koneksi, wajah asing, dan hasil ambigu tidak memproduksi check-in.
 - [ ] Pembatasan keamanan kamera/jaringan lokal dan kekurangan anti-spoofing dijelaskan.
@@ -130,11 +188,11 @@ Satu hal yang harus dinyatakan jujur kepada peserta dan pemilik project: **kehil
 
 | Dokumen | Bagian yang mengikat |
 |---|---|
-| `docs/DECISIONS.md` | D-015 (template terenkripsi, tanpa foto mentah), D-022 (AES-256-GCM per baris), **D-030 (kebijakan kunci — USULAN)**, D-023 (kontrak kamera JPEG), D-025 (lisensi bobot model), D-027 (Go pemilik keputusan dan database), D-029 (liveness terpisah) |
-| `docs/DATA_MODEL.md` | §4.12 `face_templates` (kolom, AAD, perilaku dekripsi gagal, penghapusan keras), §5.3–§5.4, §6, §7.1–§7.3 (WAL dan pencadangan), §11 butir 4 (larangan menyimpan kunci) |
+| `docs/DECISIONS.md` | D-015 (template terenkripsi, tanpa foto mentah), D-022 (AES-256-GCM per baris), **D-030 (kebijakan kunci — USULAN)**, D-023 (kontrak kamera JPEG), D-025 (lisensi bobot model), D-027 (Go pemilik keputusan dan database), D-028 (Go sumber kebenaran, UI bukan penentu), D-029 (liveness terpisah) |
+| `docs/DATA_MODEL.md` | §4.12 `face_templates` (kolom, AAD, perilaku dekripsi gagal, penghapusan keras), §5.3–§5.4 (penghapusan dan pencabutan), §6, §7.1–§7.3 (WAL dan pencadangan), §11 butir 4–7 (larangan menyimpan kunci, cadangan, dan larangan menulis `face_templates` sebelum D-030) |
 | `docs/API_CONTRACT.md` | §6.7 (penanganan gambar), §6.8 (pemisahan tanggung jawab, kunci dimiliki Go), §7 (status kegagalan wajah) |
 | `docs/OPEN_QUESTIONS.md` | Q-16 (pengelolaan kunci — **blocker** penyimpanan biometrik, usulan ada di D-030), Q-07 (angka ambang kalibrasi), Q-18 (batas laju/ukuran gambar) |
 
-Tidak ada angka ambang kecocokan yang ditetapkan di dokumen ini. Kebijakan pengelolaan kunci pada §5a–§5d berstatus **usulan** sampai pemilik project menyetujui D-030.
+Tidak ada angka ambang kecocokan yang ditetapkan di dokumen ini. Kebijakan pengelolaan kunci pada §5a–§5d berstatus **usulan** sampai pemilik project menyetujui D-030. **Periode pemulihan 30 hari pada §5d adalah batas waktu upaya operator, bukan jaminan pemulihan kunci.**
 
 Lihat pula `TEST_PLAN.md`, `FACE_ENGINE.md`, dan `REFERENCES.md`.

@@ -19,7 +19,7 @@ Belum semua rancangan merupakan keputusan final. Pertanyaan berikut dijawab saat
 | Q-13 | Kode peserta demo memakai NIM asli atau kode fiktif? | Kode sintetis untuk demo/publikasi | Fase 1 |
 | Q-14 | Pembaruan realtime dengan polling atau WebSocket? | **DIPUTUSKAN pada FL-003: polling interval dengan `ETag` lebih dahulu (D-021 DISETUJUI)**; WebSocket hanya setelah kebutuhan pembaruan seketika terbukti | Fase 4 |
 | Q-15 | Branding aplikasi dan nama paket Android? | FaceLink AI, dipastikan ketika app disiapkan | Fase 3 |
-| Q-16 | Bagaimana kunci enkripsi template biometrik dikelola (lokasi, rotasi, pemulihan)? | **Baru dari FL-002.** Bentuk penyimpanan sudah final (AES-256-GCM per baris, AAD mengikat `person_id`+`model_id`+`model_version`+`key_version`; D-022 DISETUJUI). **FL-004 mengajukan jawabannya sebagai D-030 (USULAN):** kunci di luar database dan di luar Git, dibungkus DPAPI cakupan pengguna di `%LOCALAPPDATA%\FaceLink\keys\`, akses lewat `KeyProvider` Go, `key_version` pertama `'1'`, rotasi disiapkan tetapi belum aktif, tanpa kunci pemulihan otomatis, dan periode pemulihan 30 hari. **Belum disetujui — Q-16 tetap TERBUKA dan tetap menghambat implementasi `face_templates`.** | Fase 2 (menunggu persetujuan pemilik) |
+| Q-16 | Bagaimana kunci enkripsi template biometrik dikelola (lokasi, rotasi, pemulihan)? | **Baru dari FL-002.** Bentuk penyimpanan sudah final (AES-256-GCM per baris, AAD mengikat `person_id`+`model_id`+`model_version`+`key_version`; D-022 DISETUJUI). **FL-004 mengajukan jawabannya sebagai D-030 (USULAN):** kunci di luar database dan di luar Git, dibungkus DPAPI cakupan pengguna di `%LOCALAPPDATA%\FaceLink\keys\`, akses lewat `KeyProvider` Go, `key_version` pertama `'1'`, rotasi disiapkan tetapi belum aktif, tanpa kunci pemulihan otomatis, dan periode pemulihan 30 hari **yang bukan jaminan pemulihan**. **FL-004R mempertajam usulan itu:** kegagalan membaca template dipisahkan menjadi **tiga kondisi** (kunci sementara tidak tersedia / kunci ada tetapi tidak dapat dipakai / kunci dipastikan tidak dapat dipulihkan) dan **template tidak boleh dihapus karena kegagalan dekripsi sementara**. **Belum disetujui — Q-16 tetap TERBUKA dan tetap menghambat implementasi `face_templates`.** | Fase 2 (menunggu persetujuan pemilik) |
 | Q-17 | Apakah deteksi wajah dijalankan di ESP32-S3 untuk menghemat bandwidth, atau gambar dikirim utuh ke backend? | **Baru dari FL-002.** Usulan: kirim utuh dulu; deteksi di perangkat dievaluasi belakangan | Fase 5 |
 | Q-18 | Batas laju dan batas ukuran unggahan gambar dari perangkat kamera? | **Baru dari FL-002.** Belum ada angka; harus diukur, bukan dikira-kira | Fase 1 |
 
@@ -31,7 +31,18 @@ FL-004 **mengajukan jawaban** untuk Q-16 melalui **D-030 berstatus USULAN**: kun
 
 **FL-004 tidak menutup Q-16.** Usulan bukan keputusan; sesuai protokol perubahan keputusan dan `AGENTS.md` §1 butir 5, status ditentukan pemilik project. **Q-16 tetap terbuka dan `face_templates` tetap tidak boleh diimplementasikan** sampai D-030 disetujui. Q-07 dan Q-18 **juga tetap terbuka** dan tidak diisi angka apa pun oleh FL-004.
 
-Satu temuan FL-004 yang perlu dicatat terpisah: **DPAPI tidak menjamin keamanan terhadap semua jenis serangan** — ia terikat pada akun Windows, permudah dibaca oleh program lain yang berjalan dengan kredensial yang sama, dan pada profil roaming dapat didekripsi dari komputer lain. Batas ini dicatat di `docs/SECURITY_PRIVACY.md` §5b dan harus dijelaskan apa adanya, bukan diringkas menjadi "kunci sudah terenkripsi".
+Satu temuan FL-004 yang perlu dicatat terpisah: **DPAPI tidak menjamin keamanan terhadap semua jenis serangan** — ia terikat pada akun Windows, mudah dibaca oleh program lain yang berjalan dengan kredensial yang sama, dan pada profil roaming dapat didekripsi dari komputer lain. Batas ini dicatat di `docs/SECURITY_PRIVACY.md` §5b dan harus dijelaskan apa adanya, bukan diringkas menjadi "kunci sudah terenkripsi".
+
+## Catatan FL-004R (15 Oktober 2026)
+
+FL-004R menyempurnakan usulan yang sama pada branch `docs/fl-004-key-management`; **tidak ada status yang dinaikkan dan tidak ada kode yang ditulis.** Empat penyempurnaan yang mengubah isi kebijakan:
+
+1. **Periode pemulihan 30 hari dinyatakan tegas bukan jaminan pemulihan.** Angka itu adalah batas waktu **upaya** operator, bukan masa berlaku yang menjamin template dapat dibaca kembali. Rincian pada `docs/SECURITY_PRIVACY.md` §5d paragraf pembuka dan `docs/DECISIONS.md` D-030 butir 7.
+2. **Kegagalan membaca template dipisahkan menjadi tiga kondisi** (A: kunci sementara tidak tersedia, B: kunci ada tetapi tidak dapat dipakai, C: kunci dipastikan tidak dapat dipulihkan) pada §5d.1, dengan **larangan menghapus template selama kondisi masih A atau B** pada §5d.2. Sebelumnya semua kegagalan dekripsi diperlakukan sama dan baris langsung dihapus — itu akan menghancurkan template yang masih dapat dipulihkan.
+3. **Prosedur insiden kunci (§5d.3), enrollment ulang ber-consent (§5d.4), dan absensi manual sebagai jalur tetap (§5d.5)** ditetapkan sebagai prosedur, bukan hanya sebagai prinsip.
+4. **Aturan penghapusan diperjelas mencakup berkas `-wal` dan `-shm`, salinan cadangan, dan lapisan cache**, bukan hanya baris tabel (`docs/DECISIONS.md` D-030 konsekuensi butir 5).
+
+Dua temuan yang **tidak** berubah dan tetap menjadi blocker: D-030 tetap **USULAN** dan Q-16 tetap **TERBUKA**. Q-07 tetap pekerjaan kalibrasi pada fase AI Engine tanpa angka apa pun.
 
 ## Catatan FL-003 (15 Oktober 2026)
 
