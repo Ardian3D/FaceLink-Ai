@@ -1,0 +1,316 @@
+# =============================================================================
+# .gitignore — FaceLink AI
+# Tugas: FL-001 (Fondasi Repository dan Dokumentasi)
+# Tujuan: mencegah kode build, berkas lokal, RAHASIA, serta DATA BIOMETRIK/pribadi
+#         masuk ke riwayat Git. Lihat docs/SECURITY_PRIVACY.md dan
+#         docs/COLLABORATION.md bagian 5.
+#
+# PENTING: dokumentasi (`*.md`, `docs/`, `research/`) dan source code yang akan
+# dibuat pada fase berikutnya TIDAK boleh diabaikan oleh berkas ini.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. RAHASIA DAN KONFIGURASI LOKAL (paling kritis)
+# -----------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+*.env
+.envrc
+
+# Rahasia perangkat, kunci, dan token yang diprovisikan saat demo
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+secrets/
+secret/
+credentials/
+credentials.json
+service-account*.json
+*.token
+device-tokens.json
+operator-tokens.json
+
+# -----------------------------------------------------------------------------
+# 2. DATA BIOMETRIK DAN PRIBADI — TIDAK BOLEH MASUK REPOSITORY
+#    (docs/SECURITY_PRIVACY.md, docs/COLLABORATION.md bagian 5)
+# -----------------------------------------------------------------------------
+# Sampel enrollment dan penangkapan wajah
+data/enrollment/
+data/captures/
+data/frames/
+data/faces/
+data/biometric/
+data/participants/
+enrollment/
+captures/
+faces/
+samples/
+*.jpg
+*.jpeg
+*.png
+*.bmp
+*.webp
+*.tiff
+
+# Embedding / template biometrik
+*.npy
+*.npz
+*.pkl
+*.pickle
+*.emb
+embeddings/
+templates/
+*.face
+*.faceenc
+
+# Ekspor dan database pribadi
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.mdb
+*.dump
+*.sql.gz
+backups/
+*.backup
+
+# Dikecualikan: gambar dokumentasi/skema yang benar-benar berizin dan sintetis
+!docs/**/*.png
+!docs/**/*.svg
+!docs/**/*.jpg
+
+# -----------------------------------------------------------------------------
+# 3. MODEL AI LOKAL (besar, lisensi berkas harus ditinjau sebelum di-commit)
+#    docs/FACE_ENGINE.md & docs/REFERENCES.md mensyaratkan versi + checksum.
+# -----------------------------------------------------------------------------
+models/
+models-cache/
+weights/
+*.onnx
+*.tflite
+*.caffemodel
+*.weights
+*.pt
+*.pth
+*.h5
+*.pb
+*.bin
+*.param
+.sface/
+.yunet/
+checkpoints/
+
+# -----------------------------------------------------------------------------
+# 4. Go
+# -----------------------------------------------------------------------------
+*.exe
+*.exe~
+*.dll
+*.dylib
+*.test
+*.out
+/vendor/
+go.work
+go.work.sum
+coverage.out
+coverage.html
+*.prof
+__debug_bin*
+delv-*
+
+# -----------------------------------------------------------------------------
+# 5. Python (mesin AI lokal)
+# -----------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+.python-version
+.pytest_cache/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.ruff_cache/
+.ipynb_checkpoints/
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.hypothesis/
+site/
+
+# -----------------------------------------------------------------------------
+# 6. Node / React Native / Expo
+# -----------------------------------------------------------------------------
+node_modules/
+.npm/
+.yarn/
+.pnp
+.pnp.js
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+lerna-debug.log*
+
+# Expo
+.expo/
+.expo-shared/
+expo-env.d.ts
+*.orig.*
+*.p8
+*.mobileprovision
+*.mobileprovision.*
+android/app/*.keystore
+android/app/debug.keystore
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+android/.cxx/
+ios/Pods/
+ios/build/
+ios/*.xcworkspace/xcuserdata/
+ios/*.xcodeproj/xcuserdata/
+ios/.xcode.env.local
+metro-cache/
+.cache/
+
+# -----------------------------------------------------------------------------
+# 7. Firmware ESP32 (fase hardware, docs/DEVICE_HARDWARE.md)
+# -----------------------------------------------------------------------------
+firmware/**/build/
+firmware/**/.pio/
+firmware/**/.vscode/
+firmware/**/sdkconfig
+firmware/**/sdkconfig.old
+firmware/**/managed_components/
+firmware/**/dependencies.lock
+firmware/**/secrets.h
+firmware/**/wifi_config.h
+.pio/
+.pioenvs/
+.piolibdeps/
+sdkconfig
+sdkconfig.old
+secrets.h
+wifi_config.h
+
+# -----------------------------------------------------------------------------
+# 8. Log dan berkas sementara proses
+#    (log tidak boleh memuat JPEG, embedding, token, atau identitas)
+# -----------------------------------------------------------------------------
+*.log
+logs/
+log/
+*.tmp
+tmp/
+temp/
+.crash/
+crashlytics-build.properties
+*.pid
+*.seed
+*.pid.lock
+*.lock
+!package-lock.json
+!pnpm-lock.yaml
+!bun.lock
+!bun.lockb
+!go.sum
+!poetry.lock
+!requirements.lock
+
+# Rekaman audio/video uji (dapat memuat wajah/suara peserta)
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.wav
+*.mp3
+recordings/
+screenshots/local/
+artifacts/local/
+
+# -----------------------------------------------------------------------------
+# 9. Editor dan OS
+# -----------------------------------------------------------------------------
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.example.json
+.idea/
+*.swp
+*.swo
+*.swn
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+*.stackdump
+
+# -----------------------------------------------------------------------------
+# 10. Alat AI coding agent (bersifat lokal, bukan bagian produk)
+# -----------------------------------------------------------------------------
+.omo/
+.claude/
+.codex/
+.agent/
+.aider*
+.cursor/
+*.aider.chat.history.md
+
+# -----------------------------------------------------------------------------
+# 11. Berkas hasil build dan arsip umum
+# -----------------------------------------------------------------------------
+*.zip
+*.7z
+*.rar
+*.tar
+*.tar.gz
+*.tgz
+dist/
+out/
+*.apk
+*.aab
+*.ipa
+*.msi
+*.dmg
+*.AppImage
+*.snap
+*.deb
+*.rpm
+
+# -----------------------------------------------------------------------------
+# 12. CATATAN PEMELIHARAAN
+# -----------------------------------------------------------------------------
+# - Jangan tambahkan pola yang mengabaikan `docs/`, `research/`, `*.md`,
+#   `AGENTS.md`, `PROJECT_STATE.md`, `README.md`, atau source code.
+# - Uji ulang dengan `git status --ignored` setelah menambah pola baru.
+# - Rahasia yang sudah terlanjur di-commit harus dianggap bocor: rotasi
+#   kredensial, lalu bersihkan riwayat. Jangan mengandalkan penghapusan biasa.
