@@ -68,13 +68,38 @@ templates/
 *.faceenc
 
 # Ekspor dan database pribadi
+# Sidecar SQLite diperlakukan sebagai satu kesatuan dengan databasenya: `-wal` dan
+# `-shm` dapat memuat sisa baris yang sudah dihapus (docs/SECURITY_PRIVACY.md §5f).
+# Pola di bawah mencakup ketiga ekstensi database dan seluruh bentuk sidecar yang
+# relevan, bukan hanya `*.db-wal`.
 *.sqlite
 *.sqlite3
+*.sqlite*
 *.db
-*.db-journal
 *.db-wal
 *.db-shm
+*.db-journal
 *.db-wal2
+*.db-shm2
+*.db-backup
+*.db-lock
+*.db-jit
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+*.sqlite-wal2
+*.sqlite-shm2
+*.sqlite-backup
+*.sqlite-lock
+*.sqlite-jit
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite3-journal
+*.sqlite3-wal2
+*.sqlite3-shm2
+*.sqlite3-backup
+*.sqlite3-lock
+*.sqlite3-jit
 *.mdb
 *.dump
 *.sql.gz
@@ -319,5 +344,8 @@ out/
 #   `*.db-shm`) dan salinan cadangan dapat memuat sisa baris yang sudah dihapus.
 #   Pola WAL/SHM ada di bagian 2 agar berkas itu tidak ikut ter-commit
 #   (docs/SECURITY_PRIVACY.md §5c dan §5f).
+# - Sidecar SQLite dapat muncul untuk ketiga ekstensi database (`.db`, `.sqlite`,
+#   `.sqlite3`) dan dengan nama apa pun. Setiap pola sidecar baru harus diuji
+#   dengan `git check-ignore` untuk **ketiga** ekstensi itu, bukan hanya `.db`.
 # - Rahasia yang sudah terlanjur di-commit harus dianggap bocor: rotasi
 #   kredensial, lalu bersihkan riwayat. Jangan mengandalkan penghapusan biasa.

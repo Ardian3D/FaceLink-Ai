@@ -46,7 +46,7 @@ Pemilik project **menyetujui D-030** pada 15 Oktober 2026 dengan **dua klarifika
 
 **Yang masih terbuka:** **Q-07 tetap terbuka** (kalibrasi ambang YuNet+SFace; tidak ada angka yang ditetapkan) dan **Q-18 tetap terbuka** (batas laju dan ukuran unggahan gambar). Q-17 juga belum diputuskan.
 
-**Disetujui bukan berarti siap dipakai.** Belum ada kode yang ditulis dan belum ada satu pun pengujian T-21–T-35 yang dijalankan; klaim apa pun tentang berjalannya penyimpanan kunci **belum memiliki bukti**.
+**Disetujui bukan berarti siap dipakai.** Belum ada kode yang ditulis dan belum ada satu pun pengujian T-21–T-38 yang dijalankan; klaim apa pun tentang berjalannya penyimpanan kunci **belum memiliki bukti**.
 
 
 FL-004R menyempurnakan usulan yang sama pada branch `docs/fl-004-key-management`; **tidak ada status yang dinaikkan dan tidak ada kode yang ditulis.** Empat penyempurnaan yang mengubah isi kebijakan:
