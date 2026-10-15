@@ -4,8 +4,8 @@ Belum semua rancangan merupakan keputusan final. Pertanyaan berikut dijawab saat
 
 | ID | Pertanyaan | Saran awal (belum disahkan) | Dibutuhkan |
 |---|---|---|---|
-| Q-01 | Backend Go+Python atau Python saja? | Go + `chi` untuk API, Python untuk AI; tetap pertimbangkan kesederhanaan | Fase 1 |
-| Q-02 | PostgreSQL lokal atau SQLite? | PostgreSQL untuk konsistensi, SQLite jika setup Windows menjadi hambatan | Fase 1 |
+| Q-01 | Backend Go+Python atau Python saja? | **FL-002 merekomendasikan Python + FastAPI saja** (D-019); alternatif Go tetap tercatat sebagai D-010. Menunggu keputusan pemilik | Fase 1 |
+| Q-02 | PostgreSQL lokal atau SQLite? | **FL-002 merekomendasikan SQLite mode WAL lebih dahulu** (D-020) dengan jalur migrasi ke PostgreSQL; PostgreSQL tetap tercatat sebagai D-011 | Fase 1 |
 | Q-03 | Akun operator saja atau juga akun peserta? | Operator wajib; akun peserta prioritas tambahan | Fase 3 |
 | Q-04 | Siapa peserta uji dan berapa orang? | Sekitar 5–10 sukarelawan dewasa dengan persetujuan | Fase 2 |
 | Q-05 | Bagaimana formulir persetujuan dan tenggat penghapusan biometrik? | Template dihapus jika izin dicabut dan setelah demo selesai | Fase 2 |
@@ -17,7 +17,14 @@ Belum semua rancangan merupakan keputusan final. Pertanyaan berikut dijawab saat
 | Q-11 | Spesifikasi laptop Windows, webcam, HP Android untuk uji? | Sesuaikan perangkat yang sudah dimiliki | Fase 1 |
 | Q-12 | Apakah `deepseek-v4.1-flash` mendukung tool OmO tanpa biaya? | Uji dengan tugas nonrahasia; nonaktifkan fallback berbayar | Fase 0–1 |
 | Q-13 | Kode peserta demo memakai NIM asli atau kode fiktif? | Kode sintetis untuk demo/publikasi | Fase 1 |
-| Q-14 | Pembaruan realtime dengan polling atau WebSocket? | Polling lebih sederhana untuk awal; tingkatkan setelah stabil | Fase 4 |
+| Q-14 | Pembaruan realtime dengan polling atau WebSocket? | **FL-002 merekomendasikan polling interval dengan `ETag` lebih dahulu** (D-021); WebSocket hanya setelah kebutuhan terbukti | Fase 4 |
 | Q-15 | Branding aplikasi dan nama paket Android? | FaceLink AI, dipastikan ketika app disiapkan | Fase 3 |
+| Q-16 | Bagaimana kunci enkripsi template biometrik dikelola (lokasi, rotasi, pemulihan)? | **Baru dari FL-002.** Usulan: kunci dari konfigurasi lokal di luar Git; rotasi/pemulihan belum ditetapkan | Fase 2 |
+| Q-17 | Apakah deteksi wajah dijalankan di ESP32-S3 untuk menghemat bandwidth, atau gambar dikirim utuh ke backend? | **Baru dari FL-002.** Usulan: kirim utuh dulu; deteksi di perangkat dievaluasi belakangan | Fase 5 |
+| Q-18 | Batas laju dan batas ukuran unggahan gambar dari perangkat kamera? | **Baru dari FL-002.** Belum ada angka; harus diukur, bukan dikira-kira | Fase 1 |
 
 Setelah diputuskan, buat/perbarui entri di `DECISIONS.md` dan sesuaikan `PROJECT_STATE.md`.
+
+## Catatan FL-002 (15 Oktober 2026)
+
+FL-002 **tidak menutup** Q-01, Q-02, dan Q-14 — ketiganya kini memiliki rekomendasi yang tercatat, tetapi keputusan akhir tetap milik pemilik project. Q-07 (model dan ambang kecocokan) **tetap terbuka** karena angka ambang hanya boleh ditetapkan setelah pengukuran pada peserta uji, bukan disalin dari contoh mana pun. Tiga pertanyaan baru (Q-16 sampai Q-18) muncul dari analisis FL-002.
