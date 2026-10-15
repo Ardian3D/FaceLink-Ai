@@ -108,14 +108,14 @@ FaceLink-AI/                      # ← kondisi FL-001: hanya berkas di bawah in
 
 ## 9. Status keputusan setelah FL-003
 
-Status per **FL-003 (15 Oktober 2026)**, ditambah catatan **FL-004** pada baris pengelolaan kunci. Tabel ini merangkum keputusan yang **sudah berlaku**; teks keputusan yang mengikat tetap hanya ada di `docs/DECISIONS.md`. Analisis FL-002 yang ditolak dipindahkan ke §11 dan §12 sebagai catatan historis. Usulan FL-004 (D-030) **belum berlaku** dan karena itu tidak mengubah status baris mana pun.
+Status per **FL-003 (15 Oktober 2026)**, ditambah catatan **FL-004** dan **FL-004S** pada baris pengelolaan kunci. Tabel ini merangkum keputusan yang **sudah berlaku**; teks keputusan yang mengikat tetap hanya ada di `docs/DECISIONS.md`. Analisis FL-002 yang ditolak dipindahkan ke §11 dan §12 sebagai catatan historis. Usulan FL-004 (D-030) **sudah berlaku sejak disetujui pada FL-004S**, tetapi berlaku sebagai **rancangan** — belum ada kode dan belum ada pengujian, sehingga tidak ada baris di sini yang boleh dibaca sebagai bukti fitur berjalan.
 
 | Pertanyaan | Status setelah FL-003 |
 |---|---|
 | Go + Python vs Python saja | **DIPUTUSKAN** (D-010 DISETUJUI): **Go + `chi`** sebagai backend utama, **Python sebagai AI Engine terpisah**. D-019 DITOLAK. |
 | PostgreSQL vs SQLite | **DIPUTUSKAN** (D-020 DISETUJUI): SQLite mode WAL lebih dahulu; D-011 (PostgreSQL awal) DITUNDA dengan skema tetap portabel. |
 | Polling lebih dahulu atau WebSocket langsung | **DIPUTUSKAN** (D-021 DISETUJUI): polling interval dengan `ETag` lebih dahulu; WebSocket sebagai peningkatan setelah kebutuhan terbukti. |
-| Format otorisasi internal dan penyimpanan template | **Sebagian diputuskan**: penyimpanan template memakai AES-256-GCM per baris (D-022 DISETUJUI) dengan kunci di luar database dan di luar Git; format autentikasi internal mengikuti `API_CONTRACT.md` §6. **Pengelolaan kunci (lokasi, rotasi, pemulihan) tetap terbuka — Q-16**, dengan usulan FL-004 berstatus **D-030 USULAN** dan belum berlaku. |
+| Format otorisasi internal dan penyimpanan template | **Sebagian diputuskan**: penyimpanan template memakai AES-256-GCM per baris (D-022 DISETUJUI) dengan kunci di luar database dan di luar Git; format autentikasi internal mengikuti `API_CONTRACT.md` §6. **Pengelolaan kunci (lokasi, rotasi, pemulihan) sudah ditetapkan sebagai D-030 dan DISETUJUI pada FL-004S**; yang belum ada adalah implementasi dan pengujiannya. |
 | Versi model AI, toleransi matching dan jumlah sampel | **Masih terbuka** — YuNet + SFace sudah final (D-012), tetapi angka ambang tetap Q-07; hanya dapat ditetapkan setelah pengukuran memakai peserta uji. Jangan mengarang ambang. |
 
 Lihat `DECISIONS.md` dan `OPEN_QUESTIONS.md`. Konsekuensi yang berlaku:
@@ -186,7 +186,7 @@ Pertahankan konsep umum `person`, `group/class`, `session`, `device`, dan `atten
 - Template disimpan sebagai **ciphertext** dengan `nonce` per baris (AES-256-GCM; D-022). Karena backend MVP adalah **Go** (D-010), implementasi enkripsi berada di Go — pustaka Python `cryptography` yang disebut pada draf FL-002 **bukan** jalur yang dipakai. Kunci berasal dari konfigurasi lokal, **tidak** masuk database maupun repositori.
 - Data tambahan yang ikut diautentikasi: `person_id`, `model_id`, dan `key_version` sesuai `docs/DATA_MODEL.md` §4.12, sehingga ciphertext tidak dapat dipindahkan antaridentitas tanpa terdeteksi.
 - Enkripsi tingkat aplikasi dipilih daripada enkripsi seluruh berkas database agar kebijakan dapat diuji per baris dan agar penghapusan template saat persetujuan dicabut dapat diverifikasi langsung.
-- Hasil ini hanya berlaku bila pengelolaan kunci benar; **pengelolaan kunci masih menjadi pertanyaan terbuka** (Q-16). **FL-004 mengajukan jawabannya sebagai D-030 (USULAN):** kunci di luar database dan di luar Git, dibungkus Windows DPAPI cakupan pengguna, diakses lewat satu antarmuka `KeyProvider` di Go, dengan periode pemulihan 30 hari dan tanpa kunci pemulihan otomatis. Karena DPAPI terikat pada akun Windows dan **tidak** melindungi dari program lain yang berjalan dengan kredensial yang sama, jangan menganggap lapisan ini melindungi template dari penyerang yang sudah menguasai akun. Rincian: `docs/SECURITY_PRIVACY.md` §5a–§5b.
+- Hasil ini hanya berlaku bila pengelolaan kunci benar; **pengelolaan kunci kini diputuskan melalui D-030 (DISETUJUI pada FL-004S) setelah sebelumnya menjadi pertanyaan terbuka Q-16.** Kebijakannya: kunci di luar database dan di luar Git, dibungkus Windows DPAPI cakupan pengguna, diakses lewat satu antarmuka `KeyProvider` di Go, dengan periode pemulihan 30 hari dan tanpa kunci pemulihan otomatis. Karena DPAPI terikat pada akun Windows dan **tidak** melindungi dari program lain yang berjalan dengan kredensial yang sama, jangan menganggap lapisan ini melindungi template dari penyerang yang sudah menguasai akun. Dua klarifikasi pemilik pada FL-004S: **kesiapan layanan biometrik dipisahkan dari kesiapan absensi manual**, dan **penghapusan mengakui keterbatasan jaminan** pada WAL, cadangan, serta media penyimpanan. Rincian: `docs/SECURITY_PRIVACY.md` §5a–§5f.
 - Jangan pernah menulis gambar wajah, embedding, kunci, atau token ke log.
 
 ### 11.6 Risiko spoofing
@@ -272,11 +272,11 @@ Prinsip: **domain absensi tidak boleh mengetahui jenis kamera**. Semua sumber ga
 |---|---|
 | Risiko teknis | Model yang dipilih belum diukur pada peserta nyata; ambang matching belum ada angkanya dan **tidak boleh diarang** (Q-07, kalibrasi fase AI Engine). |
 | Risiko teknis | Beban penulisan bersamaan pada SQLite belum diuji untuk skenario antrean kios. |
-| Risiko operasional | Pengelolaan kunci enkripsi template belum ditetapkan (Q-16) dan **menghambat implementasi `face_templates`**. FL-004 mengajukan kebijakannya (D-030, **USULAN**), termasuk risiko yang diterima: kehilangan kunci berarti kehilangan template, dan pemulihan bergantung pada berkas kunci yang tersimpan pada akun Windows yang sama. |
+| Risiko operasional | Pengelolaan kunci enkripsi template **sudah ditetapkan sebagai D-030 (DISETUJUI pada FL-004S)**, tetapi **implementasi `face_templates` masih belum dikerjakan**. Risiko yang diterima tetap berlaku: kehilangan kunci berarti kehilangan template, dan pemulihan bergantung pada berkas kunci yang tersimpan pada akun Windows yang sama. Ditambah keterbatasan yang diakui pada FL-004S: penghapusan **tidak** menjamin isi media penyimpanan bersih secara fisik (`docs/SECURITY_PRIVACY.md` §5f). |
 | Risiko privasi | Spoofing tidak tertangani secara kuat; verifikasi manual wajib tetap tersedia. |
 | Risiko proyek | Repositori belum memiliki `LICENSE` (D-017), sehingga ketentuan penggunaan karya belum jelas. |
 | Biaya | Komponen arsitektur yang berlaku berlisensi permisif dan **Rp0**: Go + `chi`, Python + OpenCV (YuNet/SFace), ONNX Runtime, SQLite, React Native/Expo. `cryptography` (Python) **tidak dipakai** — enkripsi template dilakukan di Go memakai pustaka standar `crypto/aes` + `crypto/cipher` (D-022, `docs/API_CONTRACT.md` §6.7). FastAPI sebagai server backend juga tidak dipakai (D-019 DITOLAK). |
 
 Kontrak yang mengikat dan berlaku satu arah dari dokumen ini: `docs/API_CONTRACT.md` (API + kontrak internal Go↔Python) dan `docs/DATA_MODEL.md` (skema 15 tabel, SQLite WAL, migrasi berversi). Bila dokumen ini berbeda dengan keduanya, **kontrak yang menang** dan dokumen ini harus diperbaiki.
 
-Pertanyaan yang harus dijawab pemilik sebelum implementasi: `docs/OPEN_QUESTIONS.md` — terutama **Q-16** (pengelolaan kunci, penghambat penyimpanan biometrik) dan **Q-07** (angka ambang kecocokan, kalibrasi fase AI Engine).
+Pertanyaan yang harus dijawab pemilik sebelum implementasi: `docs/OPEN_QUESTIONS.md` — terutama **Q-16** (pengelolaan kunci — **sudah diputuskan pada FL-004S**, sisa pekerjaannya implementasi dan pengujian) dan **Q-07** (angka ambang kecocokan, kalibrasi fase AI Engine — **masih terbuka**).

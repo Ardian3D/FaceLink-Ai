@@ -19,7 +19,7 @@ Belum semua rancangan merupakan keputusan final. Pertanyaan berikut dijawab saat
 | Q-13 | Kode peserta demo memakai NIM asli atau kode fiktif? | Kode sintetis untuk demo/publikasi | Fase 1 |
 | Q-14 | Pembaruan realtime dengan polling atau WebSocket? | **DIPUTUSKAN pada FL-003: polling interval dengan `ETag` lebih dahulu (D-021 DISETUJUI)**; WebSocket hanya setelah kebutuhan pembaruan seketika terbukti | Fase 4 |
 | Q-15 | Branding aplikasi dan nama paket Android? | FaceLink AI, dipastikan ketika app disiapkan | Fase 3 |
-| Q-16 | Bagaimana kunci enkripsi template biometrik dikelola (lokasi, rotasi, pemulihan)? | **Baru dari FL-002.** Bentuk penyimpanan sudah final (AES-256-GCM per baris, AAD mengikat `person_id`+`model_id`+`model_version`+`key_version`; D-022 DISETUJUI). **FL-004 mengajukan jawabannya sebagai D-030 (USULAN):** kunci di luar database dan di luar Git, dibungkus DPAPI cakupan pengguna di `%LOCALAPPDATA%\FaceLink\keys\`, akses lewat `KeyProvider` Go, `key_version` pertama `'1'`, rotasi disiapkan tetapi belum aktif, tanpa kunci pemulihan otomatis, dan periode pemulihan 30 hari. **Belum disetujui — Q-16 tetap TERBUKA dan tetap menghambat implementasi `face_templates`.** | Fase 2 (menunggu persetujuan pemilik) |
+| Q-16 | Bagaimana kunci enkripsi template biometrik dikelola (lokasi, rotasi, pemulihan)? | **Baru dari FL-002.** Bentuk penyimpanan sudah final (AES-256-GCM per baris, AAD mengikat `person_id`+`model_id`+`model_version`+`key_version`; D-022 DISETUJUI). **FL-004 mengajukan jawabannya, dan pemilik menyetujuinya pada FL-004S sebagai D-030 (DISETUJUI):** kunci di luar database dan di luar Git, dibungkus DPAPI cakupan pengguna di `%LOCALAPPDATA%\FaceLink\keys\`, akses lewat `KeyProvider` Go, `key_version` pertama `'1'`, rotasi disiapkan tetapi belum aktif, tanpa kunci pemulihan otomatis, dan periode pemulihan 30 hari **yang bukan jaminan pemulihan**. **FL-004R mempertajam usulan itu:** kegagalan membaca template dipisahkan menjadi **tiga kondisi** (kunci sementara tidak tersedia / kunci ada tetapi tidak dapat dipakai / kunci dipastikan tidak dapat dipulihkan) dan **template tidak boleh dihapus karena kegagalan dekripsi sementara**. **DIPUTUSKAN pada FL-004S (15 Oktober 2026):** pemilik project menyetujui **D-030** beserta **dua klarifikasi wajib** — (1) kesiapan layanan biometrik dipisahkan dari kesiapan absensi manual, sehingga kegagalan kunci **tidak** mematikan seluruh backend tetapi layanan tetap gagal secara aman (§5e); (2) kebijakan penghapusan mengakui keterbatasan jaminan pada SQLite WAL, cadangan, dan media penyimpanan (§5f). **Ini keputusan atas rancangan; implementasi dan pengujian nyata masih tertunda** dan menunggu tugas implementasi tersendiri yang disetujui pemilik. | Fase 2 (rancangan diputuskan; implementasi tertunda) |
 | Q-17 | Apakah deteksi wajah dijalankan di ESP32-S3 untuk menghemat bandwidth, atau gambar dikirim utuh ke backend? | **Baru dari FL-002.** Usulan: kirim utuh dulu; deteksi di perangkat dievaluasi belakangan | Fase 5 |
 | Q-18 | Batas laju dan batas ukuran unggahan gambar dari perangkat kamera? | **Baru dari FL-002.** Belum ada angka; harus diukur, bukan dikira-kira | Fase 1 |
 
@@ -27,15 +27,40 @@ Setelah diputuskan, buat/perbarui entri di `DECISIONS.md` dan sesuaikan `PROJECT
 
 ## Catatan FL-004 (15 Oktober 2026)
 
-FL-004 **mengajukan jawaban** untuk Q-16 melalui **D-030 berstatus USULAN**: kunci AES-256-GCM disimpan di luar database dan di luar Git, dibungkus Windows DPAPI cakupan pengguna, diakses lewat satu antarmuka `KeyProvider` di Go, dengan rotasi yang disiapkan tetapi belum diaktifkan dan tanpa kunci pemulihan otomatis. Rinciannya ada di `docs/SECURITY_PRIVACY.md` §5a–§5d dan `docs/DECISIONS.md`.
+FL-004 **mengajukan jawaban** untuk Q-16 melalui **D-030**, yang **disetujui pemilik pada FL-004S**: kunci AES-256-GCM disimpan di luar database dan di luar Git, dibungkus Windows DPAPI cakupan pengguna, diakses lewat satu antarmuka `KeyProvider` di Go, dengan rotasi yang disiapkan tetapi belum diaktifkan dan tanpa kunci pemulihan otomatis. Rinciannya ada di `docs/SECURITY_PRIVACY.md` §5a–§5f dan `docs/DECISIONS.md`.
 
-**FL-004 tidak menutup Q-16.** Usulan bukan keputusan; sesuai protokol perubahan keputusan dan `AGENTS.md` §1 butir 5, status ditentukan pemilik project. **Q-16 tetap terbuka dan `face_templates` tetap tidak boleh diimplementasikan** sampai D-030 disetujui. Q-07 dan Q-18 **juga tetap terbuka** dan tidak diisi angka apa pun oleh FL-004.
+**FL-004R juga tidak menutup Q-16.** Usulan bukan keputusan; sesuai protokol perubahan keputusan dan `AGENTS.md` §1 butir 5, status ditentukan pemilik project. Hal itu kemudian terjadi pada **FL-004S**, ketika pemilik menyetujui D-030 beserta dua klarifikasi wajib. Meski begitu, **`face_templates` tetap belum diimplementasikan** karena persetujuan itu berlaku atas rancangan, bukan sebagai izin menulis kode. Q-07 dan Q-18 **tetap terbuka** dan tidak diisi angka apa pun oleh FL-004/FL-004R/FL-004S.
 
-Satu temuan FL-004 yang perlu dicatat terpisah: **DPAPI tidak menjamin keamanan terhadap semua jenis serangan** — ia terikat pada akun Windows, permudah dibaca oleh program lain yang berjalan dengan kredensial yang sama, dan pada profil roaming dapat didekripsi dari komputer lain. Batas ini dicatat di `docs/SECURITY_PRIVACY.md` §5b dan harus dijelaskan apa adanya, bukan diringkas menjadi "kunci sudah terenkripsi".
+Satu temuan FL-004 yang perlu dicatat terpisah: **DPAPI tidak menjamin keamanan terhadap semua jenis serangan** — ia terikat pada akun Windows, mudah dibaca oleh program lain yang berjalan dengan kredensial yang sama, dan pada profil roaming dapat didekripsi dari komputer lain. Batas ini dicatat di `docs/SECURITY_PRIVACY.md` §5b dan harus dijelaskan apa adanya, bukan diringkas menjadi "kunci sudah terenkripsi".
+
+## Catatan FL-004S (15 Oktober 2026)
+
+Pemilik project **menyetujui D-030** pada 15 Oktober 2026 dengan **dua klarifikasi wajib**. Q-16 berubah dari TERBUKA menjadi **DIPUTUSKAN untuk rancangan MVP**. Cabang kerja: `docs/fl-004-key-management`.
+
+**Dua klarifikasi yang menjadi bagian keputusan:**
+
+1. **Kesiapan layanan biometrik dipisahkan dari kesiapan layanan absensi manual.** Kegagalan `KeyProvider` atau kunci biometrik **tidak** otomatis mematikan seluruh backend; absensi manual, kelola peserta, autentikasi operator, dan pencatatan audit tetap berjalan. Namun layanan **tetap gagal secara aman** bila integritas database, autentikasi operator, konsistensi kunci dengan AAD, atau keutuhan riwayat tidak dapat dijamin. Ketentuan: `docs/SECURITY_PRIVACY.md` §5e, `docs/DECISIONS.md` D-030 butir 10.
+2. **Kebijakan penghapusan mengakui keterbatasan jaminan penghapusan.** Retensi dan pembersihan mencakup berkas `-wal` dan `-shm`, salinan cadangan, dan cache; **tidak ada klaim** bahwa data hilang secara fisik dari media penyimpanan, karena SSD dan media flash memakai pemetaan ulang blok di luar kendali aplikasi. Ketentuan: `docs/SECURITY_PRIVACY.md` §5f, `docs/DECISIONS.md` D-030 butir 11 dan konsekuensi butir 5a.
+
+**Yang TIDAK berubah:** D-030 tetap melarang penghapusan otomatis template saat kegagalan kunci bersifat sementara (kondisi A dan B), mempertahankan AES-256-GCM per baris, DPAPI cakupan pengguna, `KeyProvider` di Go, dan `key_version` bertipe teks.
+
+**Yang masih terbuka:** **Q-07 tetap terbuka** (kalibrasi ambang YuNet+SFace; tidak ada angka yang ditetapkan) dan **Q-18 tetap terbuka** (batas laju dan ukuran unggahan gambar). Q-17 juga belum diputuskan.
+
+**Disetujui bukan berarti siap dipakai.** Belum ada kode yang ditulis dan belum ada satu pun pengujian T-21–T-35 yang dijalankan; klaim apa pun tentang berjalannya penyimpanan kunci **belum memiliki bukti**.
+
+
+FL-004R menyempurnakan usulan yang sama pada branch `docs/fl-004-key-management`; **tidak ada status yang dinaikkan dan tidak ada kode yang ditulis.** Empat penyempurnaan yang mengubah isi kebijakan:
+
+1. **Periode pemulihan 30 hari dinyatakan tegas bukan jaminan pemulihan.** Angka itu adalah batas waktu **upaya** operator, bukan masa berlaku yang menjamin template dapat dibaca kembali. Rincian pada `docs/SECURITY_PRIVACY.md` §5d paragraf pembuka dan `docs/DECISIONS.md` D-030 butir 7.
+2. **Kegagalan membaca template dipisahkan menjadi tiga kondisi** (A: kunci sementara tidak tersedia, B: kunci ada tetapi tidak dapat dipakai, C: kunci dipastikan tidak dapat dipulihkan) pada §5d.1, dengan **larangan menghapus template selama kondisi masih A atau B** pada §5d.2. Sebelumnya semua kegagalan dekripsi diperlakukan sama dan baris langsung dihapus — itu akan menghancurkan template yang masih dapat dipulihkan.
+3. **Prosedur insiden kunci (§5d.3), enrollment ulang ber-consent (§5d.4), dan absensi manual sebagai jalur tetap (§5d.5)** ditetapkan sebagai prosedur, bukan hanya sebagai prinsip.
+4. **Aturan penghapusan diperjelas mencakup berkas `-wal` dan `-shm`, salinan cadangan, dan lapisan cache**, bukan hanya baris tabel (`docs/DECISIONS.md` D-030 konsekuensi butir 5).
+
+Pada saat FL-004R dikerjakan, D-030 masih **USULAN** dan Q-16 masih **TERBUKA**; keduanya berubah pada **FL-004S** (lihat catatan di atas). Q-07 tetap pekerjaan kalibrasi pada fase AI Engine tanpa angka apa pun.
 
 ## Catatan FL-003 (15 Oktober 2026)
 
-FL-003 **menutup** Q-01, Q-02, dan Q-14: pemilik project menetapkan Go + `chi` (D-010 DISETUJUI), SQLite mode WAL (D-020 DISETUJUI), dan polling + `ETag` (D-021 DISETUJUI); D-019 DITOLAK dan D-011 DITUNDA. Q-07 (angka ambang kecocokan) dan Q-16 (pengelolaan kunci enkripsi) **tetap terbuka** dan tidak boleh diisi dengan angka atau kebijakan yang dikira-kira. Q-16 kini menghambat implementasi `face_templates`, dan Q-07 menghambat pemberlakuan keputusan kecocokan.
+FL-003 **menutup** Q-01, Q-02, dan Q-14: pemilik project menetapkan Go + `chi` (D-010 DISETUJUI), SQLite mode WAL (D-020 DISETUJUI), dan polling + `ETag` (D-021 DISETUJUI); D-019 DITOLAK dan D-011 DITUNDA. Pada saat itu Q-07 (angka ambang kecocokan) dan Q-16 (pengelolaan kunci enkripsi) **tetap terbuka** dan tidak boleh diisi dengan angka atau kebijakan yang dikira-kira; **Q-16 kemudian diputuskan pada FL-004S melalui D-030**, sementara **Q-07 tetap terbuka sampai diukur**. Q-16 masih menghambat **implementasi** `face_templates` (bukan lagi menghambat keputusan rancangannya), dan Q-07 menghambat pemberlakuan keputusan kecocokan.
 
 ## Catatan FL-002 (15 Oktober 2026)
 

@@ -41,12 +41,22 @@
 | T-20 | APK dipasang ke HP Android | Instalasi dan alur utama berjalan pada jaringan lokal |
 | T-21 | Kunci aktif tidak ada saat backend dinyalakan | Penyalaan **gagal dengan pesan jelas**; backend **tidak** membuat kunci baru sendiri dan **tidak** membuat template tironan |
 | T-22 | Berkas kunci disalin ke mesin/akun lain | Dekripsi gagal; tidak ada template yang terbaca dan tidak ada yang ditebak. Hasil dicatat apa adanya, termasuk bila gagal pada tahap yang tidak terduga |
-| T-23 | Berkas kunci dihapus, database utuh | Template dihapus, peristiwa tercatat di `audit_events` tanpa isi embedding, peserta dapat hadir lewat jalur manual |
+| T-23 | Berkas kunci dihapus, database utuh | Penyalaan berikutnya menolak bekerja dengan pesan jelas. **Baris tidak langsung dihapus**: kondisi diperiksa lebih dahulu dan baris ditandai tidak dapat didekripsi, bukan dimusnahkan (kondisi A→C, `docs/SECURITY_PRIVACY.md` §5d.1–§5d.2) |
 | T-24 | `aad` pada baris diubah (uji perusakan) | Verifikasi AAD gagal; baris **tidak** dipakai dan backend mengembalikan “tidak dapat diverifikasi” |
 | T-25 | `key_version` baris tidak sesuai kunci yang tersedia | Baris tidak dapat didekripsi; backend tidak menurunkan versi secara diam-diam dan tidak mencoba kunci lain di luar versi yang ditunjuk |
 | T-26 | Cadangan database tanpa berkas kunci dipulihkan | Kehadiran dan nama tetap terbaca; kolom `ciphertext` **tidak** dapat dibaca. Ini harus dilaporkan sebagai keterbatasan, bukan kegagalan tak terduga |
-| T-27 | Pencabutan persetujuan lalu pemulihan kunci | Template **tidak** kembali; pencabutan tetap bersifat penghapusan |
+| T-27 | Pencabutan persetujuan lalu pemulihan kunci | Template **tidak** kembali; pencabutan tetap bersifat penghapusan, dan pemulihan kunci tidak boleh menghidupkan kembali baris yang sudah dicabut |
 | T-28 | Pemeriksaan kebocoran berkas kunci | Berkas kunci tidak ada di dalam repositori, tidak ada di direktori yang disinkronkan awan, dan tidak ada pada keluaran log |
+| T-29 | Kondisi A — kunci sementara tidak tersedia | Berkas kunci dikunci proses lain / media dilepas / profil belum termuat. **Jumlah baris `face_templates` tidak berubah** dan tidak ada penghapusan yang dijalankan; operasi yang butuh template ditolak dan dicatat |
+| T-30 | Kondisi B — kunci ada tetapi tidak dapat dipakai | `auth_tag` dirusak atau `key_version` ditunjuk ke kunci yang rusak. Baris **dikarantina**, tidak ditampilkan dan tidak dihitung cocok; **tidak ada** penghapusan, dan backend memeriksa salinan kunci lain lebih dahulu |
+| T-31 | Kondisi C — kunci dipastikan tidak dapat dipulihkan | Seluruh salinan sah diperiksa dan habis. **Baru di sini** penghapusan diizinkan, dijalankan operator, dan tercatat di `audit_events`; kehadiran sebelumnya tetap sah dan tidak ditarik kembali |
+| T-32 | Penghapusan otomatis tidak pernah terjadi | Dengan tugas terjadwal aktif dan kunci tidak tersedia, **tidak ada** baris yang terhapus tanpa tindakan operator |
+| T-33 | Sisa biometrik setelah penghapusan | Setelah penghapusan template, periksa `facelink.db`, **`-wal`**, **`-shm`**, **salinan cadangan**, dan **cache**. Tidak ada sisa yang dapat dipulihkan; bila ada, penghapusan dinyatakan **belum selesai** dan dilaporkan sebagai bug |
+| T-34 | Absensi manual ketika tidak ada satu pun template | Seluruh template tidak tersedia (kondisi A atau C). Peserta **tetap** dapat hadir melalui jalur manual, dan kehadiran itu berlaku sama sahnya; tidak ada penolakan kehadiran |
+| T-35 | Enrollment ulang dengan persetujuan baru | Peserta diminta ulang persetujuannya; bila menolak, **tidak ada** template baru dan tidak ada konsekuensi merugikan; `audit_events` mencatat status persetujuan tanpa potret atau embedding |
+| T-36 | Kesiapan dipisahkan: absensi manual tanpa layanan biometrik | Layanan biometrik dimatikan atau kuncinya tidak tersedia. Absensi manual **tetap** melayani peserta, kehadiran tercatat, dan **tidak ada** pemeriksaan keamanan yang dilemahkan agar layanan hidup (paparan §5e butir 4) |
+| T-37 | Urutan pemulihan setelah gangguan kunci | Setelah insiden kunci diselesaikan, **absensi manual dipulihkan lebih dahulu**; layanan biometrik menyusul. Kelas tidak menunggu penyelesaian insiden |
+| T-38 | Tidak ada klaim penghapusan berlebihan | Laporan hasil penghapusan menyebut lokasi yang **belum** terjangkau (media penyimpanan, cadangan di luar jangkauan) apa adanya; frasa “terhapus permanen” dan “tidak dapat dipulihkan secara forensik” **tidak muncul** |
 
 ## 3. Protokol evaluasi wajah
 
@@ -87,11 +97,17 @@ Bug/risiko dan tindak lanjut:
 
 ## 6. Catatan FL-004: batas pengujian pengelolaan kunci
 
-T-21 sampai T-28 di atas adalah **skenario yang direncanakan**, bukan hasil yang sudah dijalankan. Ketentuan yang mengikat:
+T-21 sampai T-35 di atas adalah **skenario yang direncanakan**, bukan hasil yang sudah dijalankan. Ketentuan yang mengikat:
 
-1. Skenario kunci **baru boleh dijalankan setelah D-030 disetujui** dan implementasi penyimpanan biometrik diizinkan. Sebelum itu, tidak ada kode yang boleh menulis `face_templates`.
+1. Skenario kunci **baru boleh dijalankan setelah ada tugas implementasi yang disetujui pemilik**. D-030 **sudah disetujui pada FL-004S**, tetapi persetujuan itu berlaku atas **rancangan**; sampai tugas implementasi disetujui, tetap tidak ada kode yang boleh menulis `face_templates`.
 2. Hasil uji kehilangan kunci dan penggantian perangkat harus **diukur pada mesin demo sungguhan**, dengan Windows dan akun yang akan dipakai. Jangan menyimpulkan perilaku DPAPI dari dokumentasi lalu menuliskannya sebagai hasil uji.
 3. Skenario T-22 harus menguji dua kondisi terpisah: (a) berkas kunci disalin ke **mesin lain**, dan (b) berkas kunci disalin ke **akun lain pada mesin yang sama**. Keduanya dapat berbeda hasilnya.
 4. Bila mesin demo memakai akun dengan profil roaming, hasilnya **tidak** dapat digeneralisasi ke mesin lain; catat kondisi profil bersama hasilnya.
 5. **Tidak boleh** ada klaim bahwa data biometrik aman terhadap serangan yang sudah menguasai akun Windows. Skenario seperti itu **di luar jangkauan** rancangan MVP dan harus disebutkan sebagai keterbatasan, bukan diuji lalu dinyatakan lulus.
 6. Uji negatif lebih penting daripada uji positif di area ini: yang harus dibuktikan adalah backend **menolak bekerja** saat kunci hilang atau tidak cocok, bukan bahwa backend bekerja saat semuanya benar.
+7. **Ketiga kondisi §5d.1 harus dapat dibedakan pada pengujian nyata** (T-29, T-30, T-31). Bila backend tidak sanggup membedakan kondisi A dan B dari kondisi C, itu **temuan kegagalan**, bukan kelulusan — perilaku yang benar saat tidak yakin adalah **berhenti dan melaporkan**, bukan menghapus.
+8. **Periode pemulihan 30 hari bukan objek uji kelulusan.** Yang diuji adalah bahwa penghapusan hanya terjadi setelah kondisi C ditetapkan dan tidak pernah dipicu otomatis (T-32). Jangan menuliskan hasil uji seolah masa 30 hari menjamin template dapat dipulihkan.
+9. **Uji T-33 wajib memeriksa lebih dari berkas `facelink.db`**: berkas `-wal`, `-shm`, salinan cadangan, dan cache juga diperiksa. Penghapusan yang hanya membersihkan tabel induk dinyatakan **belum selesai**.
+10. **Fallback absensi manual diuji sebagai jalur normal, bukan hanya saat darurat** (T-34). Bila jalur manual hanya bekerja ketika template masih ada, itu kegagalan yang harus dilaporkan.
+11. **Dua klarifikasi FL-004S menjadi syarat lulus yang eksplisit.** (a) **T-36** harus membuktikan kesiapan dipisahkan: dengan layanan biometrik dimatikan atau kunci tidak tersedia, absensi manual **tetap berjalan** dan tidak ada pemeriksaan keamanan yang dilonggarkan untuk itu (`docs/SECURITY_PRIVACY.md` §5e). (b) **T-38** harus membuktikan tidak ada klaim penghapusan yang berlebihan: laporan akhir menyebut lokasi yang **belum** terjangkau (media penyimpanan, cadangan di luar jangkauan) apa adanya (`docs/SECURITY_PRIVACY.md` §5f).
+12. **Kegagalan layanan biometrik bukan alasan melumpuhkan pemeriksaan keamanan.** Bila implementasi “berhasil” dengan cara menonaktifkan pemeriksaan agar layanan tetap hidup, hasil itu dinyatakan **gagal** sesuai `docs/SECURITY_PRIVACY.md` §5e butir 4.
