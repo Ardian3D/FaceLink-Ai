@@ -312,21 +312,14 @@ func (s Server) handleAuthRefresh(w http.ResponseWriter, r *http.Request) {
 	})
 
 	// Kontrak §5.1: respons penyegaran hanya memuat pasangan token baru —
-	// bentuk `user` tidak dikirim ulang karena aplikasi memakai `GET /me` bila
-	// memerlukannya.
-	expiresIn := int(s.waktuSekarang().Sub(pair.AccessExpiresAt).Abs().Seconds())
-	if sisa := s.sisaAkses(pair); sisa >= 0 {
-		expiresIn = sisa
-	}
+	// bentuk `user` maupun objek `session` tidak dikirim ulang, karena aplikasi
+	// memakai `GET /me` bila memerlukan identitas atau cakupannya. Identitas
+	// sesi tidak berubah oleh rotasi, sehingga klien yang sudah memegangnya
+	// tidak kehilangan apa pun.
 	writeData(w, r, http.StatusOK, map[string]any{
 		"access_token":  pair.AccessToken,
 		"refresh_token": pair.RefreshToken,
-		"expires_in":    expiresIn,
-		"session": map[string]string{
-			"id":                  pair.SessionID,
-			"access_expires_at":   audit.FormatWaktu(pair.AccessExpiresAt),
-			"absolute_expires_at": audit.FormatWaktu(pair.AbsoluteExpiresAt),
-		},
+		"expires_in":    s.sisaAkses(pair),
 	})
 }
 

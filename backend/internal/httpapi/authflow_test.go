@@ -373,6 +373,36 @@ type sesiUji struct {
 	Status  string
 }
 
+// sesiDariSegarkan membaca respons `POST /auth/refresh`.
+//
+// Kontrak §5.1 hanya mengizinkan pasangan token pada respons itu — tidak ada
+// objek `user` maupun `session`. Identitas sesi tidak berubah oleh rotasi, jadi
+// nilai yang sudah diketahui dari sesi sebelumnya dipakai kembali; inilah yang
+// dilihat aplikasi klien, yang memang sudah memegang identitas itu.
+func (h *harnessAuth) sesiDariSegarkan(data map[string]any, sebelumnya sesiUji) sesiUji {
+	h.t.Helper()
+
+	akses, _ := data["access_token"].(string)
+	segarkan, _ := data["refresh_token"].(string)
+	if akses == "" || segarkan == "" {
+		h.t.Fatalf("respons penyegaran tidak memuat access_token/refresh_token: %v", data)
+	}
+	if _, ada := data["user"]; ada {
+		h.t.Errorf("respons penyegaran memuat objek user: %v", data)
+	}
+	if _, ada := data["session"]; ada {
+		h.t.Errorf("respons penyegaran memuat objek session: %v", data)
+	}
+
+	hasil := sesiUji{Access: akses, Refresh: segarkan, SesiID: sebelumnya.SesiID}
+	// Identitas pemanggil diverifikasi lewat endpoint yang memang menyediakannya.
+	me := h.harapSukses(h.kirim(http.MethodGet, "/api/v1/me", nil, akses), http.StatusOK)
+	hasil.UserID, _ = me["id"].(string)
+	hasil.Role, _ = me["role"].(string)
+	hasil.Status, _ = me["status"].(string)
+	return hasil
+}
+
 // hashUji menghitung SHA-256 heksadesimal sebuah token, bentuk yang sama
 // dengan kolom hash pada `session_tokens`. Dipakai pengujian untuk membuktikan
 // token mentah tidak pernah tersimpan.
@@ -936,7 +966,7 @@ func TestPenyegaranMemutarToken(t *testing.T) {
 
 	r := h.kirim(http.MethodPost, "/api/v1/auth/refresh",
 		map[string]any{"refresh_token": sesi1.Refresh}, "")
-	sesi2 := h.sesiDari(h.harapSukses(r, http.StatusOK))
+	sesi2 := h.sesiDariSegarkan(h.harapSukses(r, http.StatusOK), sesi1)
 
 	if sesi2.Access == sesi1.Access {
 		t.Fatal("token akses baru sama dengan token akses lama")
@@ -961,7 +991,7 @@ func TestPemakaianUlangPenyegarMencabutSesi(t *testing.T) {
 
 	r := h.kirim(http.MethodPost, "/api/v1/auth/refresh",
 		map[string]any{"refresh_token": sesi1.Refresh}, "")
-	sesi2 := h.sesiDari(h.harapSukses(r, http.StatusOK))
+	sesi2 := h.sesiDariSegarkan(h.harapSukses(r, http.StatusOK), sesi1)
 
 	ulang := h.kirim(http.MethodPost, "/api/v1/auth/refresh",
 		map[string]any{"refresh_token": sesi1.Refresh}, "")
@@ -992,7 +1022,7 @@ func TestBatasAbsolutTigaPuluhHariMenghentikanPenyegaran(t *testing.T) {
 	h.clk.Advance(29 * 24 * time.Hour)
 	r := h.kirim(http.MethodPost, "/api/v1/auth/refresh",
 		map[string]any{"refresh_token": sesi1.Refresh}, "")
-	sesi2 := h.sesiDari(h.harapSukses(r, http.StatusOK))
+	sesi2 := h.sesiDariSegarkan(h.harapSukses(r, http.StatusOK), sesi1)
 	if sesi2.Access == sesi1.Access {
 		t.Fatal("token akses hari ke-29 tidak diperbarui")
 	}
@@ -1162,7 +1192,7 @@ func TestPemakaianUlangPenyegarMencabutSeluruhSesi(t *testing.T) {
 	// Rotasi sesi pertama, lalu pakai token penyegar lamanya.
 	putar := h.kirim(http.MethodPost, "/api/v1/auth/refresh",
 		map[string]any{"refresh_token": sesi1.Refresh}, "")
-	sesi1b := h.sesiDari(h.harapSukses(putar, http.StatusOK))
+	sesi1b := h.sesiDariSegarkan(h.harapSukses(putar, http.StatusOK), sesi1)
 
 	ulang := h.kirim(http.MethodPost, "/api/v1/auth/refresh",
 		map[string]any{"refresh_token": sesi1.Refresh}, "")
@@ -1193,11 +1223,11 @@ func TestPemakaianUlangPenyegarGenerasiLamaTerdeteksi(t *testing.T) {
 
 	putar1 := h.kirim(http.MethodPost, "/api/v1/auth/refresh",
 		map[string]any{"refresh_token": sesi1.Refresh}, "")
-	sesi2 := h.sesiDari(h.harapSukses(putar1, http.StatusOK))
+	sesi2 := h.sesiDariSegarkan(h.harapSukses(putar1, http.StatusOK), sesi1)
 
 	putar2 := h.kirim(http.MethodPost, "/api/v1/auth/refresh",
 		map[string]any{"refresh_token": sesi2.Refresh}, "")
-	sesi3 := h.sesiDari(h.harapSukses(putar2, http.StatusOK))
+	sesi3 := h.sesiDariSegarkan(h.harapSukses(putar2, http.StatusOK), sesi2)
 
 	// Token generasi pertama kini dua langkah di belakang: tidak ada lagi di
 	// `refresh_hash` maupun `prev_refresh_hash`.

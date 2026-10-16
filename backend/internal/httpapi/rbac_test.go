@@ -306,7 +306,7 @@ func TestLogDanAuditTidakMembocorkanRahasia(t *testing.T) {
 
 	segarkan := h.kirim(http.MethodPost, "/api/v1/auth/refresh",
 		map[string]any{"refresh_token": sesiDosen.Refresh}, "")
-	sesiBaru := h.sesiDari(h.harapSukses(segarkan, http.StatusOK))
+	sesiBaru := h.sesiDariSegarkan(h.harapSukses(segarkan, http.StatusOK), sesiDosen)
 
 	// Login dari email yang tidak diundang: identitas ditolak, bukan dibuat.
 	emailAsing := "orang.asing.log@kampus.example"
