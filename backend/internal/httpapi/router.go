@@ -11,26 +11,9 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 )
 
-// NewRouter memasang seluruh middleware dan rute MVP.
-//
-// Urutan middleware mengikuti docs/API_CONTRACT.md §1.4: RequestID lebih dahulu
-// agar setiap catatan log dan audit memiliki penautan, lalu Recoverer, lalu
-// batas waktu, lalu body limit, lalu logging akses.
-//
-// Recoverer muncul dua kali dengan sengaja: sekali pada rantai ini untuk
-// melindungi middleware berikutnya, dan sekali lagi di dalam goroutine timeout
-// (lihat timeout) karena panic pada handler terjadi di goroutine yang berbeda
-// dari pemanggil middleware sehingga tidak terjangkau recoverer di lapisan luar
-// (FL-005R-FIX).
+// NewRouter memasang rute MVP. Urutan middleware ditentukan satu kali di chain.
 func NewRouter(s Server) http.Handler {
 	r := chi.NewRouter()
-
-	r.Use(middleware.RequestID)
-	r.Use(echoRequestID)
-	r.Use(recoverer(s))
-	r.Use(timeout(s))
-	r.Use(bodyLimit(s))
-	r.Use(accessLog(s))
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/healthz", s.handleHealthz)
@@ -43,7 +26,34 @@ func NewRouter(s Server) http.Handler {
 	// Rute tidak dikenal tetap dijawab JSON, bukan halaman HTML bawaan Go.
 	r.NotFound(notFoundJSON)
 
-	return r
+	return chain(s, r)
+}
+
+// chain memasang seluruh middleware pada handler. Fungsi ini adalah satu-satunya
+// tempat urutan middleware ditentukan, sehingga urutan yang diuji pengujian
+// selalu sama dengan urutan yang dijalankan produksi.
+//
+// Urutan dari luar ke dalam, beserta alasannya:
+//
+//  1. RequestID paling luar agar setiap catatan log dan audit memiliki penautan.
+//  2. accessLog berada di luar timeout dan recoverer (FL-005S). Status yang
+//     dicatat adalah status final yang benar-benar dikirim klien — termasuk 503
+//     batas waktu dan 500 hasil pemulihan panic — dan barisnya ditulis saat
+//     respons selesai, bukan setelah handler lambat berhenti. Sebelumnya
+//     accessLog berada di dalam timeout sehingga respons 503 tercatat 200,
+//     panic yang dipulihkan tidak tercatat sama sekali, dan baris log menunggu
+//     handler selesai meskipun klien sudah menerima respons batas waktu.
+//  3. recoverer berada di dalam accessLog agar panic yang ia pulihkan ditulis
+//     lewat statusWriter yang dicatat accessLog. Panic pada handler dipulihkan
+//     recoverer tambahan di dalam goroutine timeout (lihat timeout).
+//  4. timeout, lalu bodyLimit.
+func chain(s Server, next http.Handler) http.Handler {
+	return middleware.RequestID(
+		echoRequestID(
+			accessLog(s)(
+				recoverer(s)(
+					timeout(s)(
+						bodyLimit(s)(next))))))
 }
 
 // echoRequestID memastikan setiap respons memuat penautan permintaan, baik
@@ -60,6 +70,11 @@ func echoRequestID(next http.Handler) http.Handler {
 
 // recoverer menangkap panic di handler. Kontrak API §1.4 butir 3 mewajibkan
 // panic tidak membocorkan jejak tumpukan kepada klien.
+//
+// Middleware ini dipasang di dalam accessLog (lihat chain) supaya respons 500
+// yang dihasilkannya tetap tercatat dengan status yang benar, dan dipasang lagi
+// di dalam goroutine timeout (lihat timeout) karena panic pada handler terjadi
+// di goroutine yang berbeda dari pemanggil middleware.
 func recoverer(s Server) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -169,6 +184,12 @@ func bodyLimit(s Server) func(http.Handler) http.Handler {
 // accessLog mencatat satu baris ringkas per permintaan. Nilai yang dicatat
 // dibatasi pada metode, jalur, status, durasi, dan request id; parameter kueri
 // tidak dicatat agar data peserta tidak masuk log (AGENTS.md §3).
+//
+// Middleware ini dipasang paling luar sesudah RequestID (lihat chain) supaya
+// status yang dicatat adalah status final yang benar-benar dikirim klien —
+// termasuk 503 batas waktu dan 500 hasil pemulihan panic — dan supaya barisnya
+// ditulis saat respons selesai, bukan setelah handler lambat berhenti
+// (FL-005S).
 func accessLog(s Server) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
