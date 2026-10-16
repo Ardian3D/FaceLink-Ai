@@ -94,15 +94,16 @@ FaceLink-AI/                      # ← kondisi FL-001: hanya berkas di bawah in
 ├── .gitignore                    # ditambahkan pada FL-001
 ├── docs/                         # ADA — 16 dokumen perencanaan
 ├── research/                     # ADA — ruang kajian jurnal (referensi saja)
-├── apps/                         # BELUM ADA — dibuat pada fase 1 dan 3
-│   ├── mobile/                   # BELUM ADA (React Native + Expo, fase 3)
-│   └── api/                      # TIDAK DIPAKAI — lihat catatan FL-005 di bawah
+├── apps/                         # BELUM ADA — hanya untuk aplikasi klien (fase 3)
+│   └── mobile/                   # BELUM ADA (React Native + Expo, fase 3)
+│                                 # TIDAK ADA `apps/api/` — backend Go ada di `backend/` (§8.1)
 ├── services/                     # BELUM ADA
 │   └── face-engine/              # BELUM ADA (Python + OpenCV, fase 2)
 ├── firmware/                     # BELUM ADA (fase hardware)
 │   └── esp32-s3-cam/             # BELUM ADA (firmware, fase 5)
 ├── tests/                        # BELUM ADA (pengujian integrasi)
-└── backend/                      # ADA (FL-005) — Go API + migrasi SQL
+├── .github/workflows/            # ADA (FL-005R) — quality gate CI backend Go
+└── backend/                      # ADA (FL-005) — LOKASI RESMI Go Backend
     ├── cmd/server/
     ├── internal/
     └── migrations/
@@ -110,7 +111,20 @@ FaceLink-AI/                      # ← kondisi FL-001: hanya berkas di bawah in
 
 > **Catatan FL-001 (15 Oktober 2026):** pada saat fondasi dokumentasi dibuat, hanya `README.md`, `AGENTS.md`, `PROJECT_STATE.md`, `.gitignore`, `docs/`, dan `research/` yang benar-benar ada. Folder `apps/`, `services/`, `firmware/`, dan `tests/` sengaja **belum dibuat**; keberadaannya di atas hanya rencana. Jangan menafsirkan diagram ini sebagai bukti implementasi. Nama dan struktur akhir menunggu review arsitektur.
 
-> **Catatan FL-005 (15 Oktober 2026):** kode backend Go yang benar-benar ditulis **berada di `backend/`**, bukan di `apps/api/` seperti sketsa di atas. Perbedaan ini disengaja dan **belum disetujui sebagai perubahan arsitektur**: `backend/` adalah nama yang dipakai pada tugas implementasi FL-005, sedangkan `apps/api/` hanya kandidat dari fase dokumentasi. `apps/` tetap **belum dibuat** dan `apps/api/` tidak dipakai. `services/face-engine/`, `firmware/`, `apps/mobile/`, dan `tests/` tetap rencana. Penyelarasan nama ini adalah keputusan pemilik project dan **tidak** diambil sendiri oleh FL-005; sampai ada keputusan, `backend/` adalah lokasi nyata dan diagram di atas tetap menggambarkan rencana lama.
+### 8.1 Lokasi resmi backend Go (**DIPUTUSKAN pada FL-005R**)
+
+**`backend/` di akar repositori adalah lokasi resmi Go Backend FaceLink AI.** Keputusan ini berlaku sejak FL-005R dan menggantikan usulan `apps/api/` dari fase dokumentasi.
+
+Alasan: kode backend sudah ditulis, diuji, dan di-merge ke `main` pada `backend/` (FL-005, PR #7). Memindahkannya ke `apps/api/` hanya untuk menyesuaikan diri dengan diagram lama akan memindahkan direktori build, jalur migrasi SQL, dan working directory CI tanpa manfaat teknis, serta menambah risiko tanpa nilai bagi pengguna. Yang diselaraskan adalah dokumennya, bukan kodenya.
+
+Konsekuensi yang berlaku:
+
+- **`apps/api/` TIDAK dipakai.** Rujukan aktif ke jalur itu dihapus dari dokumen; tidak ada berkas yang perlu ditulis di sana.
+- **`apps/` tetap ada dan tetap dipakai** untuk aplikasi klien; `apps/mobile/` (React Native + Expo) tetap rencana fase 3.
+- **`services/face-engine/`** tetap rencana fase 2 untuk mesin AI Python. Backend Go di `backend/` adalah satu-satunya layanan yang berjalan saat ini.
+- **`firmware/`** dan **`tests/`** tetap rencana.
+
+> **Catatan historis:** usulan `apps/api/` berasal dari fase dokumentasi FL-001–FL-003, ketika belum ada kode sama sekali. Catatan itu tidak lagi menggambarkan jalur aktif dan **tidak boleh** diikuti oleh tugas implementasi berikutnya.
 
 ## 9. Status keputusan setelah FL-003
 

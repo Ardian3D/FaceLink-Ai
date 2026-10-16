@@ -72,6 +72,8 @@ go run ./cmd/server            # jalankan, mendengarkan di 127.0.0.1:8080
 
 Seluruh variabel lingkungan didokumentasikan pada [`.env.example`](.env.example). Petunjuk lengkap, termasuk cara menjalankan pengujian, ada di [`backend/README.md`](backend/README.md).
 
+`backend/` di akar repositori adalah **lokasi resmi** backend Go (lihat [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §8.1). Usulan lama `apps/api/` tidak dipakai. Quality gate otomatis ada di [`.github/workflows/backend-go.yml`](.github/workflows/backend-go.yml) dan berjalan pada Windows dan Ubuntu untuk setiap Pull Request ke `main`.
+
 > Aplikasi React Native, mesin AI Python, dan firmware ESP32 **belum dimulai**. Jangan membaca keberadaan folder `backend/` sebagai tanda fitur absensi sudah bekerja.
 
 ## Catatan asal README
