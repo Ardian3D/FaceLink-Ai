@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -33,6 +34,13 @@ const (
 	EnvShutdownTimeout = "FACELINK_SHUTDOWN_TIMEOUT"
 	EnvLogLevel        = "FACELINK_LOG_LEVEL"
 	EnvBuildVersion    = "FACELINK_BUILD_VERSION"
+	// GoogleClientIDs memuat daftar client ID OAuth yang diizinkan, dipisahkan
+	// koma. Client ID bukan rahasia, tetapi tetap konfigurasi — bukan nilai
+	// yang ditanam di kode (docs/API_CONTRACT.md §5.1).
+	EnvGoogleClientIDs = "FACELINK_GOOGLE_CLIENT_IDS"
+	// GoogleJWKSURL adalah sumber kunci publik Google. Dapat diarahkan ke
+	// penyedia simulasi pada pengujian; bawaannya endpoint resmi Google.
+	EnvGoogleJWKSURL = "FACELINK_GOOGLE_JWKS_URL"
 )
 
 // Nilai bawaan. Alamat bawaan sengaja loopback: mesin AI lokal dan backend tidak
@@ -47,6 +55,8 @@ const (
 	DefaultIdleTimeout     = 60 * time.Second
 	DefaultShutdownTimeout = 15 * time.Second
 	DefaultLogLevel        = "info"
+	// DefaultGoogleJWKSURL adalah endpoint kunci publik Google (OpenID Connect).
+	DefaultGoogleJWKSURL = "https://www.googleapis.com/oauth2/v3/certs"
 )
 
 var validLogLevels = map[string]bool{
@@ -69,6 +79,12 @@ type Config struct {
 	// dikonfigurasi; kesiapan dilaporkan sebagai "unavailable", bukan gagal
 	// seluruh backend (docs/SECURITY_PRIVACY.md §5e).
 	AIEngineURL string
+	// GoogleClientIDs adalah daftar audience yang diterima pada verifikasi ID
+	// token Google. Kosong berarti login Google belum dikonfigurasi: endpoint
+	// autentikasi menolak melayani, sementara operasi lokal lain tetap jalan.
+	GoogleClientIDs []string
+	// GoogleJWKSURL adalah alamat JWKS Google.
+	GoogleJWKSURL string
 	// Timeout server HTTP.
 	ReadTimeout     time.Duration
 	WriteTimeout    time.Duration
@@ -88,11 +104,20 @@ func (c Config) Redacted() map[string]any {
 	if c.AIEngineURL != "" {
 		aiState = "set"
 	}
+	googleState := "unset"
+	if len(c.GoogleClientIDs) > 0 {
+		// Jumlah client ID dilaporkan, nilainya tidak: daftar audience bukan
+		// rahasia, tetapi tidak ada gunanya memenuhi log dengan nilai
+		// konfigurasi yang dapat berubah.
+		googleState = fmt.Sprintf("configured (%d client id)", len(c.GoogleClientIDs))
+	}
 	return map[string]any{
 		"addr":             c.Addr,
 		"database_path":    c.DatabasePath,
 		"migrations_dir":   c.MigrationsDir,
 		"ai_engine_url":    aiState,
+		"google_oauth":     googleState,
+		"google_jwks_url":  c.GoogleJWKSURL,
 		"read_timeout":     c.ReadTimeout.String(),
 		"write_timeout":    c.WriteTimeout.String(),
 		"idle_timeout":     c.IdleTimeout.String(),
@@ -173,6 +198,21 @@ func LoadFrom(lookup EnvLookup) (Config, error) {
 		buildVersion = "dev"
 	}
 
+	// Daftar audience (client ID) Google. Kosong berarti login Google belum
+	// dikonfigurasi — bukan kesalahan konfigurasi: seluruh operasi lokal tetap
+	// berjalan dan endpoint autentikasi menolak dengan pesan jelas (§5e).
+	clientIDs := pecahDaftar(getString(lookup, EnvGoogleClientIDs, ""))
+	for _, id := range clientIDs {
+		if !strings.HasSuffix(id, ".apps.googleusercontent.com") {
+			problems = append(problems, fmt.Sprintf("%s: %q bukan client ID Google yang dikenal", EnvGoogleClientIDs, id))
+		}
+	}
+
+	jwksURL := strings.TrimSpace(getString(lookup, EnvGoogleJWKSURL, DefaultGoogleJWKSURL))
+	if err := validateHTTPSURL(jwksURL); err != nil {
+		problems = append(problems, fmt.Sprintf("%s: %v", EnvGoogleJWKSURL, err))
+	}
+
 	if len(problems) > 0 {
 		return Config{}, fmt.Errorf("konfigurasi tidak valid:\n  - %s", strings.Join(problems, "\n  - "))
 	}
@@ -182,6 +222,8 @@ func LoadFrom(lookup EnvLookup) (Config, error) {
 		DatabasePath:    filepath.Clean(dbPath),
 		MigrationsDir:   filepath.Clean(migrationsDir),
 		AIEngineURL:     aiURL,
+		GoogleClientIDs: clientIDs,
+		GoogleJWKSURL:   jwksURL,
 		ReadTimeout:     readTimeout,
 		WriteTimeout:    writeTimeout,
 		IdleTimeout:     idleTimeout,
@@ -189,6 +231,34 @@ func LoadFrom(lookup EnvLookup) (Config, error) {
 		LogLevel:        logLevel,
 		BuildVersion:    buildVersion,
 	}, nil
+}
+
+// pecahDaftar memecah nilai berkoma menjadi daftar bersih tanpa entri kosong.
+func pecahDaftar(nilai string) []string {
+	var hasil []string
+	for _, bagian := range strings.Split(nilai, ",") {
+		bersih := strings.TrimSpace(bagian)
+		if bersih != "" {
+			hasil = append(hasil, bersih)
+		}
+	}
+	return hasil
+}
+
+// validateHTTPSURL memastikan alamat kunci publik memakai HTTPS dan memiliki
+// host. Kunci signing Google tidak boleh diambil lewat HTTP terbuka.
+func validateHTTPSURL(nilai string) error {
+	parsed, err := url.Parse(nilai)
+	if err != nil {
+		return fmt.Errorf("alamat tidak dapat dibaca: %w", err)
+	}
+	if parsed.Scheme != "https" {
+		return errors.New("alamat harus memakai https")
+	}
+	if parsed.Host == "" {
+		return errors.New("alamat harus memuat host")
+	}
+	return nil
 }
 
 func getString(lookup EnvLookup, key, fallback string) string {
