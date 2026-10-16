@@ -2,6 +2,7 @@
 
 **Status:** Rancangan v0.3, belum berupa tampilan atau aplikasi jadi.
 **Revisi FL-010U (16 Oktober 2026):** rancangan diselaraskan dengan tiga role manusia (`admin`, `dosen`, `mahasiswa`) yang masuk dengan **Google Sign-In**, dan `device` sebagai autentikasi mesin terpisah. Cabang `docs/fl-010u-google-three-roles` dari `origin/main` (`804c2f7`). Role `operator` lama digantikan `dosen`; akun `mahasiswa` kini ada. Matriks izin lengkap: `docs/AUTHORIZATION.md` §2 dan §4.
+**Revisi FL-010V (16 Oktober 2026):** ditambahkan keadaan **sesi dicabut/pengguna dinonaktifkan** dan **kegagalan TLS/sertifikat tidak tepercaya** (§2.1 dan §3), catatan **satu role utama per akun sehingga navigasi tidak berpindah role** (§2), serta sub-bagian **§3a prosedur offline saat sesi tidak sah** — **tanpa bypass autentikasi**, rujuk Q-24. Seluruh keadaan baru berstatus **BELUM TERVERIFIKASI**. Rancangan biometrik dan aturan konsen **tidak diubah**.
 **Platform utama:** Android melalui React Native + Expo + TypeScript. Dashboard berfokus pada tiga role manusia pada MVP.
 
 ## 1. Tujuan pengalaman pengguna
@@ -12,12 +13,14 @@
 
 Navigasi ditentukan oleh `role` yang dikembalikan backend. Menyembunyikan menu **bukan** pengendalian akses: setiap permintaan tetap diperiksa backend. Role manusia yang berlaku pada MVP adalah `admin`, `dosen`, dan `mahasiswa`, semuanya masuk dengan Google Sign-In; `device` adalah autentikasi mesin terpisah dan tidak memakai aplikasi ini. Role `operator` lama digantikan `dosen` (cakupannya terbagi antara `admin` dan `dosen`), dan akun `mahasiswa` kini ada; seluruh matriks izin ada di `docs/AUTHORIZATION.md` §2 dan §4.
 
+**Satu role utama per akun (FL-010V, 16 Oktober 2026 — D-037).** Satu akun internal memiliki **tepat satu role utama aktif**, dan **satu identitas Google tidak boleh menghasilkan beberapa sesi role berbeda**. Karena itu **navigasi tidak pernah berpindah role** di dalam aplikasi: tidak ada tombol, menu, atau alur **multi-role switching** pada MVP, dan satu perangkat yang sudah masuk sebagai satu role tetap memakai navigasi role itu sampai keluar. Menjalankan demo sebagai `admin` sekaligus `dosen` menuntut **dua akun berbeda**, bukan satu akun dengan dua peran. Hak istimewa `admin` atas operasi kelas ditetapkan backend dan **tidak** menjadikan akun itu `dosen` kedua. Perubahan role hanya oleh `admin` berwenang, **wajib diaudit** (`user.role_changed`), dan berlaku pada permintaan berikutnya karena role dibaca ulang dari database — aplikasi tidak mengubah navigasi berdasarkan klaim token.
+
 ### 2.1 Alur masuk dengan Google Sign-In
 
 1. Pengguna menekan **"Continue with Google"**; tidak ada form email/kata sandi.
-2. Aplikasi menerima Google ID token dari perangkat dan mengirimkannya ke backend (`POST /auth/google`). Aplikasi **tidak pernah** menentukan role.
+2. Aplikasi membuat **nonce acak per percobaan login**, mengirimkannya ke Google dan ke backend, lalu mengirim Google ID token ke backend (`POST /auth/google`). Aplikasi **tidak pernah** menentukan role. Nonce berlaku sekali pakai (kedaluwarsa 5 menit); percobaan login yang gagal memerlukan nonce baru.
 3. Backend memverifikasi ID token, mencari akun internal, memeriksa `status`, lalu menerbitkan sesi aplikasi; respons memuat `role` dan aplikasi mengarahkan ke beranda role tersebut.
-4. Sesi disimpan pada penyimpanan aman perangkat dan tidak pernah ditulis ke log atau berkas konfigurasi.
+4. Sesi disimpan pada **penyimpanan kredensial platform** (Android Keystore lewat penyimpanan aman Expo), **bukan** plaintext di `AsyncStorage`, dan tidak pernah ditulis ke log atau berkas konfigurasi. Google ID token tidak disimpan sebagai kredensial.
 
 Keadaan gagal yang wajib dibedakan. Untuk keadaan yang menyangkut keberadaan atau status akun, pesan yang ditampilkan **satu pesan generik** (anti-enumeration) dan tidak membedakan sebabnya:
 
@@ -28,6 +31,11 @@ Keadaan gagal yang wajib dibedakan. Untuk keadaan yang menyangkut keberadaan ata
 | Google tidak terjangkau | Pesan gangguan jaringan bahwa layanan identitas tidak dapat dihubungi saat ini, dengan opsi mencoba lagi; **tidak ada** sesi yang diterbitkan |
 | Sesi berakhir | Sesi aplikasi tidak lagi sah (kedaluwarsa atau dicabut); pengguna wajib masuk kembali dengan Google dan memerlukan internet saat itu |
 | Akun belum tertaut | Akun `mahasiswa` aktif tetapi belum ditautkan ke baris peserta (`409 ACCOUNT_NOT_LINKED`); dijelaskan bahwa data pribadi belum tersedia dan `admin` perlu menautkan akun |
+| **Sesi dicabut saat aplikasi berjalan (FL-010V)** | Permintaan berikutnya ditolak `401 SESSION_REVOKED`; aplikasi menghapus token yang tersimpan, menutup layar operasi, dan **kembali ke layar masuk Google** dengan penjelasan singkat bahwa sesi tidak lagi berlaku. Tidak ada mode kerja lanjutan, tidak ada data lama yang ditampilkan, dan tidak ada opsi "lanjut tanpa masuk" |
+| **Pengguna dinonaktifkan saat aplikasi berjalan (FL-010V)** | Sama seperti di atas: sesi dicabut dan aplikasi **kembali ke layar masuk Google** dengan pesan generik §2.1 (arahan menghubungi `admin`); mencoba masuk lagi gagal sampai `admin` mengaktifkan kembali. Pesan **tidak** membedakan penonaktifan dari pencaburan lain |
+| **Kegagalan TLS / sertifikat tidak tepercaya (FL-010V)** | Pesan jelas bahwa koneksi ke server tidak aman atau sertifikat server tidak tepercaya, dengan arahan menghubungi `admin` untuk memasang sertifikat yang benar. **Tidak ada** opsi "abaikan", "lanjut saja", atau "nonaktifkan validasi sertifikat", dan **tidak ada** pengiriman token atau ID token di atas koneksi yang gagal diverifikasi |
+
+**Catatan FL-010V (16 Oktober 2026).** Kegagalan TLS **tidak boleh** diselesaikan dengan menonaktifkan validasi (`InsecureSkipVerify` atau ekuivalen) dan tidak boleh ditawarkan sebagai pilihan kepada pengguna. Bila sertifikat tidak tepercaya, aplikasi berhenti dan melaporkan; perbaikan dilakukan pada konfigurasi server/sertifikat (lihat `docs/SECURITY_PRIVACY.md` §6).
 
 ### 2.2 Navigasi `admin`
 
@@ -80,8 +88,26 @@ Kelas di luar penugasan tidak ditampilkan; bila tetap diminta, backend menjawab 
 - **Butuh petugas (`admin`/`dosen`):** hasil ambigu, peserta tidak mendaftar, persetujuan belum aktif.
 - **Offline/gangguan:** koneksi server atau mesin AI bermasalah; tampilkan pesan yang dapat ditindaklanjuti.
 - **Sesi/akun (FL-010U):** keadaan berikut harus punya tampilan terpisah dari keadaan kamera di atas — **sedang masuk** (Google Sign-In berjalan), **sesi berakhir** (sesi aplikasi kedaluwarsa atau dicabut → wajib masuk lagi), **akun belum diberi akses atau dinonaktifkan** (satu pesan generik, lihat §2.1), **akun belum tertaut** (`409 ACCOUNT_NOT_LINKED`), dan **perlu internet untuk masuk** (Google tidak terjangkau). Selama sesi masih sah, aplikasi tidak memanggil Google, jadi keadaan ini tidak muncul saat internet mati tetapi sesi hidup.
+- **Sesi dicabut atau pengguna dinonaktifkan saat aplikasi berjalan (FL-010V, 16 Oktober 2026):** tampilan terpisah yang menutup layar operasi, menghapus token tersimpan, dan **mengembalikan pengguna ke layar masuk Google** dengan penjelasan singkat. Tidak ada mode kerja lanjutan, tidak ada tampilan data lama, dan tidak ada tombol "lanjut tanpa masuk". Pesan penonaktifan memakai pesan generik §2.1 agar tidak membedakan sebabnya.
+- **Kegagalan TLS atau sertifikat tidak tepercaya (FL-010V, 16 Oktober 2026):** pesan jelas bahwa koneksi tidak dapat diverifikasi kepercayaannya, disertai arahan menghubungi `admin`. **Tidak ada** opsi menonaktifkan validasi sertifikat, mengabaikan peringatan, atau melanjutkan pengiriman data.
+- **Offline dengan sesi tidak sah (FL-010V, 16 Oktober 2026):** internet mati **dan** sesi aplikasi tidak berlaku; tampilkan penjelasan bahwa masuk kembali memerlukan internet, dan **tidak ada** jalur operasi di aplikasi. Rincian prosedur mengikuti §3a.
 
 Jangan memakai warna saja untuk menyampaikan status: sertakan ikon dan teks jelas.
+
+### 3a. Prosedur offline saat sesi tidak sah (FL-010V, 16 Oktober 2026)
+
+Internet tetap diperlukan untuk **login awal dan re-autentikasi** serta pengambilan kunci/metadata Google. Sesi aplikasi yang masih sah dipakai pada backend lokal tanpa menghubungi Google pada setiap permintaan, tetapi **login Google baru tidak boleh dijanjikan berjalan offline**.
+
+Bila internet terputus **dan** sesi aplikasi tidak berlaku (kedaluwarsa, dicabut, atau batas absolut 30 hari tercapai):
+
+1. **Tidak ada bypass autentikasi.** Aplikasi **tidak** menyediakan mode operasi, kunci darurat, akun lokal, atau jalur apa pun yang melewati pemeriksaan sesi, status akun, role, dan cakupan resource. Endpoint terproteksi tetap menolak permintaan tanpa sesi yang sah (`401`), dan penolakan itu **tidak** dilonggarkan hanya karena jaringan bermasalah.
+2. **Aplikasi tidak menampilkan data operasi.** Layar sesi, daftar hadir, dan data peserta tidak dibuka kembali dari salinan lama; yang tampil hanya penjelasan keadaan dan langkah yang harus dilakukan.
+3. **Absensi manual mengikuti prosedur operasional aman.** Kehadiran yang harus dicatat selama keadaan ini dicatat di luar aplikasi mengikuti prosedur operasional kelas yang disetujui (daftar hadir manual yang ditandatangani/diverifikasi petugas yang berwenang), **bukan** melalui klaim aplikasi.
+4. **Operator memasukkannya setelah terautentikasi kembali.** Setelah jaringan dan sesi pulih, petugas yang berwenang (peran yang berhak menurut `docs/AUTHORIZATION.md` §4) memasukkan catatan itu melalui **absensi manual yang terautentikasi**, dengan `reason`, sehingga setiap baris kehadiran dapat dipertanggungjawabkan dan tercatat pada `audit_events`.
+5. **Tidak ada kehadiran yang diisi tebakan.** Kehadiran yang tidak dapat dipastikan dibiarkan **tidak tercatat**, bukan diisi perkiraan (D-028).
+6. **Rincian prosedur masih terbuka.** Rancangan rinci — termasuk bila keadaan ini tidak dapat diterima untuk demo — tetap **Q-24** pada `docs/OPEN_QUESTIONS.md` dan **belum diputuskan**; bagian ini hanya menetapkan larangan bypass autentikasi dan arah prosedur, **bukan** janji bahwa jalur offline sudah dirancang atau teruji.
+
+**Status: BELUM TERVERIFIKASI.** Tidak ada bagian dari prosedur ini yang sudah dijalankan atau diuji.
 
 ## 4. Alur demo kelas pertama
 

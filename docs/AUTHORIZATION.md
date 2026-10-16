@@ -1,6 +1,6 @@
 # Matriks Peran dan Otorisasi FaceLink AI (MVP)
 
-**Versi:** 2.0 · **Status:** **ARSITEKTUR DISETUJUI PEMILIK PROJECT PADA FL-010U (16 Oktober 2026); BELUM DIIMPLEMENTASIKAN.** Dokumen ini menggantikan rancangan peran FL-010/FL-010R. Butir yang masih menuntut keputusan pemilik ada di §9.
+**Versi:** 2.1 · **Status:** **DISETUJUI PEMILIK PROJECT (FL-010V, 16 Oktober 2026); BELUM DIIMPLEMENTASIKAN.** Seluruh keputusan yang sebelumnya menunggu (cakupan `dosen`, audit minimum, pengikatan jaringan, lifecycle akun, dan session management) **sudah disetujui**; rinciannya di `docs/DECISIONS.md` D-032–D-037. Butir yang **masih terbuka** ada di §9.
 
 **Lingkup:** demo **satu kelas, satu terminal** (`docs/PRD.md` §4). Tidak ada multi-tenant, multi-organisasi, SSO perusahaan, billing, atau HRIS. Semua isi dokumen ini berlaku untuk MVP lokal dan **tidak** boleh diperluas diam-diam.
 
@@ -37,6 +37,8 @@
 | `mahasiswa` | Peserta yang memiliki akun dan akses pribadi | Dashboard pribadi: profil, jadwal sesi kelas yang diikuti, status dan riwayat kehadiran sendiri, status persetujuan sendiri | Keputusan pemilik FL-010U §4 |
 
 Ketiganya masuk melalui **Google Sign-In** dan memakai **satu aplikasi React Native yang sama** dengan navigasi berbeda menurut role dari backend.
+
+**Satu role utama per akun (D-037, disetujui FL-010V).** Satu akun internal memiliki **tepat satu** role utama aktif; satu identitas Google **tidak boleh** menghasilkan beberapa sesi role berbeda, dan **tidak ada** multi-role switching pada MVP. Hak istimewa `admin` ditetapkan backend dan tetap memungkinkan **operasi kelas sesuai kontrak tanpa menjadikan admin sebagai `dosen` kedua**.
 
 ### 2.2 Aktor mesin dan proses internal (bukan role pengguna manusia)
 
@@ -83,7 +85,10 @@ Ketiganya masuk melalui **Google Sign-In** dan memakai **satu aplikasi React Nat
 | Penyimpanan klien | Penyimpanan aman perangkat; **dilarang** ditulis ke log, Git, atau berkas konfigurasi |
 | Pencabutan | Logout mencabut sesi itu; `admin` dapat mencabut sesi mana pun; penonaktifan akun mencabut seluruh sesi akun itu |
 | Rotasi dan penyalahgunaan | Setiap penyegaran menerbitkan token baru; pemakaian ulang penyegar lama → **seluruh sesi dicabut** + audit `auth.session.reuse_detected` |
-| Aturan keras | Google ID token **tidak pernah** dipakai sebagai sesi aplikasi dan **tidak pernah** disimpan |
+| Batas absolut sesi | **30 hari sejak sesi awal dibuat**; rotasi penyegar **tidak** memperpanjang batas ini — perpanjangan hanya lewat Google Sign-In ulang yang sah (D-033, disetujui FL-010V) |
+| Nonce OIDC | Aplikasi membuat nonce acak per percobaan login dan mengirimkannya ke Google serta backend; backend menolak nonce yang sudah dipakai (sekali pakai, TTL 5 menit, disimpan sebagai hash) |
+| Penyimpanan di klien | **Wajib** penyimpanan kredensial platform (Android Keystore melalui penyimpanan aman Expo). **Dilarang** menyimpan token sensitif sebagai plaintext di AsyncStorage |
+| Aturan keras | Google ID token **tidak pernah** dipakai sebagai sesi aplikasi, **tidak pernah** disimpan, dan **bukan** token otorisasi API FaceLink AI |
 
 **Bootstrap admin pertama** dilakukan **lokal, sekali, oleh operator mesin**: perintah `-bootstrap-admin` pada `cmd/server` menulis satu baris `users` (`role='admin'`, `status='invited'`) untuk email Google yang disebutkan, menolak berjalan bila sudah ada akun `admin` aktif atau `invited`, tidak menerima kata sandi, dan diaudit `user.bootstrapped`. **Pengguna Google pertama tidak pernah otomatis menjadi admin.**
 
@@ -116,6 +121,8 @@ Bukan peran API publik. Hanya loopback `127.0.0.1`/IPC dengan token internal (`d
 ## 4. Matriks otorisasi `endpoint × peran`
 
 Diturunkan langsung dari `docs/API_CONTRACT.md` §4. **Total 53 baris endpoint.** Kolom "Peran yang diizinkan" adalah **satu-satunya** sumber kebenaran otorisasi; endpoint yang tidak tercantum **tidak boleh** dibuat.
+
+> **FL-010V (16 Oktober 2026):** persetujuan D-034 **tidak mengubah** satu pun baris pada §4.1–§4.13. Tidak ada endpoint baru, tidak ada peran yang ditambah atau dikurangi, dan tidak ada perubahan izin. Bila suatu saat izin berubah, perubahan itu wajib punya alasan terdokumentasi dan tabel rekap §4.14 harus dihitung ulang secara programatis.
 
 Dari 53 endpoint, **2** dapat dipanggil tanpa token (`POST /auth/google`, `GET /healthz`) dan **51** menuntut kredensial yang sah; jumlah 51 adalah soal autentikasi, bukan soal peran.
 
@@ -306,11 +313,11 @@ Jumlah endpoint yang boleh dipanggil tiap peran: `admin` **46** · `dosen` **18*
 | `auth.google.succeeded`, `auth.google.linked` | **Ya** | Jejak pembuatan sesi dan penautan identitas pada login pertama |
 | `auth.login.denied` | **Ya** | Menyimpan `reason` ber-kode (`no_account`, `not_linked`, `suspended`, `email_mismatch`), **tanpa** email atau `sub` |
 | `auth.session.refreshed`, `auth.session.revoked`, `auth.session.reuse_detected`, `auth.logout` | **Ya** | Pencabutan dan deteksi penyalahgunaan harus dapat ditelusuri |
-| `user.bootstrapped`, `user.invited`, `user.role_changed`, `user.status_changed` | **Ya** (usulan perluasan, §9 butir 3) | Perubahan hak akses |
-| `person.account_linked`, `person.account_unlinked` | **Ya** (usulan perluasan) | Penautan akun–biometrik harus dapat diaudit |
-| `class.dosen_assigned`, `class.dosen_removed` | **Ya** (usulan perluasan) | Perubahan cakupan akses |
-| Penolakan otorisasi pada jalur administratif (`authz.denied`) | **Usulan lama, belum disetujui** | FL-010 §9 butir 4 masih menunggu keputusan pemilik; jangan diperlakukan sebagai kontrak yang berlaku |
-| Perangkat ditolak karena `device_id` tidak cocok (`auth.device.mismatch`) | **Usulan lama, belum disetujui** | Idem |
+| `user.bootstrapped`, `user.invited`, `user.role_changed`, `user.status_changed` | **Ya** (berlaku, D-036 FL-010V) | Perubahan hak akses |
+| `person.account_linked`, `person.account_unlinked` | **Ya** (berlaku, D-036) | Penautan akun–biometrik harus dapat diaudit |
+| `class.dosen_assigned`, `class.dosen_removed` | **Ya** (berlaku, D-036) | Perubahan cakupan akses |
+| Penolakan otorisasi pada jalur administratif (`authz.denied`) | **Ya** (berlaku, D-036) | Menutup jalur penyalahgunaan dan salah konfigurasi; `safe_metadata` memuat `actor_id`, peran, jalur, metode, dan `request_id` saja |
+| Perangkat ditolak karena `device_id` tidak cocok (`auth.device.mismatch`) | **Ya** (berlaku, D-036) | Indikasi perangkat/salinan konfigurasi yang salah |
 | Permintaan tanpa token pada endpoint terlindungi | **Tidak wajib** | Volume tinggi, tanpa aktor teridentifikasi |
 | Permintaan ke sumber daya di luar cakupan (`404`) | **Tidak wajib** | Tidak dapat dibedakan dari "tidak ada" tanpa membocorkan |
 
@@ -377,6 +384,10 @@ Mengunci keputusan FL-010U sebagai **kontrak yang dapat diuji** untuk implementa
 | AC-AUTHZ-16 | Admin terakhir dan akun sendiri tidak dapat dinonaktifkan/diturunkan perannya (`409`) |
 | AC-AUTHZ-17 | `mahasiswa` hanya dapat membaca datanya sendiri; tidak ada parameter klien yang dapat mengarahkan ke `person_id` lain |
 | AC-AUTHZ-18 | Pemakaian ulang token penyegar yang sudah dirotasi mencabut sesi dan tercatat di audit |
+| AC-AUTHZ-19 | Penautan identitas bersifat atomik: dua permintaan login bersamaan untuk akun `invited` yang sama menghasilkan **tepat satu** penautan dan tidak ada baris ganda |
+| AC-AUTHZ-20 | Satu identitas Google tidak dapat ditautkan ke dua akun, dan perubahan alamat email di penyedia **tidak** mengalihkan akun yang sudah tertaut |
+| AC-AUTHZ-21 | Batas absolut sesi 30 hari dihitung sejak sesi dibuat; rotasi penyegar **tidak** memperpanjangnya |
+| AC-AUTHZ-22 | Satu akun hanya memiliki satu role utama aktif; tidak ada jalur untuk memperoleh beberapa sesi role berbeda dari satu identitas Google |
 
 ### 8.2 Skenario uji penolakan akses (negatif)
 
@@ -411,15 +422,15 @@ Melengkapi `docs/TEST_PLAN.md` §2 dan §7–§8. Diberi ID `TA-xx` agar dapat d
 
 ---
 
-## 9. Konflik, koreksi, dan hal yang butuh keputusan pemilik
+## 9. Keputusan yang sudah diambil dan yang masih terbuka
 
-Bagian ini dicatat apa adanya. FL-010U menuliskan rancangan berdasarkan keputusan pemilik; hal-hal berikut **belum** diputuskan dan tidak boleh diperlakukan sebagai kontrak yang berlaku.
+Bagian ini dicatat apa adanya. Sejak **FL-010V (16 Oktober 2026)**, butir **1–4 di bawah sudah diputuskan pemilik** dan berstatus berlaku; butir **5–9 masih terbuka** dan tidak boleh diperlakukan sebagai kontrak yang berlaku.
 
-1. **Cakupan `dosen` mengikuti daftar tugas FL-010U §4 secara harfiah.** Akibat yang harus dipahami pemilik: **enrollment biometrik, pencatatan/pencabutan konsen, pengelolaan peserta, ekspor CSV, dan seluruh operasi perangkat menjadi milik `admin`**. Bila alur demo menuntut dosen melakukan enrollment atau mencatat konsen di kelas yang ditugaskannya, matriks §4 harus diperluas lewat keputusan pemilik, bukan lewat penafsiran agent.
-2. **Ekspor CSV hanya `admin`.** Dosen dapat melihat rekap pada aplikasi tetapi tidak mengunduh berkas ekspor. Bila dosen memerlukannya, yang berubah hanya kolom peran pada baris itu — bukan endpoint baru.
-3. **Perluasan daftar audit minimum** (§6.2) menunggu persetujuan pemilik. Selama belum disetujui, aksi baru ditulis sebagai usulan, dan `authz.denied` serta `auth.device.mismatch` tetap usulan lama FL-010 yang belum disetujui.
-4. **Satu akun Google = satu baris `users` = satu role.** Menjalankan demo sebagai admin sekaligus dosen memerlukan dua akun Google berbeda. Bila pemilik menghendaki satu orang memegang dua role (mis. dosen yang juga mengelola akunnya sendiri), itu perubahan model data dan otorisasi yang harus diputuskan lebih dahulu.
-5. **Jalur absensi saat internet mati dan sesi habis tidak dirancang.** Google Sign-In menuntut internet (§10 butir 1). Bila pemilik menghendaki absensi tetap dapat dicatat tanpa sesi yang sah, itu keputusan kebijakan tersendiri — bukan penambahan yang boleh diputuskan agent.
+1. **DIPUTUSKAN (FL-010V) — cakupan `dosen` (D-034).** `dosen` hanya mengelola kelas yang secara resmi ditugaskan: melihat kelas dan pesertanya, membuka/menutup sesi, absensi manual, melihat status/riwayat/rekap kelasnya, dan fungsi operasional kelas yang eksplisit diizinkan matriks. **Enrollment biometrik, pengelolaan persetujuan biometrik, pengelolaan pengguna dan role, pengelolaan perangkat IoT global, dan penghapusan peserta sensitif tetap khusus `admin`.** Matriks §4 **tidak berubah**.
+2. **DIPUTUSKAN (FL-010V) — ekspor data administratif (D-034).** `GET /sessions/{session_id}/export.csv` tetap **admin-only**; dosen melihat rekap pada aplikasi. Perubahan di masa depan menuntut alasan terdokumentasi.
+3. **DIPUTUSKAN (FL-010V) — daftar audit minimum (D-036).** Perluasan daftar audit **berlaku**, termasuk `authz.denied` dan `auth.device.mismatch` yang sebelumnya masih usulan. Rincian ada di §6.2.
+4. **DIPUTUSKAN (FL-010V) — satu role utama per akun (D-037).** Satu akun = tepat satu role utama aktif; satu identitas Google tidak menghasilkan beberapa sesi role; tidak ada multi-role switching pada MVP. Demo sebagai admin sekaligus dosen tetap memerlukan dua akun Google berbeda.
+5. **Jalur absensi saat internet mati dan sesi habis belum dirancang (Q-24, tetap terbuka).** Google Sign-In menuntut internet (§10 butir 1). FL-010V menegaskan **tidak ada bypass autentikasi**: operasi manual mengikuti prosedur operasional aman lalu dimasukkan setelah operator terautentikasi kembali. Rincian prosedurnya tetap pertanyaan terbuka di `docs/OPEN_QUESTIONS.md`.
 6. **Penarikan konsen oleh mahasiswa sendiri dari aplikasi** (P1) belum dirancang; pencatatan dan pencabutan konsen tetap melalui `admin` sesuai matriks §4.
 7. **Jadwal akademik penuh tidak ada.** `GET /me/schedule` menampilkan sesi absensi nyata, bukan jadwal mata kuliah. Bila diperlukan tabel jadwal, itu keputusan model data baru.
 8. **Rujukan rusak pada keputusan lama.** `docs/DECISIONS.md` D-028 menunjuk `docs/UX_FLOWS.md` §10, sedangkan dokumen itu hanya memiliki §1–§8. Target yang dimaksud **tidak dapat ditentukan dengan pasti** dan **tidak boleh ditebak**; pemilik perlu menyebut bagian yang dimaksud. Dicatat sebagai masalah terbuka.
@@ -436,6 +447,9 @@ Bagian ini dicatat apa adanya. FL-010U menuliskan rancangan berdasarkan keputusa
 - Tidak ada login perangkat lewat Google, dan tidak ada perangkat yang dihitung sebagai pengguna manusia.
 - Tidak ada endpoint yang menulis kehadiran tanpa kredensial.
 - Tidak ada SSO organisasi, LDAP, atau penyedia identitas kedua pada MVP.
+- Tidak ada multi-role switching: satu akun hanya memiliki satu role utama aktif (D-037).
+- Tidak ada bypass autentikasi saat internet mati atau sesi tidak sah: operasi manual mengikuti prosedur operasional aman lalu dimasukkan setelah operator terautentikasi kembali (Q-24 masih terbuka untuk rinciannya).
+- Tidak ada akses backend dari internet publik; LAN privat hanya lewat konfigurasi eksplisit dan HTTPS bersertifikat tepercaya (D-035).
 - Tidak ada cloud, billing, HRIS, atau CCTV terus-menerus (D-016 `DITUNDA`).
 
 ---

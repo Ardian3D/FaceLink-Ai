@@ -1,13 +1,18 @@
 # Kontrak API FaceLink AI
 
-**Versi:** 1.0 · **Revisi:** FL-010U (16 Oktober 2026) · **Status:** SPESIFIKASI FINAL TAHAP DOKUMENTASI; **BELUM DIIMPLEMENTASIKAN** dan belum menjadi berkas OpenAPI yang dapat dijalankan.
+**Versi:** 1.0 · **Revisi:** FL-010V (16 Oktober 2026) · **Status:** SPESIFIKASI FINAL TAHAP DOKUMENTASI; **BELUM DIIMPLEMENTASIKAN** dan belum menjadi berkas OpenAPI yang dapat dijalankan.
 
-Dokumen ini adalah acuan wajib yang harus ditinjau sebelum membuat handler Go atau layar React Native yang memanggilnya. Kontrak ini **mengikuti** keputusan yang sudah disetujui di `docs/DECISIONS.md` (D-010, D-020, D-021, D-022, D-027, D-028) dan **tidak menggantikan** `docs/PRD.md`.
+Dokumen ini adalah acuan wajib yang harus ditinjau sebelum membuat handler Go atau layar React Native yang memanggilnya. Kontrak ini **mengikuti** keputusan yang sudah disetujui di `docs/DECISIONS.md` (D-010, D-020, D-021, D-022, D-027, D-028, D-031–D-037) dan **tidak menggantikan** `docs/PRD.md`.
 
 **Tidak ada kode aplikasi yang ditulis pada tugas ini.** Seluruh contoh di bawah adalah ilustrasi bentuk data, bukan bukti endpoint sudah berjalan.
 
 > **Revisi FL-010U (16 Oktober 2026), cabang `docs/fl-010u-google-three-roles` dari `origin/main` (`804c2f7`).**
 > Revisi ini menyelaraskan kontrak dengan arsitektur tiga role manusia (`admin`, `dosen`, `mahasiswa`) + Google Sign-In, dan `device` sebagai autentikasi mesin yang terpisah. Perubahan bersifat **dokumentasi saja**: tidak ada kode Go, TypeScript, SQL, atau berkas migrasi yang ditulis pada FL-010U. Seluruh skenario runtime di dokumen ini berstatus **BELUM TERVERIFIKASI**. Kontrak kanonik revisi ini ada di dalam repo: matriks peran/izin tunggal pada `docs/AUTHORIZATION.md` §4, ketentuan sesi pada `docs/DECISIONS.md` D-031–D-033, dan tabel ketersediaan layanan pada `docs/ARCHITECTURE.md` §7.1.
+
+> **Revisi FL-010V (16 Oktober 2026), cabang `docs/fl-010v-final-auth-decisions`.**
+> Revisi ini mencatat **persetujuan final** pemilik project atas keputusan autentikasi dan otorisasi: **D-032** (lifecycle akun), **D-033** (session management), **D-034** (hak akses `dosen`), **D-035** (akses jaringan lokal — **disetujui pada tingkat kebijakan**), **D-036** (perluasan daftar minimum audit keamanan — **kini BERLAKU**), dan **D-037** (satu role utama aktif per akun — disetujui untuk MVP); **D-031 tetap DISETUJUI**. Perubahan pada FL-010V bersifat **dokumentasi saja**: tidak ada kode Go, TypeScript, SQL, atau berkas migrasi yang ditulis.
+>
+> **Tidak ada endpoint yang berubah pada FL-010V.** Matriks 53 endpoint (§4) beserta metode, jalur, dan himpunan perannya **tidak diubah**; nama peran, nama tabel, dan kode kesalahan stabil juga tidak diubah. Yang ditambahkan hanyalah aturan dan catatan yang mengikat di dalam kontrak: transport dan jaringan (§1.6), aturan nonce dan batas absolut sesi (§5.1), lifecycle akun (§5.2), perluasan audit (§5.13), dan daftar hal yang masih menunggu keputusan (§10). Kontrak kanonik revisi ini ada di dalam repo: keputusan pada `docs/DECISIONS.md` D-031–D-037, matriks peran/izin tunggal pada `docs/AUTHORIZATION.md` §4, kebijakan audit pada `docs/SECURITY_PRIVACY.md` §6, dan detail transport pada `docs/ARCHITECTURE.md` §5.1. Seluruh skenario runtime di dokumen ini tetap berstatus **BELUM TERVERIFIKASI**.
 
 ## 1. Aturan umum
 
@@ -148,6 +153,20 @@ Kode kesalahan stabil minimum yang dipakai lintas modul:
 | `DATABASE_BUSY` | 503 | Database terkunci melewati batas tunggu |
 | `INTERNAL_ERROR` | 500 | Kesalahan tak terduga |
 
+### 1.6 Transport dan jaringan (FL-010V)
+
+Aturan berikut menetapkan **transport dan pengikatan jaringan** untuk komunikasi aplikasi → backend. Ketentuan ini bersifat **kebijakan (D-035, disetujui pada tingkat kebijakan pada FL-010V)**; rincian pelaksanaan sertifikat belum diuji. Tidak ada endpoint yang berubah oleh aturan ini — ia hanya mengikat bagaimana endpoint yang sudah ada dijangkau.
+
+1. **Default development adalah loopback** (`127.0.0.1`). Tidak ada nilai bawaan yang membuka backend ke antarmuka lain.
+2. **Akses dari HP lewat LAN privat hanya boleh diaktifkan lewat konfigurasi eksplisit** (mis. nilai alamat yang dipilih operator). Tidak ada default yang membuka jaringan, dan pengikatan LAN **tidak boleh** menjadi perilaku otomatis.
+3. **Setiap komunikasi aplikasi → backend pada LAN wajib HTTPS dengan sertifikat yang dipercaya perangkat.** Sertifikat harus dipasang/dipercayai sebagai bagian dari penyiapan yang disengaja, bukan diterima begitu saja oleh aplikasi.
+4. **Dilarang**: HTTP terbuka sebagai konfigurasi deployment yang direkomendasikan; menonaktifkan validasi TLS; `InsecureSkipVerify` atau ekuivalen pada klien mana pun. Tidak ada flag "abaikan sertifikat" pada aplikasi.
+5. **Backend tidak boleh dibuka ke internet publik.** Jangan menganggap Wi-Fi privat saja sudah melindungi access/refresh token; token tetap menuntut transport terenkripsi dan jaringan yang dikendalikan.
+6. **Untuk development, loopback atau `adb reverse` boleh dipakai** bila sesuai keamanan platform. `adb reverse tcp:8080 tcp:8080` mempertahankan backend pada loopback tanpa menambah permukaan jaringan.
+7. **Rincian sertifikat lokal dan trust chain Android masih pekerjaan teknis yang BELUM DIUJI.** Catatan pembatas yang wajib dibaca bersama aturan ini: Android 7+ **tidak** mempercayai CA yang dipasang pengguna untuk aplikasi kecuali aplikasi memakai `network_security_config` atau build kustom (Expo Go tidak dapat memuat konfigurasi itu), sehingga opsi CA lokal/reverse proxy menuntut development build/production build — dan **itu yang harus diuji**. Detail temuan dan batasan ini ada di `docs/ARCHITECTURE.md` §5.1 dan kebijakan privasi/keamanannya di `docs/SECURITY_PRIVACY.md` §6.
+8. **Kode yang berlaku saat ini menolak pengikatan non-loopback** (`FACELINK_ADDR` selain `127.0.0.1`/`localhost`/`::1` ditolak oleh `backend/internal/config/config.go`), sehingga pengikatan LAN harus diimplementasikan pada **FL-011** bersama TLS. Selama aturan itu berlaku, opsi yang tersedia untuk demo adalah loopback + `adb reverse`.
+9. **Status verifikasi:** tidak ada satu pun ketentuan pada sub-bagian ini yang sudah diuji. Seluruhnya berstatus **BELUM TERVERIFIKASI**.
+
 ## 2. Strategi versi
 
 1. Versi mayor ada pada jalur (`/api/v1`). Perubahan yang **memutus kompatibilitas** menaikkan nomor mayor dan menambah jalur baru; jalur lama tidak dihapus dalam tugas yang sama.
@@ -265,13 +284,15 @@ Notasi: **wajib** berarti field harus ada. Semua contoh JSON memakai UUID dan ni
 
 Ringkasan alur (selengkapnya pada `docs/AUTHORIZATION.md` §3.1 dan `docs/DECISIONS.md` D-031): aplikasi React Native meminta Google ID token (JWT) di sisi perangkat, mengirimkannya ke `POST /auth/google`, backend memverifikasi token menurut OpenID Connect, mencari identitas pada `user_identities` dengan kunci `(provider='google', subject=sub)`, memeriksa status akun `users`, lalu menerbitkan **sesi FaceLink AI** berupa token opak. Google ID token **bukan** sesi aplikasi dan **tidak pernah** disimpan sebagai sesi.
 
-Bentuk sesi (rancangan MVP; `docs/AUTHORIZATION.md` §3.1 dan `docs/DECISIONS.md` D-033): token opak acak 256-bit dikirim sebagai `Authorization: Bearer <token>`; di server hanya **hash SHA-256** yang disimpan pada `session_tokens`; masa berlaku token akses 60 menit; token penyegar 30 hari dengan **batas absolut sesi 30 hari**; penyimpanan klien di penyimpanan aman perangkat. Peran **tidak** disimpan di dalam token: role selalu dibaca ulang dari database pada setiap permintaan.
+Bentuk sesi (`docs/AUTHORIZATION.md` §3.1 dan `docs/DECISIONS.md` **D-033, DISETUJUI pada FL-010V**): token opak acak 256-bit dikirim sebagai `Authorization: Bearer <token>`; di server hanya **hash SHA-256** yang disimpan pada `session_tokens`; masa berlaku token akses 60 menit; token penyegar 30 hari dengan **batas absolut sesi 30 hari dihitung sejak sesi awal dibuat**; penyimpanan klien di penyimpanan aman perangkat. Peran **tidak** disimpan di dalam token: role selalu dibaca ulang dari database pada setiap permintaan.
 
 #### `POST /api/v1/auth/google`
 
 - **Peran:** publik (dengan pembatasan laju ketat).
 - **Tubuh permintaan:** `id_token` (wajib, string — Google ID token/JWT), `nonce` (wajib bila aplikasi memakai nonce).
 - **Verifikasi OIDC yang wajib:** tanda tangan lewat **JWKS** Google (`kid`; kunci di-cache dan dirotasi saat `kid` tidak dikenal); `alg` **wajib** RS256 (menolak `none`, HS256, dan algoritme simetris); `iss` ∈ {`https://accounts.google.com`, `accounts.google.com`}; `aud` ∈ daftar client ID resmi yang dikonfigurasi (tidak ada client ID yang ditanam di kode); `exp`/`iat` dengan toleransi selisih waktu terbatas (usulan 120 detik); `nonce` cocok bila dipakai; `azp` diperiksa bila token punya beberapa audience; `email_verified` = true.
+- **Aturan nonce (FL-010V, 16 Oktober 2026):** aplikasi menghasilkan **nonce acak per percobaan login** dan mengirimkannya **ke Google maupun ke backend**. Backend memverifikasi kecocokan nonce, lalu **menolak nonce yang sudah pernah dipakai** — nonce bersifat **sekali pakai** dengan **TTL 5 menit**, disimpan sebagai **hash** (bukan nilai mentah) pada tabel target **`auth_nonces`**. Login tanpa nonce yang sah atau dengan nonce kedaluwarsa/terpakai gagal dengan `401 IDENTITY_TOKEN_INVALID`. Rujukan kebijakan: `docs/DECISIONS.md` D-031 dan `docs/SECURITY_PRIVACY.md` §2.
+- **Tujuan ID token (FL-010V, 16 Oktober 2026):** Google ID token dipakai **hanya untuk pertukaran identitas** pada endpoint ini — ia **bukan** token otorisasi API FaceLink AI dan **tidak pernah** menjadi sesi aplikasi. Setelah pertukaran berhasil, seluruh permintaan berikutnya memakai token sesi opak FaceLink AI, dan role/cakupan tetap diputuskan backend dari database.
 - **Aturan penautan akun:** identitas dicari pada `user_identities` lewat `sub` (pengenal stabil; **email bukan kunci identitas**). Identitas belum tertaut boleh tertaut **hanya bila** ada baris `users` berstatus `invited` dengan `email` yang sama persis (huruf kecil, tanpa spasi tepi) dan klaim `email_verified=true`, lalu baris itu diaktifkan. Selain itu **tidak ada akun yang dibuat**: tidak ada pendaftaran mandiri dan tidak ada role otomatis.
 - **Respons `200`:**
 
@@ -309,7 +330,7 @@ Bentuk sesi (rancangan MVP; `docs/AUTHORIZATION.md` §3.1 dan `docs/DECISIONS.md
 - **Kesalahan:** `VALIDATION_FAILED`, `UNAUTHENTICATED`, `TOKEN_EXPIRED`, `SESSION_REVOKED`.
 - **Rotasi:** setiap penyegaran menerbitkan pasangan token baru; hash penyegar sebelumnya disimpan satu langkah (`prev_refresh_hash`) untuk deteksi pemakaian ulang.
 - **Deteksi penyalahgunaan:** penyegar yang sudah dirotasi dipakai ulang → **seluruh sesi pengguna itu dicabut** dan audit `auth.session.reuse_detected` ditulis.
-- **Batas absolut:** batas sesi 30 hari **tidak** diperpanjang tanpa batas; sesi yang melewatinya menuntut Google Sign-In ulang.
+- **Batas absolut 30 hari sejak sesi awal dibuat (FL-010V, 16 Oktober 2026):** batas absolut dihitung dari **waktu sesi awal dibuat**, bukan dari penyegaran terakhir. Rotasi penyegar **tidak boleh memperpanjang** batas absolut itu; sesi yang telah melewati 30 hari ditolak dan menuntut **Google Sign-In ulang** yang sah sebagai satu-satunya cara memperpanjang. Batas ini berlaku sebagai kebijakan yang disetujui (**D-033**); belum ada implementasi maupun pengujiannya.
 - **Efek database:** `UPDATE session_tokens`; audit `auth.session.refreshed`.
 - **Idempotensi:** token penyegar lama tidak dapat dipakai dua kali.
 
@@ -367,6 +388,21 @@ Bentuk sesi (rancangan MVP; `docs/AUTHORIZATION.md` §3.1 dan `docs/DECISIONS.md
 - **Idempotensi:** mencabut sesi yang sudah tercabut mengembalikan `404`.
 
 ### 5.2 Modul 2 — Akun pengguna, peserta, dan penautan peserta
+
+#### Lifecycle akun (FL-010V, 16 Oktober 2026)
+
+Aturan berikut menetapkan **lifecycle akun** dan berlaku sebagai kebijakan yang disetujui (**D-032**, disetujui FL-010V). Tidak ada endpoint baru: seluruhnya mengikat perilaku endpoint pada §5.1 dan §5.2 yang sudah ada.
+
+1. **Alur ringkas:** admin membuat undangan memakai alamat email Google calon pengguna → admin menetapkan **tepat satu** role utama (`admin`/`dosen`/`mahasiswa`) → akun berstatus **`invited`** → pengguna melakukan Google Sign-In → backend memverifikasi ID token menurut OpenID Connect (termasuk `email_verified` dan `sub`) → **penautan atomik** pada login pertama → akun berstatus **`active`**. Status akun: `invited` → `active` → `suspended`; **tidak ada penghapusan keras akun**.
+2. **Penautan atomik pada login pertama.** Untuk akun undangan yang belum tertaut, email terverifikasi dicocokkan secara aman lalu `provider='google'` + `subject=sub` ditautkan **secara atomik**; hanya setelah itu akun menjadi `active`. Login berikutnya memakai identitas tertaut (`sub`), **bukan** email sebagai pengenal utama.
+3. **Tanpa auto-registration.** Tidak ada akun yang dibuat otomatis saat login Google. Pengguna tak terdaftar atau nonaktif **tidak** mendapat akses dashboard.
+4. **Tanpa role dari Google.** Role tidak pernah berasal dari Google maupun dari klien React Native; penetapan role hanya oleh `admin` berwenang melalui `PATCH /users/{user_id}` dan wajib diaudit.
+5. **Tanpa auto-admin.** Google pertama yang login **tidak pernah** otomatis menjadi `admin`; admin pertama hanya dibuat lewat bootstrap lokal (butir 8).
+6. **Tanpa account takeover lewat perubahan email.** Email hanya dipakai **sekali** untuk penautan pertama. Sesudah tertaut, pencocokan email **tidak pernah** dipakai lagi, sehingga perubahan alamat email di penyedia identitas tidak dapat mengalihkan akun. Ditegakkan bersama batasan unik `(provider, subject)` dan `(user_id, provider)`: satu identitas Google tidak boleh tertaut ke beberapa akun.
+7. **Satu role utama per akun (D-037).** Satu akun internal memiliki **tepat satu role utama aktif**; tidak ada multi-role switching pada MVP. Hak istimewa `admin` untuk mengelola kelas sesuai matriks **tidak** menjadikannya role `dosen` kedua.
+8. **Bootstrap admin lokal.** Proses **lokal, eksplisit, sekali, dan dapat diaudit**: tanpa hardcoded password/token/kredensial, menolak berjalan bila sudah ada akun `admin` berstatus `active` atau `invited`, dan menulis **satu** baris `users` (`role='admin'`, `status='invited'`) yang ditautkan pada login Google pertama. Perintahnya `-bootstrap-admin` pada `cmd/server` (diimplementasikan pada FL-011) dengan audit `user.bootstrapped`; lihat `docs/AUTHORIZATION.md` §3.1.
+9. **Tahan request bersamaan.** Pendaftaran dan penautan harus tahan permintaan bersamaan: transaksi atomik ditambah batasan unik sebagai penjaga, dan **hanya satu** permintaan yang boleh menautkan. Bila batasan unik menolak, transaksi di-rollback dan permintaan kalah tidak boleh menulis penautan kedua.
+10. **Status verifikasi:** seluruh butir di atas adalah kebijakan dan perilaku rancangan yang **BELUM TERVERIFIKASI** — tidak ada kode, migrasi, maupun pengujian pada FL-010V.
 
 #### `GET /api/v1/people`
 
@@ -857,7 +893,7 @@ Tidak ada endpoint publik terpisah. Keduanya dijalankan di dalam §5.10. Tabel k
 
 #### `GET /api/v1/sessions/{session_id}/export.csv`
 
-- **Peran:** **admin saja.** Ekspor CSV tidak tersedia untuk `dosen` pada FL-010U; ini butir yang diminta keputusan pemilik (lihat §10 butir 10 dan `docs/AUTHORIZATION.md` §9 butir 2).
+- **Peran:** **admin saja.** Ekspor CSV tidak tersedia untuk `dosen`; cakupan ini **diputuskan** oleh pemilik pada FL-010V sebagai bagian D-034 dan **tidak berubah** dari matriks FL-010U (lihat `docs/DECISIONS.md` D-034 dan `docs/AUTHORIZATION.md` §4.10, §9 butir 2).
 - **Respons `200`:** `text/csv; charset=utf-8` dengan header `Content-Disposition`.
 - **Kolom:** `external_code`, `display_name`, `status`, `source`, `checked_in_at`, `reason`, `session_title`, `class_code`.
 - **Kode status:** `200`, `404`.
@@ -893,16 +929,20 @@ Tidak ada endpoint publik terpisah. Keduanya dijalankan di dalam §5.10. Tabel k
 - **Query:** `actor_id`, `action`, `entity_type`, `entity_id`, `from`, `to`, `cursor`, `limit`.
 - **Respons `200`:** daftar `{ id, actor_type, actor_id, action, entity_type, entity_id, time, reason, safe_metadata }`.
 - **Kode status:** `200`, `400`, `403`.
-- **Aturan keras:** `safe_metadata` tidak boleh memuat JPEG, embedding, token, kata sandi, email, ID token, `sub`, atau data biometrik. `reason` memuat alasan manusia untuk koreksi manual.
+- **Aturan keras:** `safe_metadata` tidak boleh memuat JPEG, embedding, token, kata sandi, email, ID token, `sub`, data biometrik, atau **kredensial perangkat**. `reason` memuat alasan manusia untuk koreksi manual.
 - **Efek database:** —
 - **Idempotensi:** aman diulang.
 - **Aksi yang berlaku saat ini (minimum, tetap dari rancangan sebelumnya):** `auth.logout`, `auth.session.revoked`, `user.created`, `person.created`, `person.updated`, `person.deleted`, `consent.granted`, `consent.withdrawn`, `enrollment.started`, `enrollment.completed`, `template.deleted`, `class.created`, `class.member.added`, `class.member.removed`, `session.created`, `session.opened`, `session.closed`, `attendance.recorded`, `attendance.manual_corrected`, `session.exported`, `device.created`, `device.token_rotated`, `device.revoked`, `migration.applied`.
 
-**Usulan perluasan daftar aksi minimum (FL-010U) — status USULAN, belum disetujui pemilik:** `auth.google.succeeded`, `auth.google.linked`, `auth.login.denied`, `auth.session.refreshed`, `auth.session.reuse_detected`, `user.bootstrapped`, `user.invited`, `user.role_changed`, `user.status_changed`, `person.account_linked`, `person.account_unlinked`, `class.dosen_assigned`, `class.dosen_removed`. Selama belum disetujui, daftar ini **tidak** boleh diperlakukan sebagai keputusan yang berlaku. `authz.denied` dan `auth.device.mismatch` tetap berstatus usulan lama yang belum disetujui (FL-010 §9 butir 4). Untuk `auth.login.denied`, `safe_metadata` menyimpan `reason` ber-kode (`no_account`, `not_linked`, `suspended`, `email_mismatch`) — **bukan** email. Rujukan: `docs/AUTHORIZATION.md` §6.2.
+**Perluasan daftar aksi minimum — BERLAKU (D-036, disetujui FL-010V):** daftar berikut **berlaku**, bukan usulan lagi, dan menjadi bagian daftar minimum audit keamanan: `auth.google.succeeded`, `auth.google.linked`, `auth.login.denied` (dengan `reason` ber-kode: `no_account`, `not_linked`, `suspended`, `email_mismatch`), `auth.session.refreshed`, `auth.session.revoked`, `auth.session.reuse_detected`, `auth.logout`, `authz.denied`, `auth.device.mismatch`, `user.bootstrapped`, `user.invited`, `user.role_changed`, `user.status_changed`, `person.account_linked`, `person.account_unlinked`, `class.dosen_assigned`, `class.dosen_removed`. `authz.denied` dan `auth.device.mismatch` yang sebelumnya masih berstatus usulan **kini ikut berlaku** melalui D-036. Untuk `auth.login.denied`, `safe_metadata` menyimpan `reason` ber-kode (`no_account`, `not_linked`, `suspended`, `email_mismatch`) — **bukan** email. Rujukan: `docs/DECISIONS.md` D-036, `docs/SECURITY_PRIVACY.md` §6, dan `docs/AUTHORIZATION.md` §6.2.
+
+**Larangan isi audit (tetap, ditegaskan FL-010V):** `safe_metadata` dan isi audit **tidak boleh** memuat password, access token, refresh token, Google ID token, **kredensial perangkat**, embedding wajah, maupun foto wajah; gunakan identifier internal dan metadata seminimal mungkin.
+
+**Status implementasi:** daftar di atas adalah **kebijakan yang berlaku**, tetapi **belum ada** implementasi maupun pengujiannya pada FL-010V — seluruh event berstatus **BELUM TERVERIFIKASI**. Pencatatan audit keamanan baru boleh dianggap andal setelah tugas **FL-005S** (penguatan log respons & pemulihan panic) selesai; lihat §10 dan `docs/TEST_PLAN.md` §4.
 
 ### 5.14 Modul 14 — Portal self-service dosen dan mahasiswa
 
-Modul **baru** pada FL-010U. Portal self-service hanya membaca data milik sendiri; **tidak ada** endpoint `/me/*` yang mengubah data. Untuk akun `mahasiswa` yang belum tertaut baris `people` (`people.account_user_id` kosong), **keempat** endpoint pada modul ini mengembalikan **`409 ACCOUNT_NOT_LINKED`**, karena daftar kelas, jadwal, riwayat, maupun status konsen tidak dapat ditentukan tanpa penautan. Aturan ini ditetapkan pada FL-010U (bukan hasil uji) dan berstatus **BELUM TERVERIFIKASI**; lihat §10 butir 18. Penautan akun dilakukan `admin` lewat §5.2.
+Modul **baru** pada FL-010U. Portal self-service hanya membaca data milik sendiri; **tidak ada** endpoint `/me/*` yang mengubah data. Untuk akun `mahasiswa` yang belum tertaut baris `people` (`people.account_user_id` kosong), **keempat** endpoint pada modul ini mengembalikan **`409 ACCOUNT_NOT_LINKED`**, karena daftar kelas, jadwal, riwayat, maupun status konsen tidak dapat ditentukan tanpa penautan. Aturan ini ditetapkan pada FL-010U (bukan hasil uji) dan berstatus **BELUM TERVERIFIKASI**; lihat §10 butir 15. Penautan akun dilakukan `admin` lewat §5.2.
 
 #### `GET /api/v1/me/classes`
 
@@ -923,7 +963,7 @@ Modul **baru** pada FL-010U. Portal self-service hanya membaca data milik sendir
 - **Respons `200`:** daftar `{ session_id, class_id, class_code, title, status, started_at, closes_at, late_after }`.
 - **Kode status:** `200`, `401`, `403`, `409`.
 - **Kesalahan:** `ACCOUNT_NOT_LINKED` (409) bila akun belum tertaut baris `people`.
-- **Catatan keras:** **tidak ada tabel jadwal akademik pada MVP**. Yang ditampilkan di sini adalah sesi absensi nyata, bukan jadwal mata kuliah. Kebutuhan jadwal kuliah penuh dicatat sebagai pertanyaan terbuka (lihat §10 butir 13).
+- **Catatan keras:** **tidak ada tabel jadwal akademik pada MVP**. Yang ditampilkan di sini adalah sesi absensi nyata, bukan jadwal mata kuliah. Kebutuhan jadwal kuliah penuh dicatat sebagai pertanyaan terbuka (lihat §10 butir 14).
 - **Efek database:** —
 - **Idempotensi:** aman diulang.
 
@@ -946,7 +986,7 @@ Modul **baru** pada FL-010U. Portal self-service hanya membaca data milik sendir
 - **Respons `200`:** `{ "data": { "person_id", "consent_state", "records": [ { "purpose", "version", "capture_method", "granted_at", "withdrawn_at" } ] } }`. `consent_state` bernilai `active`, `none`, atau `withdrawn`.
 - **Kode status:** `200`, `401`, `403`, `409`.
 - **Kesalahan:** `ACCOUNT_NOT_LINKED` (409).
-- **Catatan:** pencatatan dan pencabutan konsen tetap melalui jalur petugas/`admin` (§5.3) sesuai rancangan yang berlaku; **tidak ada** endpoint mahasiswa untuk mencatat atau mencabut konsen pada MVP (lihat §10 butir 12).
+- **Catatan:** pencatatan dan pencabutan konsen tetap melalui jalur petugas/`admin` (§5.3) sesuai rancangan yang berlaku; **tidak ada** endpoint mahasiswa untuk mencatat atau mencabut konsen pada MVP (lihat §10 butir 4).
 - **Efek database:** —
 - **Idempotensi:** aman diulang.
 
@@ -1047,7 +1087,7 @@ Aturan percobaan ulang:
 | Pemeriksaan konsen, keanggotaan kelas, status sesi, perangkat | **Go** |
 | Penulisan seluruh tabel database | **Go** |
 | Idempotensi dan audit | **Go** |
-| Penyimpanan template terenkripsi | **Go** (kunci di luar database dan di luar Git; bentuk penyimpanan AES-256-GCM final, pengelolaan kunci diusulkan pada **D-030 (USULAN)** dan dirinci di `docs/SECURITY_PRIVACY.md` §5a–§5d) |
+| Penyimpanan template terenkripsi | **Go** (kunci di luar database dan di luar Git; bentuk penyimpanan AES-256-GCM final, pengelolaan kunci **D-030 (DISETUJUI pada FL-004S atas rancangan; belum diimplementasikan dan belum diuji)** dan dirinci di `docs/SECURITY_PRIVACY.md` §5a–§5d) |
 
 ## 7. Status kegagalan pengenalan wajah dan pemisahannya dari error HTTP
 
@@ -1121,26 +1161,24 @@ Daftar berikut harus terwujud sebagai pengujian saat implementasi. **Belum ada p
 
 ## 10. Hal yang belum disetujui atau menunggu keputusan
 
+**Revisi FL-010V (16 Oktober 2026).** Butir yang **sudah diputuskan pemilik** pada FL-010V **dihapus dari daftar ini** karena statusnya kini berlaku: cakupan `dosen` (D-034), perluasan daftar audit (D-036), pengikatan jaringan dan transport (D-035), lifecycle akun (D-032), dan aturan sesi (D-033). Penghapusan ini **bukan** penghapusan riwayat keputusan: alasan dan isi keputusannya tetap ada di `docs/DECISIONS.md` D-032–D-037, dan matriks §4 tidak berubah. Daftar di bawah hanya memuat hal yang **benar-benar masih terbuka**; tidak satu pun boleh dibaca sebagai keputusan yang berlaku.
+
+Catatan riwayat yang dipertahankan: butir lama **"akun peserta" (D-013) yang akan menambah modul autentikasi kedua** sudah **DIGANTIKAN pada FL-010U (16 Oktober 2026)** — akun `mahasiswa` kini ada dan merupakan bagian keputusan yang sudah disetujui pemilik; penautannya ke baris `people` diatur pada §5.2 (`/people/{person_id}/account-link`) dan portal self-service-nya pada §5.14. Butir itu karena itu tidak lagi ada pada daftar di bawah, bukan karena ditolak.
+
 1. **Pengelolaan kunci biometrik (Q-16).** Kebijakan lengkap ada sebagai **D-030 (DISETUJUI pada FL-004S)** di `docs/DECISIONS.md` dan `docs/SECURITY_PRIVACY.md` §5a–§5f. **Status: disetujui atas rancangan, belum diimplementasikan dan belum diuji**, sehingga tabel `face_templates` masih tidak boleh ditulis sebelum ada tugas implementasi tersendiri yang disetujui pemilik project — jangan menganggap persetujuan rancangan sebagai izin menulis kode.
 2. **Angka batas** ukuran JPEG, resolusi maksimum, batas laju, dan `retry_after_hint_ms` masih kandidat dan harus **diukur** (Q-18), bukan ditetapkan dari perkiraan.
 3. **Ambang kecocokan dan margin** belum ada (Q-07). Kontrak ini hanya menetapkan bahwa ambangnya milik Go dan harus terkalibrasi.
-4. **Masa berlaku token** sesi pengguna dan token perangkat, serta kebijakan rotasi, masih perlu keputusan. Rancangan MVP yang dipakai sementara (token akses 60 menit, penyegar 30 hari, batas absolut 30 hari) berasal dari `docs/DECISIONS.md` D-033 dan belum disetujui sebagai keputusan pemilik.
-5. ~~**Akun peserta** (D-013 masih USULAN) akan menambah modul autentikasi kedua bila disetujui.~~ **DIGANTIKAN pada FL-010U (16 Oktober 2026):** akun `mahasiswa` kini ada dan merupakan bagian dari keputusan yang sudah disetujui pemilik; penautannya ke baris `people` diatur pada §5.2 (`/people/{person_id}/account-link`) dan portal self-service-nya pada §5.14. Tidak ada lagi "modul autentikasi kedua" yang menunggu persetujuan.
-6. **Liveness** tidak dijanjikan ada pada MVP (D-029). Bila mekanisme dipilih, ia menambah endpoint atau kolom baru.
-7. **Halaman pengelolaan perangkat di aplikasi** belum masuk PRD; endpointnya sudah disiapkan agar tidak menghambat.
-8. **Kebijakan retensi catatan kehadiran** dan hubungannya dengan penghapusan peserta belum diputuskan (`docs/OPEN_QUESTIONS.md`).
-9. **WebSocket** belum diaktifkan (D-021); bila kebutuhan muncul, ia akan menjadi modul baru, bukan perubahan pada endpoint rekap.
-
-Butir berikut ditambahkan pada **FL-010U (16 Oktober 2026)** dari `docs/AUTHORIZATION.md` §9. Seluruhnya masih menunggu keputusan pemilik dan **tidak boleh** ditulis sebagai keputusan yang berlaku.
-
-10. **Cakupan `dosen`.** Rancangan FL-010U mengikuti daftar tugas pada permintaan FL-010U secara harfiah (baca peserta kelas sendiri, buka/tutup sesi, koreksi manual, rekap). Konsekuensinya **enrollment biometrik, pencatatan konsen, pengelolaan peserta, ekspor CSV, dan seluruh operasi perangkat menjadi milik `admin`** (§5.3–§5.5, §5.9, §5.11). Bila alur demo menuntut dosen melakukan enrollment/konsen di kelasnya, perlu keputusan menambah capability itu pada matriks.
-11. **Identitas tunggal per orang.** Satu akun Google = satu baris `users` = satu role. Menjalankan demo sebagai `admin` sekaligus `dosen` memerlukan dua akun Google berbeda. Bila pemilik menghendaki satu orang memegang dua role, itu keputusan model data baru.
-12. **Audit minimum** (§5.13) — daftar aksi usulan FL-010U belum disetujui; status `authz.denied` dan `auth.device.mismatch` juga masih menunggu. Termasuk di dalamnya: apakah penarikan konsen oleh `mahasiswa` sendiri dari aplikasi (P1) akan dirancang, karena saat ini `/me/consent` baca saja.
-13. **Jadwal akademik penuh.** Tidak ada tabel jadwal mata kuliah pada MVP; `/me/schedule` (§5.14) hanya menampilkan sesi absensi nyata. Bila pemilik menghendaki jadwal kuliah penuh, itu model data dan endpoint baru.
-14. **Pengikatan jaringan backend.** Kode FL-005 yang sudah di-merge menolak alamat non-loopback (`backend/internal/config/config.go` menolak `FACELINK_ADDR` selain `127.0.0.1`/`localhost`/`::1`), sehingga HP **tidak dapat** menjangkau backend lewat Wi-Fi kelas selama aturan itu berlaku. Pilihan: (a) tetap loopback + `adb reverse tcp:8080 tcp:8080` pada demo, (b) mengizinkan pengikatan alamat LAN privat dengan persetujuan eksplisit dan dokumentasi keamanan, atau (c) proksi lokal berautentikasi. FL-010U hanya mencatat; tidak mengubah kode.
-15. **Absensi manual tanpa autentikasi tidak dirancang.** Bila internet mati dan sesi habis, tidak ada jalur absensi di aplikasi (§1.1 butir 7). Bila ini tidak dapat diterima untuk demo, perlu keputusan kebijakan (mis. perpanjangan sesi perangkat keras atau pencatatan manual di luar aplikasi).
-16. **Nama kontrak lama `GET/DELETE /operator-sessions` diganti `/auth/sessions`** (§5.1). Penggantian sudah diterapkan pada dokumen ini; persetujuan pemilik atas perubahan nama jalur masih dicatat sebagai butir terbuka.
-17. **Rujukan rusak D-028 → `docs/UX_FLOWS.md` §10.** Dokumen itu hanya memiliki §1–§8. Bagian yang dimaksud tidak boleh ditebak; pemilik perlu menyebut bagian yang benar. (Temuan FL-010U; perbaikannya di luar lingkup `docs/API_CONTRACT.md`.)
-18. **Perilaku `/me/*` pada akun `mahasiswa` yang belum tertaut — ditetapkan pada FL-010U.** Keempat endpoint Modul 14 memakai `409 ACCOUNT_NOT_LINKED` secara konsisten, karena daftar kelas, jadwal, riwayat, maupun status konsen tidak dapat ditentukan tanpa penautan `people.account_user_id`. Tetapan ini adalah perilaku rancangan yang **BELUM TERVERIFIKASI**, bukan hasil uji.
+4. **Penarikan persetujuan mandiri oleh `mahasiswa` (Q-22) — tetap terbuka (FL-010V, 16 Oktober 2026).** FL-010V **tidak** menyetujui penarikan konsen mandiri. Pada rancangan yang berlaku, `GET /me/consent` (§5.14) tetap **baca saja** dan pencatatan/pencabutan konsen tetap melalui jalur `admin` (§5.3). Bila kelak dirancang, ia menambah capability baru pada matriks dan menuntut keputusan pemilik tersendiri.
+5. **Prosedur offline saat sesi habis (Q-24) — tetap terbuka (FL-010V, 16 Oktober 2026).** Bila internet mati **dan** sesi aplikasi sudah tidak berlaku, **tidak ada bypass autentikasi** dan tidak ada jalur absensi di aplikasi; operasi manual mengikuti prosedur operasional aman lalu dimasukkan setelah operator terautentikasi kembali. Rincian prosedurnya belum diputuskan (`docs/OPEN_QUESTIONS.md` Q-24).
+6. **Rincian sertifikat lokal dan trust chain Android belum diuji (Q-25) (FL-010V, 16 Oktober 2026).** Kebijakan transport pada §1.6 **disetujui pada tingkat kebijakan** (D-035), tetapi **rincian pelaksanaannya belum diuji**: Android 7+ **tidak** mempercayai CA yang dipasang pengguna untuk aplikasi kecuali aplikasi memakai `network_security_config` atau build kustom (Expo Go tidak dapat memuat konfigurasi itu), sehingga opsi CA lokal/reverse proxy menuntut development build/production build. Ini pekerjaan teknis lanjutan yang harus diuji; temuan dan batasannya ada di `docs/ARCHITECTURE.md` §5.1.
+7. **Penamaan jalur `/auth/sessions` (FL-010V, 16 Oktober 2026).** `GET /auth/sessions` dan `DELETE /auth/sessions/{session_id}` adalah **nama yang berlaku pada kontrak ini** dan menggantikan nama lama `GET/DELETE /operator-sessions*` (§5.1, §2 butir 6). Ini **catatan penamaan, bukan perubahan izin**: metode, jalur, dan himpunan peran pada matriks §4 tidak berubah, dan penggantian nama tidak menambah maupun mengurangi akses peran mana pun.
+8. **Rujukan rusak D-028 → `docs/UX_FLOWS.md` §10 — tetap masalah terbuka (FL-010V, 16 Oktober 2026).** Dokumen itu hanya memiliki §1–§8. Bagian yang dimaksud tidak boleh ditebak; pemilik perlu menyebut bagian yang benar. Rujukan ini tetap bermasalah dan **tidak** diperbaiki oleh FL-010V.
+9. **Tugas penguatan log respons backend — FL-005S (FL-010V, 16 Oktober 2026).** Access log Go yang berlaku saat ini dapat melaporkan status `200` untuk respons `503` batas waktu dan **tidak mencatat** respons `500` hasil pemulihan panic. Karena itu pencatatan audit keamanan **belum boleh dianggap andal** sampai tugas **FL-005S** (penguatan log respons & pemulihan panic) selesai. Tugas ini **tidak** dikerjakan pada FL-010V dan tidak ada kode yang diubah. Rujukan: `docs/SECURITY_PRIVACY.md` §6 dan `docs/TEST_PLAN.md` §4.
+10. **Liveness** tidak dijanjikan ada pada MVP (D-029). Bila mekanisme dipilih, ia menambah endpoint atau kolom baru.
+11. **Halaman pengelolaan perangkat di aplikasi** belum masuk PRD; endpointnya sudah disiapkan agar tidak menghambat.
+12. **Kebijakan retensi catatan kehadiran** dan hubungannya dengan penghapusan peserta belum diputuskan (`docs/OPEN_QUESTIONS.md`).
+13. **WebSocket** belum diaktifkan (D-021); bila kebutuhan muncul, ia akan menjadi modul baru, bukan perubahan pada endpoint rekap.
+14. **Jadwal akademik penuh (Q-23) — tetap terbuka.** Tidak ada tabel jadwal mata kuliah pada MVP; `/me/schedule` (§5.14) hanya menampilkan sesi absensi nyata. Bila pemilik menghendaki jadwal kuliah penuh, itu model data dan endpoint baru.
+15. **Perilaku `/me/*` pada akun `mahasiswa` yang belum tertaut — ditetapkan pada FL-010U.** Keempat endpoint Modul 14 memakai `409 ACCOUNT_NOT_LINKED` secara konsisten, karena daftar kelas, jadwal, riwayat, maupun status konsen tidak dapat ditentukan tanpa penautan `people.account_user_id`. Tetapan ini adalah perilaku rancangan yang **BELUM TERVERIFIKASI**, bukan hasil uji.
 
 **Ketergantungan Google dan offline.** Google Sign-In **tidak boleh** dijanjikan berjalan offline. Selama sesi aplikasi masih sah, seluruh operasi aplikasi lewat LAN ke backend tetap berjalan tanpa memanggil Google; yang berhenti hanya login baru/re-autentikasi (pesan: "Perlu internet untuk masuk dengan Google"). Bila LAN ke backend mati, seluruh aplikasi berhenti karena semua keputusan ada di backend — **tidak ada** catatan kehadiran lokal. Ketentuan lengkap dan tabel ketersediaan layanan ada di `docs/ARCHITECTURE.md` §7.1 dan `docs/AUTHORIZATION.md` §9 butir 5.

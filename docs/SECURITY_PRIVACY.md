@@ -6,6 +6,8 @@
 
 **Catatan istilah.** Beberapa bagian lama masih memakai kata "operator" sebagai sebutan umum bagi manusia yang menjalankan sistem. Sejak FL-010U, sebutan itu merujuk pada role yang berlaku menurut `docs/AUTHORIZATION.md` — `admin` untuk operasi administratif dan perangkat, `dosen` untuk kelas yang ditugaskan kepadanya. Kata "operator" pada kutipan keputusan lama **tidak dihapus** agar riwayatnya tetap dapat ditelusuri; ia **bukan** role tersendiri pada FL-010U.
 
+**Revisi FL-010V (16 Oktober 2026).** Dokumen ini diselaraskan dengan keputusan final FL-010V: **D-032 (lifecycle akun), D-033 (sesi token opak + rotasi + batas absolut 30 hari), D-034 (hak akses `dosen`), D-035 (LAN privat + HTTPS tepercaya — tingkat kebijakan), D-036 (perluasan daftar audit keamanan — sekarang BERLAKU), dan D-037 (satu role utama per akun)**. Yang berubah: §2 (baris hash nonce `auth_nonces`), §5g (satu kalimat penegas Q-22, tanpa mengubah paragraf FL-010U), §6 (daftar audit berlaku, larangan isi audit, aturan transport LAN, aturan penyimpanan token React Native), §8 (butir uji baru), dan §9 (tabel keselarasan). **D-030, §5a–§5f, Q-07, matriks 53 endpoint, nama peran, dan kode kesalahan tidak diubah.** Seluruh skenario runtime tetap **BELUM TERVERIFIKASI**.
+
 ## 1. Mengapa penting
 
 Data wajah dan template biometrik bersifat sangat sensitif. Di Indonesia, **UU Nomor 27 Tahun 2022 tentang Pelindungan Data Pribadi** menggolongkan data biometrik sebagai data pribadi bersifat spesifik. Walaupun project hanya tugas kampus, peserta tetap perlu mendapat penjelasan, pilihan yang adil, dan perlindungan data.
@@ -21,7 +23,10 @@ Data wajah dan template biometrik bersifat sangat sensitif. Di Indonesia, **UU N
 | Login, token perangkat, kunci enkripsi | Rahasia | Jangan log/commit; simpan terproteksi |
 | Identitas Google (`sub`, email akun) | Pribadi | `sub` adalah pengenal stabil dan menjadi kunci penautan pada `user_identities`; email disimpan huruf kecil tanpa spasi tepi. Dipakai **hanya** untuk menautkan identitas ke akun, bukan untuk menentukan hak akses; tidak boleh masuk log, audit `safe_metadata`, atau LLM API |
 | Token sesi aplikasi (token akses dan token penyegar) | Rahasia | Token opak 256-bit; server hanya menyimpan **hash SHA-256** (`session_tokens`). Token mentah tidak pernah dicatat, tidak masuk Git, dan disimpan di penyimpanan aman perangkat (Android Keystore) |
+| Nonce login Google (hash pada tabel `auth_nonces`) | Internal (teknis) | Data teknis internal, bukan rahasia pengguna, tetapi tidak boleh dibocorkan: nilai acak sekali pakai dengan masa berlaku **5 menit**, disimpan **hanya sebagai hash**, dan ditolak bila dipakai ulang. Tidak pernah masuk log, `audit_events`, atau LLM API |
 | Log kesehatan perangkat | Operasional | Tanpa JPEG/embedding dan tanpa identitas yang tidak perlu |
+
+**FL-010V (16 Oktober 2026)** menambahkan baris nonce di atas sebagai data teknis internal. Nonce **bukan** kredensial pengguna dan **bukan** pengganti sesi aplikasi; ia hanya penanda sekali pakai yang mengikat satu percobaan login Google ke satu ID token, dan karena itu diperlakukan sebagai rahasia transport, bukan sebagai data pribadi. Baris biometrik dan baris identitas/sesi yang sudah ada **tidak diubah**.
 
 Catatan FL-010U: **Google ID token bukan data yang disimpan.** Ia hanya bukti yang diverifikasi pada `POST /api/v1/auth/google` (§6), tidak pernah dijadikan sesi aplikasi, dan tidak pernah ditulis ke log atau `audit_events`. Klasifikasi pada tabel di atas menambahkan dua baris identitas/sesi tanpa mengubah baris biometrik yang sudah ada.
 
@@ -233,6 +238,8 @@ Klarifikasi ini menetapkan bahwa kebijakan penghapusan **mengakui keterbatasan j
 
 **Ditambahkan pada FL-010U (16 Oktober 2026).** Seluruh keputusan biometrik pada §5 dan §5a–§5f di atas **tidak diubah** oleh revisi ini; paragraf ini hanya menegaskan batasnya. **Berhasil masuk dengan Google Sign-In bukan persetujuan pemrosesan wajah.** Persetujuan biometrik tetap berdiri sendiri, terpisah, tercatat, dan dapat dicabut (§3), dan seorang `mahasiswa` yang berhasil masuk lalu melihat riwayat kehadirannya sendiri **tidak** memperoleh akses ke `face_templates`, embedding, atau data peserta lain: penautan akun ke baris peserta lewat `people.account_user_id` **tidak** membuka akses ke template (lihat pula `docs/AUTHORIZATION.md` §2 dan §4). Hak akses mahasiswa terbatas pada data miliknya sendiri melalui endpoint `/me/*`, sedangkan enrollment, pencatatan konsen, dan pengelolaan peserta tetap jalur `admin`.
 
+**FL-010V (16 Oktober 2026).** Paragraf penegas di atas **tidak diubah**: penautan akun peserta **tidak** membuka template biometrik. Yang ditambahkan hanyalah penegasan status pertanyaan terkait: **Q-22 (penarikan persetujuan mandiri oleh mahasiswa) tetap TERBUKA** dan **tidak** disetujui oleh FL-010V. Penarikan konsen tetap jalur `admin` sampai ada keputusan pemilik; tidak ada endpoint `/me/*` yang boleh mencabut konsen atau menghapus template.
+
 ## 6. Pengendalian akses dan transportasi
 
 **Matriks peran dan izin yang mengikat ada di `docs/AUTHORIZATION.md`.** Bagian ini menyebut prinsipnya; dokumen itu menyebut per-endpoint.
@@ -253,6 +260,23 @@ Klarifikasi ini menetapkan bahwa kebijakan penghapusan **mengakui keterbatasan j
 - **Tidak membocorkan keberadaan sumber daya.** Sumber daya di luar cakupan pemanggil menjawab `404`, bukan `403` (`docs/AUTHORIZATION.md` §5).
 - **Gagal-aman.** Bila autentikasi atau otorisasi operator tidak dapat dijamin, endpoint operator **wajib** menolak melayani, sesuai §5e butir 4. Absensi manual tetap tersedia, tetapi **hanya** lewat endpoint terautentikasi, bukan lewat jalur yang melumpuhkan pemeriksaan keamanan.
 - **Penolakan bermakna keamanan dicatat.** Penolakan pada jalur administratif dan absensi manual meninggalkan `audit_events` tanpa data biometrik, token, sandi, atau email (`docs/AUTHORIZATION.md` §6).
+
+**FL-010V (16 Oktober 2026) — daftar audit keamanan berlaku (D-036).** Perluasan daftar minimum audit keamanan **bukan lagi usulan**: ia **BERLAKU** setelah D-036 disetujui pemilik. Daftar nama event final (selaras `docs/API_CONTRACT.md` §5.13):
+
+`auth.google.succeeded`, `auth.google.linked`, `auth.login.denied` (dengan `reason` ber-kode: `no_account`, `not_linked`, `suspended`, `email_mismatch`), `auth.session.refreshed`, `auth.session.revoked`, `auth.session.reuse_detected`, `auth.logout`, `authz.denied`, `auth.device.mismatch`, `user.bootstrapped`, `user.invited`, `user.role_changed`, `user.status_changed`, `person.account_linked`, `person.account_unlinked`, `class.dosen_assigned`, `class.dosen_removed` — ditambah `consent.granted` dan `consent.withdrawn` yang **sudah berlaku sebelumnya**.
+
+**Larangan isi audit (wajib).** `audit_events` dan `safe_metadata` **tidak boleh** memuat: password, access token, refresh token, Google ID token, embedding wajah, foto wajah, maupun kredensial perangkat. Yang dipakai adalah identifier internal dan metadata seminimal mungkin; sebab penolakan akun memakai `reason` ber-kode, **bukan** email.
+
+**FL-010V (16 Oktober 2026) — transport LAN (D-035).** Aturan yang mengikat untuk akses perangkat ke backend:
+
+- **Default development adalah loopback** (`127.0.0.1`) agar tidak ada eksposur tak sengaja. Backend **tidak boleh** dibuka ke internet publik, dan pengikatan LAN hanya boleh aktif lewat konfigurasi eksplisit.
+- Komunikasi aplikasi → backend pada LAN **wajib HTTPS dengan sertifikat yang dipercaya perangkat**.
+- **Dilarang**: `InsecureSkipVerify` atau ekuivalennya, dan menonaktifkan validasi TLS dengan cara apa pun.
+- **Tidak direkomendasikan dan tidak boleh menjadi konfigurasi deployment: HTTP terbuka.** Membuka backend lewat HTTP untuk menghindari kerumitan sertifikat adalah **pelanggaran**, bukan solusi sementara. Bila TLS gagal, yang benar adalah memperbaiki sertifikat/konfigurasi server, **bukan** menurunkan transport ke HTTP.
+- **Wi-Fi privat bukan pelindung token.** Jangan menganggap jaringan lokal yang privat sudah mengamankan access/refresh token; hanya TLS dengan sertifikat tepercaya yang memberi jaminan transport.
+- Rincian pelaksanaan (CA lokal dengan SAN alamat IP LAN, reverse proxy lokal, `adb reverse`/loopback untuk development) dan batasan Android 7+ terhadap CA yang dipasang pengguna mengikuti D-035 dan **BELUM TERVERIFIKASI**; lihat pula §9.
+
+**FL-010V (16 Oktober 2026) — penyimpanan token di React Native (D-033).** Token akses dan token penyegar **wajib** disimpan pada **penyimpanan kredensial platform** (Android Keystore lewat penyimpanan aman Expo). **Dilarang** menyimpan token sensitif dalam bentuk plaintext di `AsyncStorage` (atau penyimpanan tak terlindungi ekuivalen). Google ID token **bukan token otorisasi API** FaceLink AI: ia hanya bukti identitas berumur pendek pada `POST /api/v1/auth/google`, tidak disimpan sebagai kredensial, dan tidak pernah dipakai pada endpoint terproteksi.
 
 ## 7. Tindakan ketika gagal atau terjadi insiden
 
@@ -297,19 +321,31 @@ Klarifikasi ini menetapkan bahwa kebijakan penghapusan **mengakui keterbatasan j
 - [ ] **Pemakaian ulang penyegar terdeteksi:** penyegar yang sudah dirotasi dipakai ulang → seluruh sesi dicabut dan tercatat `auth.session.reuse_detected`.
 - [ ] **Penautan akun–peserta diuji:** akun `mahasiswa` tanpa tautan `people` menerima `409 ACCOUNT_NOT_LINKED` pada `/me/*`, dan tautan `people.account_user_id` terbukti **tidak** membuka akses ke `face_templates`.
 
+**Butir tambahan FL-010V (16 Oktober 2026) — token, nonce, batas sesi, TLS LAN, dan audit.** Semua butir di bawah berstatus **BELUM TERVERIFIKASI** sampai benar-benar dijalankan dan hasilnya dicatat apa adanya. Tidak satu pun boleh "diluluskan" dengan melonggarkan pemeriksaan keamanan.
+
+- [ ] **Token tersimpan aman di perangkat:** token akses dan penyegar tersimpan pada penyimpanan kredensial platform (Android Keystore lewat penyimpanan aman Expo); diperiksa bahwa **tidak ada** token plaintext pada `AsyncStorage`, berkas aplikasi, log, atau `git status`; ID token Google tidak disimpan sebagai kredensial.
+- [ ] **Nonce sekali pakai:** nonce cocok diverifikasi, nilai disimpan **hanya sebagai hash** pada `auth_nonces`, kedaluwarsa 5 menit, dan **nonce yang dipakai ulang ditolak**; pemeriksaan mencakup nonce kedaluwarsa dan nonce milik percobaan login lain.
+- [ ] **Batas absolut sesi 30 hari:** penyegaran berulang **tidak** memperpanjang batas absolut 30 hari sejak sesi awal dibuat; setelah batas tercapai, penyegaran ditolak dan pengguna wajib Google Sign-In ulang.
+- [ ] **TLS LAN dengan sertifikat tepercaya:** akses perangkat ke backend lewat LAN berhasil hanya dengan HTTPS bersertifikat tepercaya perangkat; sertifikat tidak tepercaya ditolak, dan **tidak ada** jalur `InsecureSkipVerify`/penonaktifan validasi TLS pada konfigurasi mana pun.
+- [ ] **Audit event keamanan terisi tanpa isi terlarang:** event D-036 benar-benar tercatat pada skenario terkait (`auth.google.succeeded`, `auth.google.linked`, `auth.login.denied`, `auth.session.refreshed`, `auth.session.revoked`, `auth.session.reuse_detected`, `auth.logout`, `authz.denied`, `auth.device.mismatch`, `user.bootstrapped`, `user.invited`, `user.role_changed`, `user.status_changed`, `person.account_linked`, `person.account_unlinked`, `class.dosen_assigned`, `class.dosen_removed`), dan isinya **tidak** memuat password, access token, refresh token, Google ID token, embedding, foto, maupun kredensial perangkat. Butir ini hanya sah bila **FL-005S** (penguatan log respons) sudah selesai — lihat `docs/TEST_PLAN.md` §4.
+
 ## 9. Keselarasan dengan keputusan dan kontrak lain
 
 | Dokumen | Bagian yang mengikat |
 |---|---|
-| `docs/DECISIONS.md` | D-015 (template terenkripsi, tanpa foto mentah), D-022 (AES-256-GCM per baris), **D-030 (kebijakan kunci — DISETUJUI pada FL-004S dengan dua klarifikasi wajib)**, D-023 (kontrak kamera JPEG), D-025 (lisensi bobot model), D-027 (Go pemilik keputusan dan database), D-028 (Go sumber kebenaran, UI bukan penentu), D-029 (liveness terpisah) |
-| `docs/DATA_MODEL.md` | §4.12 `face_templates` (kolom, AAD, perilaku dekripsi gagal, penghapusan keras), §5.3–§5.4 (penghapusan dan pencabutan), §6, §7.1–§7.3 (WAL dan pencadangan), §11 butir 4–7 (larangan menyimpan kunci, cadangan, dan larangan menulis `face_templates` sebelum D-030) |
-| `docs/API_CONTRACT.md` | §6.7 (penanganan gambar), §6.8 (pemisahan tanggung jawab, kunci dimiliki Go), §7 (status kegagalan wajah) |
-| `docs/OPEN_QUESTIONS.md` | Q-16 (**DIPUTUSKAN** untuk rancangan MVP melalui D-030; implementasi dan pengujian masih tertunda), Q-07 (angka ambang kalibrasi — tetap terbuka), Q-18 (batas laju/ukuran gambar — tetap terbuka) |
+| `docs/DECISIONS.md` | D-015 (template terenkripsi, tanpa foto mentah), D-022 (AES-256-GCM per baris), **D-030 (kebijakan kunci — DISETUJUI pada FL-004S dengan dua klarifikasi wajib; tidak diubah FL-010V)**, D-023 (kontrak kamera JPEG), D-025 (lisensi bobot model), D-027 (Go pemilik keputusan dan database), D-028 (Go sumber kebenaran, UI bukan penentu), D-029 (liveness terpisah); **FL-010V: D-032 (lifecycle akun), D-033 (sesi token opak + rotasi + batas absolut 30 hari), D-034 (hak akses `dosen`), D-035 (LAN privat + HTTPS tepercaya — tingkat kebijakan), D-036 (perluasan audit keamanan — berlaku), D-037 (satu role utama per akun)** |
+| `docs/DATA_MODEL.md` | §4.12 `face_templates` (kolom, AAD, perilaku dekripsi gagal, penghapusan keras), §5.3–§5.4 (penghapusan dan pencabutan), §6, §7.1–§7.3 (WAL dan pencadangan), §11 butir 4–7 (larangan menyimpan kunci, cadangan, dan larangan menulis `face_templates` sebelum D-030); **FL-010V: `users`, `user_identities`, `session_tokens`, `auth_nonces` (nonce sekali pakai disimpan sebagai hash, TTL 5 menit), `people.account_user_id`, `class_lecturers`** |
+| `docs/API_CONTRACT.md` | §6.7 (penanganan gambar), §6.8 (pemisahan tanggung jawab, kunci dimiliki Go), §7 (status kegagalan wajah); **FL-010V: §5.13 (nama event audit keamanan yang berlaku menurut D-036)** |
+| `docs/OPEN_QUESTIONS.md` | Q-16 (**DIPUTUSKAN** untuk rancangan MVP melalui D-030; implementasi dan pengujian masih tertunda), Q-07 (angka ambang kalibrasi — tetap terbuka), Q-18 (batas laju/ukuran gambar — tetap terbuka); **FL-010V: Q-22 (penarikan persetujuan mandiri mahasiswa — tetap TERBUKA), Q-24 (prosedur offline saat sesi tidak sah — tetap TERBUKA)** |
+| `docs/UX_FLOWS.md` | **FL-010V: §2.1 dan §3 (keadaan sesi dicabut/pengguna dinonaktifkan kembali ke layar masuk Google, kegagalan TLS/sertifikat tidak tepercaya tanpa opsi menonaktifkan validasi, satu role utama per akun sehingga navigasi tidak berpindah role), §3a (prosedur offline saat sesi tidak sah — tanpa bypass autentikasi, rujuk Q-24)** |
+| `docs/TEST_PLAN.md` | **FL-010V: §4 (persyaratan log akses mencatat status respons sebenarnya sebagai syarat tugas FL-005S yang belum dikerjakan), §8.3 (GA-13..GA-18), §8.4 (TA-23..TA-26) — semuanya BELUM TERVERIFIKASI** |
 | `docs/AUTHORIZATION.md` | §2 (peran yang berlaku: `admin`, `dosen`, `mahasiswa` + `device` sebagai identitas mesin), §3 (tiga jenis autentikasi yang tidak dapat saling menggantikan), §4 (matriks otorisasi `endpoint × peran`), §5 (aturan kepemilikan/cakupan, `404` di luar cakupan), §6 (aturan 401 vs 403 dan audit). Sumber tunggal matriks peran/izin |
 | `docs/ARCHITECTURE.md` | §1 (Google hanya penyedia identitas), §2 (diagram deployment dengan penyedia identitas Google), §3 (pembagian tanggung jawab klien/backend), §4 (modul `auth`, `accounts`, `self-service`), §5 (temuan loopback vs LAN), §9 (status keputusan otorisasi/autentikasi), §14 (ketergantungan internet) |
 | `docs/API_CONTRACT.md` §1.2, §1.5 (kode kesalahan stabil autentikasi/otorisasi), dan §4 (Modul 1, 2, 14); `docs/DATA_MODEL.md` §4 (`users`, `user_identities`, `session_tokens`, `people.account_user_id`, `class_lecturers`) | Kontrak autentikasi Google, sesi, akun/role, dan portal self-service yang dirujuk dokumen ini |
 
 Revisi FL-010U (16 Oktober 2026) menambahkan baris `docs/AUTHORIZATION.md` dan `docs/ARCHITECTURE.md` di atas serta memperbarui rujukan kontrak autentikasi/sesi. Baris biometrik pada tabel ini **tidak diubah**. Seluruh rancangan autentikasi Google dan sesi pada dokumen ini masih **BELUM TERVERIFIKASI** pada runtime; yang ada baru rancangan, bukan hasil pengujian.
+
+**FL-010V (16 Oktober 2026).** Baris `docs/UX_FLOWS.md` dan `docs/TEST_PLAN.md` ditambahkan, dan baris D-032–D-037 serta `auth_nonces` diselaraskan. D-030, §5a–§5f, Q-07, dan seluruh aturan penghapusan biometrik **tidak diubah** oleh revisi ini. Status audit keamanan naik dari *usulan* menjadi **berlaku** menurut D-036, tetapi **kode audit belum ditulis dan belum diuji**; karenanya seluruh skenario runtime tetap **BELUM TERVERIFIKASI**.
 
 Tidak ada angka ambang kecocokan yang ditetapkan di dokumen ini; Q-07 tetap pekerjaan kalibrasi pada fase AI Engine. Kebijakan pengelolaan kunci pada §5a–§5f **berlaku** sejak D-030 disetujui pemilik project pada FL-004S, **tetapi belum diimplementasikan dan belum diuji**. **Periode pemulihan 30 hari pada §5d adalah batas waktu upaya operator, bukan jaminan pemulihan kunci**, dan **penghapusan pada §5f tidak menjamin data hilang secara fisik dari media penyimpanan**.
 

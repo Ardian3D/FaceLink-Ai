@@ -4,6 +4,8 @@
 
 **Revisi FL-010U (16 Oktober 2026):** diselaraskan dengan arsitektur **tiga role manusia** (`admin`, `dosen`, `mahasiswa`) yang masuk lewat **Google Sign-In**, dan `device` sebagai **autentikasi mesin terpisah** (bukan role manusia). Revisi ini berasal dari cabang `docs/fl-010u-google-three-roles`, bercabang dari `origin/main` (`804c2f7`). Matriks izin lengkap ada di `docs/AUTHORIZATION.md`. **FL-010U adalah tahap dokumentasi saja:** tidak ada kode, SQL, atau migrasi yang ditulis pada revisi ini. Perubahan skema pada §4.1–§4.4, §4.16, dan §4.17 adalah **model data target**, bukan keadaan database saat ini; selisihnya terhadap migrasi yang sudah dijalankan dicatat di §4.18.
 
+**Revisi FL-010V (16 Oktober 2026):** memfinalkan aturan data untuk autentikasi Google dan **satu role utama per akun** (D-032, D-033, D-034, D-035, D-036, D-037 — lihat `docs/DECISIONS.md`). Yang berubah: §4.1 (satu role utama aktif + siklus hidup status + `created_by = NULL` pada bootstrap), §4.2 (kolom `absolute_expires_at` beserta aturannya), §4.16 (aturan penautan atomik dan tahan-race, email sekali pakai), §4.19 (**tabel target baru `auth_nonces`**), §12 (pengujian wajib tambahan), dan §13 (daftar hal terbuka). **FL-010V adalah tahap dokumentasi saja:** tidak ada kode, SQL, atau migrasi yang ditulis, dan **tidak ada migrasi yang dijalankan**. Seluruh pernyataan runtime pada dokumen ini tetap **BELUM TERVERIFIKASI**. Matriks izin tetap bersumber tunggal pada `docs/AUTHORIZATION.md`.
+
 Dokumen ini melengkapi `docs/API_CONTRACT.md` dan tidak menggantikan `docs/PRD.md`. Setiap perubahan skema setelah dokumen ini harus melalui berkas migrasi baru, bukan dengan mengubah migrasi yang sudah pernah dijalankan.
 
 ## 1. Ruang lingkup dan asumsi
@@ -37,8 +39,9 @@ Dokumen ini melengkapi `docs/API_CONTRACT.md` dan tidak menggantikan `docs/PRD.m
 | 15 | `idempotency_records` | Penjaga pengulangan permintaan jaringan | §8 |
 | 16 | `user_identities` | Penautan identitas penyedia (Google) ke akun `users` (§4.16) | §5.1 |
 | 17 | `class_lecturers` | Penugasan dosen pada kelas (§4.17) | §5.5 |
+| 19 | `auth_nonces` | Nonce sekali pakai untuk `POST /auth/google` (§4.19) | §5.1 |
 
-Tabel 16 dan 17 adalah **tabel baru pada model data target** FL-010U; keduanya **belum ada** pada skema yang sudah dijalankan (§4.18). Penomoran `#` mengikuti nomor sub-bagian pada §4.
+Tabel 16 dan 17 adalah **tabel baru pada model data target** FL-010U; keduanya **belum ada** pada skema yang sudah dijalankan (§4.18). Tabel 19 (`auth_nonces`) adalah **tabel target baru FL-010V (16 Oktober 2026)** yang juga **belum ada** pada skema yang sudah dijalankan. Penomoran `#` mengikuti nomor sub-bagian pada §4; nomor 18 tidak muncul di sini karena §4.18 adalah catatan selisih migrasi, bukan definisi tabel.
 
 Diagram hubungan ringkas (`||--o{` berarti satu-ke-banyak):
 
@@ -97,6 +100,9 @@ Akun manusia yang memakai aplikasi. Terdapat **tiga peran manusia**: `admin`, `d
 - **Pembuatan akun:** akun **dibuat oleh `admin` (praregistrasi)** dengan status `invited`; tidak ada pendaftaran mandiri dan **tidak ada role otomatis**. Baris `users` bertambah hanya lewat tindakan admin (atau bootstrap pertama saat sistem masih kosong).
 - **Penautan identitas Google:** identitas Google ditautkan pada **login pertama**. Backend boleh menautkan **hanya bila** ada baris `users` berstatus `invited` dengan `email` yang **sama persis** (huruf kecil, tanpa spasi tepi) dan token Google menyatakan `email_verified=true`; baris itu lalu menjadi `active`. Selain itu **tidak ada** akun yang dibuat dan tidak ada role yang ditetapkan. Rincian kolom ada di §4.16.
 - **Status:** `invited` = akun sudah dipraregistrasi tetapi identitas Google belum tertaut atau belum diaktifkan; `active` = boleh memakai aplikasi; `suspended` = ditolak. `invited` (belum tertaut) dan `suspended` sama-sama **ditolak** dengan satu pesan generik (anti-enumeration).
+- **Satu role utama per akun (D-037, DISETUJUI untuk MVP; FL-010V, 16 Oktober 2026):** satu akun internal memiliki **tepat satu** role utama aktif. Kolom `role` bersifat tunggal dan tidak ada tabel relasi akun–role pada MVP; **tidak ada multi-role switching**. Satu identitas Google **tidak boleh** diam-diam menghasilkan beberapa sesi dengan role berbeda. Hak istimewa `admin` ditetapkan backend dan memungkinkan pengelolaan kelas sesuai matriks **tanpa** mengubah admin menjadi `dosen` (`docs/AUTHORIZATION.md`). Perubahan role hanya oleh `admin` berwenang dan **wajib diaudit** (`user.role_changed`). Aturan `409 LAST_ADMIN_PROTECTED` (penonaktifan admin aktif terakhir) dan `409 SELF_ACCOUNT_PROTECTED` (akun sendiri) tetap berlaku apa adanya.
+- **Siklus hidup status yang disetujui (D-032; FL-010V, 16 Oktober 2026):** urutan yang sah adalah `invited` → `active` → `suspended`. Perpindahan `invited` → `active` **hanya** terjadi lewat penautan identitas Google pada login pertama (§4.16), bukan lewat tindakan lain. Tidak ada penghapusan keras akun; akun yang tidak boleh dipakai lagi berstatus `suspended`. Perpindahan status dicatat di audit (`user.status_changed`), dan penonaktifan akun **mencabut seluruh sesi** akun tersebut (§4.2).
+- **Bootstrap admin pertama (D-032; FL-010V, 16 Oktober 2026):** proses **lokal, eksplisit, sekali, dan dapat diaudit**, tanpa kata sandi/token/kredensial yang tertanam di kode atau repositori. Proses ini **menolak berjalan** bila sudah ada akun `admin` berstatus `active` atau `invited`. Baris yang ditulisnya adalah **satu** baris `users` dengan `role='admin'` dan `status='invited'`, dengan **`created_by = NULL`** — inilah satu-satunya baris `users` yang boleh bernilai `created_by = NULL`. Baris itu ditautkan ke identitas Google pada login pertama seperti akun undangan lain, dan pembuatannya dicatat di audit (`user.bootstrapped`).
 - **Perubahan role dan status berlaku pada permintaan berikutnya**, bukan menunggu token kedaluwarsa: role **selalu** dibaca ulang dari database pada setiap permintaan dan **tidak pernah** diambil dari Google, dari aplikasi React Native, atau dari klaim token.
 - **Penghapusan:** akun tidak dihapus keras selama masih menjadi `actor_id` pada audit maupun `created_by`; gunakan `status = 'suspended'`. Penonaktifan akun **mencabut seluruh sesi** akun tersebut (`session_tokens`, §4.2).
 - **Retensi:** selama sistem dipakai.
@@ -113,6 +119,7 @@ Menyimpan token sesi aplikasi agar dapat dicabut. **Nama tabel ini menggantikan 
 | `access_expires_at` | TEXT | tidak | Masa berlaku token akses 60 menit |
 | `refresh_hash` | TEXT | tidak | Unik; hash token penyegar aktif |
 | `refresh_expires_at` | TEXT | tidak | Masa berlaku token penyegar 30 hari |
+| `absolute_expires_at` | TEXT | tidak | **FL-010V (16 Oktober 2026).** Batas absolut sesi: `created_at` + maksimum 30 hari, **tidak pernah** diperpanjang oleh rotasi penyegar |
 | `prev_refresh_hash` | TEXT | ya | Unik bila ada; hash penyegar **sebelum** rotasi terakhir, disimpan satu langkah untuk deteksi pemakaian ulang |
 | `revoked_at` | TEXT | ya | Diisi saat logout, pencabutan admin, penonaktifan akun, atau deteksi pemakaian ulang |
 | `revoked_reason` | TEXT | ya | Wajib bila `revoked_at` diisi (mis. `logout`, `admin_revoke`, `account_suspended`, `refresh_reuse`) |
@@ -121,10 +128,12 @@ Menyimpan token sesi aplikasi agar dapat dicabut. **Nama tabel ini menggantikan 
 | `created_at` | TEXT | tidak | — |
 
 - **Unik:** `access_hash`, `refresh_hash`, `prev_refresh_hash`.
-- **Indeks:** `idx_session_tokens_user`, `idx_session_tokens_expires`.
-- **Batas absolut sesi:** 30 hari. Sesi **tidak** diperpanjang tanpa batas oleh rotasi token penyegar.
-- **Rotasi token penyegar:** setiap `POST /auth/refresh` menerbitkan **pasangan token baru** (akses + penyegar). Hash penyegar sebelumnya dipindahkan ke `prev_refresh_hash` **satu langkah** saja, agar pemakaian kembali penyegar lama dapat dikenali.
-- **Deteksi pemakaian ulang:** penyegar yang **sudah dirotasi** dipakai kembali → **seluruh sesi dicabut** (`revoked_reason = 'refresh_reuse'`) dan ditulis audit `auth.session.reuse_detected`.
+- **Indeks:** `idx_session_tokens_user`, `idx_session_tokens_expires`, `idx_session_tokens_absolute_expires`.
+- **Batas absolut sesi (D-033; FL-010V, 16 Oktober 2026):** kolom `absolute_expires_at` wajib diisi saat baris sesi dibuat dan nilainya **paling lama** `created_at` + 30 hari. Batas ini **tidak pernah** diperpanjang oleh `POST /auth/refresh`; rotasi penyegar hanya menerbitkan token baru yang tetap tunduk pada batas yang sama. Setiap penyegaran **wajib** memeriksa `now < absolute_expires_at` sebelum menerbitkan pasangan token baru; bila batas itu terlewati, penyegaran ditolak dan sesi dicabut. Satu-satunya jalan melewati batas ini adalah **autentikasi baru yang sah** lewat Google Sign-In ulang, yang membuat **baris sesi baru** (dengan `created_at` dan `absolute_expires_at` baru), bukan memperpanjang baris lama.
+- **Batas relatif vs batas absolut:** `access_expires_at` (60 menit) dan `refresh_expires_at` (30 hari) adalah masa berlaku token; `absolute_expires_at` adalah batas umur **sesi**. Karena itu `refresh_expires_at` **tidak boleh** melampaui `absolute_expires_at`, dan rotasi berulang tidak dapat memindahkan batas absolut.
+- **Rotasi token penyegar (D-033):** setiap `POST /auth/refresh` menerbitkan **pasangan token baru** (akses + penyegar) dan menggantikan hash penyegar lama. Hash penyegar sebelumnya dipindahkan ke `prev_refresh_hash` **satu langkah** saja, agar pemakaian kembali penyegar lama dapat dikenali.
+- **Deteksi pemakaian ulang (D-033):** penyegar yang **sudah dirotasi** dipakai kembali → **seluruh sesi dicabut** (`revoked_at` diisi, `revoked_reason = 'refresh_reuse'`) dan ditulis audit `auth.session.reuse_detected`.
+- **Penyimpanan hash saja (D-033):** yang disimpan pada `access_hash`, `refresh_hash`, dan `prev_refresh_hash` adalah **hash SHA-256** token. Token mentah **tidak pernah** ditulis ke database, log, atau berkas konfigurasi.
 - **Pencabutan:** `POST /auth/logout` mencabut sesi itu (panggilan kedua tetap `204`); `DELETE /auth/sessions/{session_id}` mencabut per sesi oleh `admin`; penonaktifan akun mencabut **seluruh** sesi akun itu. Sesi yang sudah dicabut ditolak sebagai `SESSION_REVOKED`.
 - **Penyimpanan klien:** penyimpanan aman perangkat (Android Keystore lewat penyimpanan aman Expo); **dilarang** di log, Git, atau berkas konfigurasi.
 - **Re-autentikasi:** setelah sesi tidak berlaku lagi, pengguna **wajib** melakukan Google Sign-In lagi; Google Sign-In **tidak** dijanjikan berjalan offline.
@@ -407,11 +416,14 @@ Satu-satunya tempat data biometrik disimpan, dan hanya dalam bentuk terenkripsi 
 | `linked_at` | TEXT | tidak | Waktu penautan |
 | `created_at` | TEXT | tidak | — |
 
-- **Unik:** `(provider, subject)` — satu identitas penyedia paling banyak menautkan satu akun.
-- **Unik:** `(user_id, provider)` — satu akun paling banyak memiliki satu identitas per penyedia.
+- **Unik:** `(provider, subject)` — satu identitas penyedia paling banyak menautkan satu akun. Batasan ini adalah **penjaga** aturan “satu identitas Google tidak boleh menautkan beberapa akun”.
+- **Unik:** `(user_id, provider)` — satu akun paling banyak memiliki satu identitas per penyedia. Bersama batasan di atas, pasangan ini mencegah dua akun berbagi satu identitas Google.
 - **Indeks:** `idx_user_identities_user`.
 - **Kunci pencarian saat login:** identitas dicari dengan kunci `(provider='google', subject=sub)`. **`email` bukan kunci identitas**; email hanya dipakai untuk mencocokkan akun `invited` pada penautan pertama, dan perbandingannya harus **sama persis** (huruf kecil, tanpa spasi tepi) disertai `email_verified=true`.
 - **Aturan penautan:** penautan hanya terjadi bila (a) baris `user_identities` sudah ada untuk `sub` tersebut, atau (b) ada baris `users` berstatus `invited` dengan email identik. Selain itu **tidak ada akun yang dibuat** dan **tidak ada role yang ditetapkan**; permintaan ditolak dengan pesan generik `403 IDENTITY_NOT_LINKED` (anti-enumeration).
+- **Penautan atomik dan tahan-race (D-032; FL-010V, 16 Oktober 2026):** penautan identitas Google dilakukan **di dalam satu transaksi** yang mencakup pencocokan akun `invited`, `INSERT` baris `user_identities`, dan perubahan `users.status` menjadi `active`. Bila dua permintaan `POST /auth/google` dengan `sub` yang sama (atau email undangan yang sama) masuk bersamaan, **hanya satu** yang boleh menautkan; permintaan yang kalah menerima konflik batasan unik dan **tidak** membuat baris kedua. Yang menjadi **penjaga terakhir adalah batasan unik** `(provider, subject)` dan `(user_id, provider)`, bukan pemeriksaan aplikasi: pemeriksaan di aplikasi hanya untuk pesan yang ramah. Hasilnya harus konsisten — tidak boleh ada keadaan “identitas tertaut tetapi akun masih `invited`”, dan tidak boleh ada dua baris identitas untuk satu `sub`.
+- **Email hanya sekali pakai untuk penautan (D-032; FL-010V, 16 Oktober 2026):** kecocokan email **hanya** dipakai pada penautan **pertama**, yaitu selama belum ada baris `user_identities` untuk `sub` tersebut. Setelah identitas tertaut, **pencocokan email tidak pernah dipakai lagi**; login berikutnya memakai `sub`. Karena itu **perubahan alamat email di penyedia tidak pernah memindahkan akun**: mengubah email di Google tidak menautkan `sub` itu ke akun lain, dan tidak memindahkan akun yang sudah tertaut ke pemilik email baru. Ini yang menutup jalur account takeover lewat perubahan email. `email_at_provider` hanya catatan historis saat penautan dan **bukan** kunci identitas.
+- **Satu identitas Google untuk satu akun (D-037; FL-010V, 16 Oktober 2026):** satu identitas Google **tidak boleh** ditautkan ke beberapa akun, dan **tidak boleh** menghasilkan beberapa sesi dengan role berbeda. Bila ternyata ada kebutuhan satu identitas dipakai di beberapa akun, itu **wajib** lewat **mekanisme resolusi yang dirancang dan disetujui lebih dahulu**; tanpa mekanisme itu, permintaan ditolak dan dicatat sebagai masalah terbuka (§13). Batasan unik di atas tetap berlaku apa pun keputusan itu nanti.
 - **Role tidak pernah berasal dari Google.** Identitas penyedia hanya membuktikan siapa yang masuk; keputusan otorisasi tetap di database FaceLink AI.
 - **Penghapusan akun:** baris identitas ikut terhapus lewat `ON DELETE CASCADE`. Pelepasan penautan identitas (tanpa menghapus akun) belum dirancang dan dicatat sebagai butir terbuka (§13).
 - **Audit:** `auth.google.succeeded`, `auth.google.linked`, `auth.login.denied` (dengan `reason` ber-kode, **bukan** email), `user.invited`, `user.role_changed`, `user.status_changed`. `safe_metadata` **tidak pernah** memuat email, ID token, `sub`, atau token sesi.
@@ -443,17 +455,37 @@ Satu-satunya tempat data biometrik disimpan, dan hanya dalam bentuk terenkripsi 
 |---|---|---|
 | `users` | `status` bernilai `active`/`disabled`; ada `deleted_at`; ada `password_hash`; `role` mengacu ke `roles(name)` dengan data `operator`/`admin` | `status` bernilai `invited`/`active`/`suspended`; **tanpa** `password_hash` dan `must_change_password`; tanpa `deleted_at`; tambah `created_by` |
 | `people` | ada `consent_state` (`unknown`/`granted`/`withdrawn`/`expired`) | tanpa `consent_state` pada dokumen ini; tambah `account_user_id` |
-| `operator_tokens` | bernama `operator_tokens`; berkolom `token_hash`/`label`/`last_used_at`/`expires_at` (tanpa pemisahan akses/penyegar) | bernama `session_tokens`; berkolom `access_hash`/`access_expires_at`/`refresh_hash`/`refresh_expires_at`/`prev_refresh_hash`/`revoked_reason`/`last_seen_at` (§4.2) |
+| `operator_tokens` | bernama `operator_tokens`; berkolom `token_hash`/`label`/`last_used_at`/`expires_at` (tanpa pemisahan akses/penyegar) | bernama `session_tokens`; berkolom `access_hash`/`access_expires_at`/`refresh_hash`/`refresh_expires_at`/`absolute_expires_at`/`prev_refresh_hash`/`revoked_reason`/`last_seen_at` (§4.2) |
 | `roles` | berisi `operator`, `admin`, `device` | berisi `admin`, `dosen`, `mahasiswa` |
 | `classes` | ada kolom `status` (`active`/`archived`) dan `description` | dokumen ini belum menyatakan `status`/`description` pada §4.5 |
 | `consent_records` | berisi `purpose`/`status`/`method`/`document_ref`/`notes` | dokumen ini memakai `purpose`/`version`/`capture_method`/`withdraw_reason` (§4.9) |
 | `user_identities`, `class_lecturers` | **tidak ada** | tabel baru (§4.16, §4.17) |
+| `auth_nonces` | **tidak ada** | tabel target baru FL-010V (§4.19); nonce sekali pakai untuk `POST /auth/google` |
 | `face_templates`, `face_enrollment_samples` | **tidak dibuat** (sengaja) | tetap **belum dibuat**; kebijakan D-030 tetap berlaku apa adanya |
 
 - **Tidak ada SQL, migrasi, atau kode yang ditulis pada FL-010U.** FL-010U adalah tahap dokumentasi.
+- **FL-010V (16 Oktober 2026) menambah satu tabel target dan satu kolom target, tanpa SQL:** tabel `auth_nonces` (§4.19) dan kolom `session_tokens.absolute_expires_at` (§4.2). Keduanya **belum ada** pada `00001_init_core_schema.sql` dan wajib dibuat pada migrasi `00002+` FL-011. FL-010V tidak mengubah berkas migrasi apa pun dan tidak menjalankan migrasi.
 - **Migrasi `00001_init_core_schema.sql` tidak boleh diubah.** Seluruh penyesuaian di atas wajib dituangkan sebagai **migrasi baru (`00002+`) pada tugas implementasi FL-011**, dengan konvensi penomoran §9.3 (nomor tidak pernah dipakai ulang) dan pola *buat tabel baru → salin → tukar nama* untuk bentuk `ALTER TABLE` yang tidak didukung SQLite (§9.3).
 - Sebelum migrasi yang mengubah atau menghapus kolom, cadangan harus dibuat mengikuti §7.3; rollback destruktif **dilarang** (§9.5).
 - Selisih di atas adalah **usulan model target**, bukan keadaan terverifikasi. Semua pernyataan runtime pada dokumen ini berstatus **BELUM TERVERIFIKASI**.
+
+### 4.19 `auth_nonces`
+
+**Tabel target baru FL-010V (16 Oktober 2026); belum ada pada skema yang sudah dijalankan (§4.18).** Menyimpan nonce sekali pakai untuk mencegah **replay** pada pertukaran identitas `POST /auth/google`. Tabel ini **tidak** menyimpan ID token, kode otorisasi, `sub`, email, atau kredensial apa pun; yang disimpan hanyalah **hash** nonce.
+
+| Kolom | Tipe | Null | Aturan |
+|---|---|---|---|
+| `nonce_hash` | TEXT | tidak | PK; hash SHA-256 nonce yang dikirim klien; nonce mentah tidak pernah disimpan |
+| `created_at` | TEXT | tidak | Waktu nonce dicatat |
+| `expires_at` | TEXT | tidak | Wajib; `created_at` + **5 menit** |
+
+- **Primary key:** `nonce_hash` — satu nonce hanya boleh ada satu kali. Inilah penjaga terakhir aturan sekali pakai, bukan pemeriksaan aplikasi.
+- **Indeks:** `idx_auth_nonces_expires` untuk pembersihan berkala.
+- **Alur sekali pakai (FL-010V):** aplikasi menghasilkan nonce acak **per percobaan login** dan mengirimkannya ke Google **dan** ke backend. Backend memverifikasi kecocokan nonce, memastikan `now < expires_at`, lalu **menghapus/menandai** baris itu **di dalam transaksi yang sama** dengan pemrosesan login. Nonce yang **sudah dipakai** ditolak; karena penghapusan bersifat atomik dan `nonce_hash` adalah primary key, dua permintaan bersamaan dengan nonce yang sama hanya boleh berhasil satu kali.
+- **TTL 5 menit:** nonce yang lebih tua dari `expires_at` **ditolak** dan tidak boleh dipakai, meskipun barisnya belum dibersihkan.
+- **Pembersihan:** baris kedaluwarsa dihapus oleh **proses pemeliharaan** (sama pola dengan `idempotency_records`, §4.15 dan §7.2), terpisah dari audit. Pemeliharaan bukan penjaga keamanan; penjaga keamanannya adalah pemeriksaan `expires_at` dan aturan sekali pakai.
+- **Audit:** kegagalan nonce (tidak cocok, kedaluwarsa, atau dipakai ulang) tercatat sebagai `auth.login.denied` dengan `reason` ber-kode. `safe_metadata` **tidak pernah** memuat nonce mentah, ID token, `sub`, atau email.
+- **Retensi:** baris dihapus segera setelah dipakai atau setelah `expires_at` terlewati; tidak ada riwayat jangka panjang pada tabel ini.
 
 ## 5. Alur transaksi penting
 
@@ -738,6 +770,27 @@ Pengujian tambahan untuk identitas Google, sesi aplikasi, dan penautan akun (FL-
 | 36 | Migrasi `00002+` dijalankan di atas database yang sudah menjalankan `00001_init_core_schema.sql` | Berhasil **tanpa** mengubah berkas `00001`; isi `users`/`people` lama tetap terbaca |
 | 37 | Kolom `password_hash` masih dirujuk kode setelah migrasi FL-011 | Terdeteksi sebagai kegagalan (tidak ada kolom kata sandi pada model target) |
 
+Pengujian tambahan FL-010V (16 Oktober 2026) untuk penautan atomik, nonce sekali pakai, dan batas absolut sesi. Semuanya berstatus **BELUM TERVERIFIKASI**; daftar ini adalah syarat penerimaan untuk tugas implementasi FL-011, bukan laporan hasil.
+
+| # | Skenario | Harapan |
+|---|---|---|
+| 38 | Dua `POST /auth/google` bersamaan dengan `sub` yang sama dan satu akun `invited` yang cocok (uji penautan bersamaan, race detector **tidak** dimatikan) | **Hanya satu** permintaan menautkan; tepat **satu** baris `user_identities` untuk `sub` itu; akun menjadi `active` satu kali; permintaan lain ditolak konflik unik tanpa membuat baris kedua |
+| 39 | Dua `POST /auth/google` bersamaan dengan email undangan yang sama tetapi `sub` berbeda | Paling banyak **satu** penautan berhasil; tidak ada dua akun berbagi satu identitas dan tidak ada dua identitas pada satu akun |
+| 40 | Nonce yang **sudah dipakai** dikirim ulang pada `POST /auth/google` | Ditolak (pelanggaran primary key `auth_nonces.nonce_hash`); tidak ada sesi diterbitkan; audit `auth.login.denied` |
+| 41 | Nonce dengan `expires_at` sudah terlewati (lebih dari 5 menit) | Ditolak; tidak ada sesi diterbitkan; nonce tidak dapat dipakai lagi |
+| 42 | Dua permintaan bersamaan memakai nonce yang sama | Hanya **satu** yang berhasil; yang kedua ditolak |
+| 43 | `POST /auth/refresh` berulang selama lebih dari 30 hari sejak `created_at` sesi | Penyegaran **ditolak** setelah `now >= absolute_expires_at`; sesi dicabut; token baru **tidak** diterbitkan dan `absolute_expires_at` **tidak** bergeser |
+| 44 | Rotasi penyegar berkali-kali dalam masa berlaku | `absolute_expires_at` **tetap** sama seperti saat baris sesi dibuat; `refresh_expires_at` tidak pernah melampauinya |
+| 45 | Google Sign-In ulang yang sah setelah batas absolut terlewati | Baris sesi **baru** dibuat dengan `created_at` dan `absolute_expires_at` baru; baris lama tidak diperpanjang |
+| 46 | Satu identitas Google (`sub` yang sama) dicoba ditautkan ke akun kedua | Ditolak oleh batasan unik `(provider, subject)`; tidak ada mekanisme resolusi otomatis |
+| 47 | Alamat email di penyedia diubah setelah identitas tertaut, lalu login lagi | Akun **tetap** sama dan **tidak** berpindah; pencocokan email tidak dipakai lagi; tidak ada penautan baru |
+| 48 | Alamat email di penyedia diubah sebelum identitas tertaut (akun `invited` dengan email lama) | Penautan **tidak** terjadi karena email tidak lagi cocok; tidak ada akun baru; ditolak dengan pesan generik |
+| 49 | Dua akun mencoba memakai identitas Google yang sama | Ditolak oleh `(user_id, provider)`/`(provider, subject)`; satu identitas hanya boleh menghasilkan **satu** sesi role |
+| 50 | Bootstrap admin dijalankan saat sudah ada akun `admin` berstatus `active` atau `invited` | Proses **menolak berjalan**; tidak ada baris `users` baru; tidak ada kredensial tertanam yang dipakai |
+| 51 | Baris `users` hasil bootstrap diperiksa | `role='admin'`, `status='invited'`, **`created_by IS NULL`**; akun menjadi `active` hanya setelah penautan Google pertama; audit `user.bootstrapped` |
+| 52 | Akun dengan `status='invited'` (belum tertaut) memanggil endpoint terproteksi | Ditolak dengan pesan generik yang **sama** seperti akun `suspended` (anti-enumeration) |
+| 53 | Baris `auth_nonces` yang sudah lewat `expires_at` dibiarkan, lalu pemeliharaan dijalankan | Baris terhapus oleh pemeliharaan; penghapusan **tidak** menjadi syarat keamanan karena pemeriksaan `expires_at` sudah menolaknya |
+
 ## 13. Pertanyaan terbuka dan hal yang belum diputuskan
 
 1. **Kebijakan retensi kehadiran** dan hubungannya dengan penghapusan peserta belum ditetapkan (lihat `docs/OPEN_QUESTIONS.md`). Ini yang menghambat `DELETE /people` karena `attendance_records` memakai `RESTRICT`.
@@ -752,3 +805,11 @@ Pengujian tambahan untuk identitas Google, sesi aplikasi, dan penautan akun (FL-
 10. **Identitas tunggal per orang:** satu akun Google = satu baris `users` = **satu** role. Menjalankan demo sebagai `admin` sekaligus `dosen` memerlukan **dua akun Google berbeda**. Bila pemilik menghendaki satu orang memegang dua role, itu keputusan model data baru (mis. tabel relasi akun–role, yang belum dirancang).
 11. **Pelepasan penautan identitas Google dari akun yang sudah ada** (unlink tanpa menghapus akun) belum dirancang; baris `user_identities` saat ini hanya hilang lewat `ON DELETE CASCADE` saat akun dihapus (§4.16).
 12. **Bentuk `classes` dan `consent_records` pada model target belum disamakan dengan migrasi yang sudah dijalankan.** `00001_init_core_schema.sql` memuat `classes.status`/`classes.description` serta `consent_records.purpose`/`status`/`method`, sedangkan dokumen ini memakai `version`/`capture_method`/`withdraw_reason` (§4.9, §4.18). Mana yang berlaku pada FL-011 harus diputuskan pemilik sebelum migrasi `00002+` ditulis; FL-010U hanya mencatat selisihnya dan **tidak** menulis migrasi.
+
+Butir tambahan FL-010V (16 Oktober 2026):
+
+13. **Q-22 (penarikan persetujuan mandiri oleh mahasiswa) TETAP TERBUKA.** FL-010V **tidak** menyetujuinya dan tidak mengubah aturan konsen; penarikan persetujuan tetap dilakukan lewat jalur yang berlaku di `docs/SECURITY_PRIVACY.md` §5a–§5f dan D-030. Jangan membaca keputusan FL-010V mana pun sebagai persetujuan Q-22.
+14. **Q-24 (prosedur operasional saat sesi habis dan internet tidak tersedia) TETAP TERBUKA.** Yang berlaku hanya ketetapan bahwa **tidak ada bypass autentikasi** saat sesi tidak sah; rincian prosedurnya belum diputuskan dan tidak boleh diciptakan pada dokumen ini.
+15. **Metode penyediaan sertifikat lokal untuk akses LAN Android belum ditentukan (pertanyaan terbuka baru, FL-010V).** Kebijakan D-035 menetapkan LAN privat + HTTPS dengan sertifikat tepercaya, tetapi **metode** pemenuhannya belum dipilih dan **belum diuji**: Android 7+ tidak mempercayai CA yang dipasang pengguna untuk aplikasi kecuali aplikasi memakai `network_security_config` atau build kustom, sehingga Expo Go tidak memadai. Opsi yang tercatat (CA lokal + SAN alamat IP LAN, reverse proxy lokal dengan TLS, atau `adb reverse` untuk development) beserta batasannya ada di `docs/ARCHITECTURE.md` §5.1. Keputusan metode ini adalah prasyarat pekerjaan pengikatan LAN + TLS pada FL-011.
+16. **Mekanisme resolusi bila satu identitas Google perlu dipakai di beberapa akun belum ada.** D-037 menetapkan satu role utama per akun dan melarang satu identitas Google menghasilkan beberapa akun/sesi role; batasan unik §4.16 menegakkannya. Bila kebutuhan itu muncul, ia menuntut keputusan model data baru (misalnya tabel relasi akun–identitas atau akun–role) yang **belum dirancang**, dan sampai itu ada, permintaan seperti itu **ditolak**.
+17. **Penguatan log respons backend (FL-005S) masih menjadi pekerjaan terpisah dan belum dikerjakan.** Access log Go saat ini dapat melaporkan status `200` untuk respons `503` batas waktu dan tidak mencatat respons `500` hasil pemulihan panic, sehingga keandalan jejak audit/keamanan belum dapat dijamin sebelum tugas itu selesai. FL-010V **tidak** mengubah kode apa pun; pekerjaan itu tercatat juga di `docs/ARCHITECTURE.md` §14.
