@@ -218,11 +218,18 @@ Klarifikasi ini menetapkan bahwa kebijakan penghapusan **mengakui keterbatasan j
 
 ## 6. Pengendalian akses dan transportasi
 
+**Matriks peran dan izin yang mengikat ada di `docs/AUTHORIZATION.md`.** Bagian ini menyebut prinsipnya; dokumen itu menyebut per-endpoint.
+
 - Operator hanya mendapat hak sesuai kebutuhannya; token perangkat tidak boleh digunakan untuk endpoint admin.
 - Endpoint AI Engine hanya untuk backend lokal; batasi ke loopback `127.0.0.1`/IPC dengan kontrak internal `docs/API_CONTRACT.md` §6, dan jangan pernah membukanya pada jaringan kelas.
 - Hanya backend Go yang boleh menulis database dan menetapkan kehadiran (D-027); AI Engine tidak memegang kredensial database, tidak membaca tabel biometrik, dan tidak boleh menyimpan embedding di disk.
 - Hindari hardcode IP, password, kunci, atau token dalam firmware dan aplikasi. Rahasia perangkat bisa diprovisikan saat demo dan diganti bila bocor.
 - Semua penyimpanan, koneksi, dan alur rilis yang terkait biometrik harus diuji sebelum penggunaan orang sungguhan.
+- **Deny by default:** endpoint hanya dapat diakses bila peran pemanggilnya tercantum eksplisit. Token operator, identitas peserta (tidak ada di MVP), dan token perangkat adalah **tiga jalur yang tidak dapat saling menggantikan** (`docs/AUTHORIZATION.md` §1 dan §3).
+- **Otorisasi diambil di backend Go, tidak di klien.** Menyembunyikan tombol pada aplikasi bukan pengendalian akses; setiap permintaan diperiksa ulang di server (D-028).
+- **Tidak membocorkan keberadaan sumber daya.** Sumber daya di luar cakupan pemanggil menjawab `404`, bukan `403` (`docs/AUTHORIZATION.md` §5).
+- **Gagal-aman.** Bila autentikasi atau otorisasi operator tidak dapat dijamin, endpoint operator **wajib** menolak melayani, sesuai §5e butir 4. Absensi manual tetap tersedia, tetapi **hanya** lewat endpoint terautentikasi, bukan lewat jalur yang melumpuhkan pemeriksaan keamanan.
+- **Penolakan bermakna keamanan dicatat.** Penolakan pada jalur administratif dan absensi manual meninggalkan `audit_events` tanpa data biometrik, token, sandi, atau email (`docs/AUTHORIZATION.md` §6).
 
 ## 7. Tindakan ketika gagal atau terjadi insiden
 
