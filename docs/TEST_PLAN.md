@@ -112,3 +112,33 @@ T-21 sampai T-38 di atas adalah **skenario yang direncanakan**, bukan hasil yang
 11. **Dua klarifikasi FL-004S menjadi syarat lulus yang eksplisit.** (a) **T-36** harus membuktikan kesiapan dipisahkan: dengan layanan biometrik dimatikan atau kunci tidak tersedia, absensi manual **tetap berjalan** dan tidak ada pemeriksaan keamanan yang dilonggarkan untuk itu (`docs/SECURITY_PRIVACY.md` §5e). (b) **T-38** harus membuktikan tidak ada klaim penghapusan yang berlebihan: laporan akhir menyebut lokasi yang **belum** terjangkau (media penyimpanan, cadangan di luar jangkauan) apa adanya (`docs/SECURITY_PRIVACY.md` §5f).
 12. **Kegagalan layanan biometrik bukan alasan melumpuhkan pemeriksaan keamanan.** Bila implementasi “berhasil” dengan cara menonaktifkan pemeriksaan agar layanan tetap hidup, hasil itu dinyatakan **gagal** sesuai `docs/SECURITY_PRIVACY.md` §5e butir 4.
 13. **T-21 dan T-23 mengukur pemisahan kesiapan, bukan matinya backend.** Backend inti dan absensi manual **harus tetap berjalan** saat kunci tidak tersedia maupun saat berkas kunci dihapus; yang berhenti hanya layanan biometrik. Hasil uji yang menunjukkan seluruh backend menolak melayani dinyatakan **kegagalan**, bukan kehati-hatian berlebih.
+
+## 7. Catatan FL-010: skenario penolakan akses dan otorisasi
+
+FL-010 menetapkan matriks peran dan izin di `docs/AUTHORIZATION.md`. Skenario negatifnya bernomor **TA-01 sampai TA-15** dan **melengkapi** T-01, T-02, dan T-15 di §2 — bukan menggantinya.
+
+| ID | Skenario | Harapan |
+|---|---|---|
+| TA-01 | Tanpa token memanggil `GET /people` | `401 UNAUTHENTICATED`; tanpa data |
+| TA-02 | Token kedaluwarsa memanggil `GET /sessions` | `401 TOKEN_EXPIRED` |
+| TA-03 | Token perangkat memanggil `/people`, `/sessions`, `/devices`, `/audit-events` | `403 FORBIDDEN_ROLE` pada keempat jalur |
+| TA-04 | Token operator memanggil `recognition-attempts` | `403 FORBIDDEN_ROLE` (bukan `200`) |
+| TA-05 | Token perangkat memakai `device_id` perangkat lain | `403`; audit `auth.device.mismatch` (usulan, `docs/AUTHORIZATION.md` §9 butir 4) |
+| TA-06 | `operator` memanggil `GET`/`POST /users` | `403 FORBIDDEN_ROLE`; audit `authz.denied` (usulan) |
+| TA-07 | `operator` memanggil `DELETE /people` dan `POST /devices` | `403 FORBIDDEN_ROLE` |
+| TA-08 | `operator` mencoba mengubah `role` dirinya sendiri | Tidak ada endpoint yang mengizinkan; peran tidak berubah |
+| TA-09 | Koreksi manual untuk peserta bukan anggota kelas | `422 CLASS_MISMATCH`; tanpa baris kehadiran |
+| TA-10 | Koreksi manual tanpa `reason` | Ditolak (`400`/`422 REASON_REQUIRED`) |
+| TA-11 | Perangkat sesi A mengirim percobaan untuk sesi B | `422 DEVICE_SESSION_MISMATCH` |
+| TA-12 | Perangkat tercabut mengirim `recognition-attempts` | `403 DEVICE_REVOKED` |
+| TA-13 | Akses objek kelas lain oleh operator | `404 NOT_FOUND`; tidak membocorkan keberadaan |
+| TA-14 | `GET /audit-events` setelah koreksi manual | `safe_metadata` bebas token/sandi/JPEG/embedding |
+| TA-15 | Komponen autentikasi dimatikan, lalu `POST /manual-checkins` | Ditolak (gagal-aman); jalur manual hanya lewat endpoint terautentikasi yang sehat |
+
+**Ketentuan yang mengikat untuk TA-01 sampai TA-15:**
+
+1. Skenario ini adalah **rencana**, bukan hasil. Statusnya **BELUM TERVERIFIKASI** sampai kode autentikasi/otorisasi ditulis pada tugas implementasi tersendiri.
+2. Uji negatif adalah inti: yang dibuktikan adalah **penolakan**, bukan keberhasilan jalur yang sah.
+3. `401` dan `403` harus dibedakan sesuai `docs/AUTHORIZATION.md` §6.1; jawaban tidak boleh membocorkan keberadaan sumber daya lain.
+4. Setiap skenario audit (TA-05, TA-06, TA-14) harus memeriksa isi `safe_metadata`, bukan hanya keberadaan barisnya.
+5. TA-15 menguji `docs/SECURITY_PRIVACY.md` §5e butir 4: layanan boleh turun, pemeriksaan keamanan **tidak** boleh dilonggarkan agar layanan tampak hidup.

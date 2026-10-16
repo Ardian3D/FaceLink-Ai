@@ -30,6 +30,8 @@ Dokumen ini adalah acuan wajib yang harus ditinjau sebelum membuat handler Go at
 | `device` | Hanya `POST /api/v1/devices/{device_id}/recognition-attempts` | Token perangkat terikat satu `device_id`; tidak dapat membaca rekap atau daftar peserta |
 | `ai-engine` (internal) | Hanya endpoint internal §6 pada `127.0.0.1` | Bukan peran API publik; tidak melewati router publik |
 
+**Ketiga peran di atas adalah daftar final MVP.** Tidak ada peran `dosen` atau `mahasiswa`: persona "operator/dosen" pada `docs/PRD.md` §3 dipenuhi oleh `operator`, dan peserta tidak memiliki akun. Dua jalur autentikasi yang berbeda — token operator dan token perangkat — **tidak dapat saling menggantikan**. Matriks `endpoint × peran`, aturan `401`/`403`, dan aturan audit penolakan ada di `docs/AUTHORIZATION.md`.
+
 ### 1.3 Format respons sukses
 
 Objek tunggal:

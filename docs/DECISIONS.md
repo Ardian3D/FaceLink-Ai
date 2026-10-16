@@ -26,7 +26,7 @@ Dokumen ini memisahkan apa yang **sudah disepakati**, apa yang **masih merupakan
 | D-010 | DISETUJUI (FL-003) | Backend utama **Go + `chi`**; mesin CV lokal **Python + OpenCV** berjalan sebagai proses terpisah. Alasan: Go memegang autentikasi, otorisasi, absensi, sesi, orang, perangkat, rekap, audit, database, dan seluruh keputusan domain; Python hanya melakukan deteksi wajah, kualitas gambar, embedding, dan pencocokan. Ini menutup persaingan dengan D-019. Konsekuensi: dua bahasa, dua paket dependensi, satu kontrak internal yang harus dijaga. Kondisi peninjauan ulang: jika biaya integrasi dua proses terbukti melebihi manfaat, atau jika pemilik memutuskan sebaliknya. |
 | D-011 | DITUNDA (FL-003) | PostgreSQL sebagai **database awal** ditunda. Skema dan migrasi tetap dirancang portabel supaya perpindahan nanti tidak memerlukan desain ulang. Kondisi peninjauan ulang: kebutuhan penulisan bersamaan dari banyak proses, kebutuhan replikasi, atau dataset uji yang membuat SQLite menjadi hambatan nyata. |
 | D-012 | DISETUJUI (FL-003) | Model MVP: OpenCV Zoo **YuNet** (deteksi) + **SFace** (pengenalan). Wajib: catat versi model dan checksum di repositori, dan verifikasi lisensi berkas bobot yang benar-benar diunduh sebelum dipakai. Ambang kecocokan tetap harus dikalibrasi memakai data uji berizin dan **tidak boleh** disalin dari contoh mana pun. |
-| D-013 | USULAN | Operator/admin sebagai satu-satunya pengguna aplikasi wajib di MVP; akun peserta opsional. Perangkat kamera memakai identitas terpisah. |
+| D-013 | USULAN | Operator/admin sebagai satu-satunya pengguna aplikasi wajib di MVP; akun peserta opsional. Perangkat kamera memakai identitas terpisah. **Rancangan final ada di `docs/AUTHORIZATION.md`** (FL-010, 16 Oktober 2026). Usulan final: statusnya dinaikkan menjadi `DISETUJUI` dengan penegasan bahwa tidak ada peran `dosen`/`mahasiswa` — "dosen" = `operator` dan peserta tidak berakun pada MVP. **Status di baris ini belum diubah; menunggu persetujuan pemilik.** |
 | D-014 | USULAN | Kios kamera **satu orang per pemindaian**, bukan mengenali seluruh ruangan. Kandidat ESP32-S3 CAM. |
 | D-015 | USULAN | Menyimpan template/embedding terenkripsi, tanpa menyimpan foto mentah secara default; menyediakan penghapusan dan absensi manual. |
 | D-016 | DITUNDA | Cloud, sinkronisasi luar jaringan, multiorganisasi, integrasi HRIS, billing, CCTV terus-menerus, dan rilis native iOS berbayar. |
@@ -166,3 +166,13 @@ Usulan ini harus ditinjau ulang bila salah satu terjadi: akun Windows di domain 
 5. Perbarui `PROJECT_STATE.md` serta spesifikasi lain yang terpengaruh.
 
 **Jangan diam-diam mengganti stack, menetapkan layanan berbayar, atau menambah fitur di luar lingkup.**
+
+## Catatan FL-010 (16 Oktober 2026) — matriks peran dan otorisasi
+
+FL-010 memfinalkan rancangan peran dan izin MVP pada `docs/AUTHORIZATION.md`. Dokumen itu **tidak** mengubah status keputusan apa pun. Tiga hal yang menuntut persetujuan pemilik sebelum berlaku (rinciannya di `docs/AUTHORIZATION.md` §9):
+
+1. **D-013** diusulkan naik dari `USULAN` menjadi `DISETUJUI`, dengan penegasan bahwa tidak ada peran `dosen`/`mahasiswa` di MVP. Statusnya **belum** diubah.
+2. Dua aksi audit baru diusulkan (`authz.denied`, `auth.device.mismatch`) untuk menambahkan daftar minimum `docs/API_CONTRACT.md` §5.13. Daftar audit minimum adalah bagian kontrak, sehingga perubahan itu tidak dilakukan sendiri.
+3. Larangan operator menonaktifkan akunnya sendiri diusulkan; belum diatur di kontrak.
+
+**D-014 dan D-015 tetap `USULAN`** dan tidak disentuh FL-010: keduanya soal kios dan penyimpanan template, bukan soal peran/otorisasi.

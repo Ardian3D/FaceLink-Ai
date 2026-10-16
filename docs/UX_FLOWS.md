@@ -22,6 +22,8 @@ Operator dapat menjalankan sesi absensi satu kelas tanpa perlu memahami AI atau 
 
 **Akun mahasiswa tidak wajib pada MVP.** Bila nanti ditambah, peserta hanya bisa melihat statusnya sendiri dan mengelola persetujuannya, tidak seluruh daftar peserta.
 
+**Peran yang berlaku pada MVP hanya `operator`, `admin`, dan `device`.** Tidak ada peran `dosen` maupun `mahasiswa` di sistem: "dosen" adalah `operator`, dan "mahasiswa" belum memiliki akun. Matriks izin lengkap beserta perbedaan `operator` dan `admin` ada di `docs/AUTHORIZATION.md`. Peran keempat (`participant`) hanya dipertimbangkan pasca-MVP dan menuntut revisi dokumen otorisasi itu.
+
 ## 3. Keadaan UI yang wajib berbeda
 
 - **Memuat:** tampilkan indikator tanpa membuat asumsi hasil.
