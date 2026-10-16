@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "FaceLink AI",
+    "slug": "facelink-ai",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "scheme": "facelinkai",
+    "icon": "./assets/branding/icon.png",
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/branding/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#0F172A"
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ai.facelink.mobile"
+    },
+    "android": {
+      "package": "ai.facelink.mobile",
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "adaptiveIcon": {
+        "backgroundColor": "#0F172A",
+        "foregroundImage": "./assets/branding/adaptive-icon-foreground.png",
+        "backgroundImage": "./assets/branding/adaptive-icon-background.png",
+        "monochromeImage": "./assets/branding/adaptive-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/branding/favicon.png"
+    }
+  }
+}
