@@ -1,0 +1,8 @@
+# Atribut berkas untuk seluruh repositori.
+#
+# Baris akhir berkas source Go dipaksa LF di semua platform. gofmt menolak
+# CRLF, sedangkan Git for Windows memakai core.autocrlf=true secara bawaan —
+# termasuk pada runner windows-latest. Tanpa atribut ini, checkout di Windows
+# menghasilkan berkas CRLF dan langkah "Pemeriksaan format (gofmt)" gagal
+# walaupun kode di repositori sudah benar (FL-005R-FIX).
+*.go text eol=lf

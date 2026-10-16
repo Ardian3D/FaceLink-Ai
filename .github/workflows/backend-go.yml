@@ -43,6 +43,11 @@ jobs:
         run: |
           go version
           go env GOOS GOARCH CGO_ENABLED
+          # Baris akhir berkas ikut dilaporkan karena gofmt menolak CRLF:
+          # kegagalan format di Windows pernah berasal dari checkout CRLF,
+          # bukan dari kode yang belum diformat (lihat .gitattributes).
+          git config --get core.autocrlf || true
+          git ls-files --eol -- '*.go' | head -5
 
       - name: Pemeriksaan format (gofmt)
         run: |

@@ -291,6 +291,44 @@ func TestPanicDitangkapDanTidakMembocorkanJejakTumpukan(t *testing.T) {
 	}
 }
 
+// TestPanicHandlerDitangkapLewatRantaiTimeout menutup celah yang belum dicakup
+// TestPanicDitangkapDanTidakMembocorkanJejakTumpukan: di sana recoverer diuji
+// langsung, tanpa middleware batas waktu. Pada rantai sungguhan, handler
+// berjalan di goroutine yang dibuat middleware batas waktu, sehingga panic-nya
+// tidak berada pada tumpukan pemanggil dan recoverer lapisan luar tidak
+// menjangkaunya — proses backend berhenti, bukan menjawab 500.
+//
+// Susunan di bawah mengikuti NewRouter: recoverer(s)(timeout(s)(handler)).
+func TestPanicHandlerDitangkapLewatRantaiTimeout(t *testing.T) {
+	s := newTestServer(t)
+
+	rantai := recoverer(s)(timeout(s)(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic("rahasia internal lewat rantai timeout")
+	})))
+
+	rec := httptest.NewRecorder()
+	rantai.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/panic-lewat-timeout", nil))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, ingin 500", rec.Code)
+	}
+	badan := rec.Body.String()
+	if strings.Contains(badan, "rahasia internal") {
+		t.Errorf("badan respons membocorkan pesan panic:\n%s", badan)
+	}
+	if strings.Contains(badan, "goroutine") || strings.Contains(badan, ".go:") {
+		t.Errorf("badan respons membocorkan jejak tumpukan:\n%s", badan)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("badan 500 bukan JSON: %v", err)
+	}
+	if payload["code"] != "INTERNAL_ERROR" {
+		t.Errorf("code = %v, ingin INTERNAL_ERROR", payload["code"])
+	}
+}
+
 func TestBadanPermintaanTerlaluBesarDitolak(t *testing.T) {
 	s := newTestServer(t, func(s *Server) { s.Config.MaxBodyBytes = 16 })
 
