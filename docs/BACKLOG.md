@@ -8,9 +8,10 @@ Daftar ini **usulan pembagian tugas**, bukan GitHub Issues yang telah dibuat. Ke
 | FL-002 | Putuskan stack Go/Python dan PostgreSQL/SQLite | FL-001 | Status D-010/D-011 diubah dengan persetujuan |
 | FL-003 | Tetapkan kontrak API, model data, dan stack final MVP | FL-002 | `API_CONTRACT.md` v1.0 dan `DATA_MODEL.md` (15 tabel) selesai; D-010/D-012/D-020–D-023/D-025–D-028 DISETUJUI, D-019 DITOLAK, D-011 DITUNDA; masih perlu review pemilik sebelum di-commit (**dokumen saja, bukan izin implementasi**) |
 | FL-010 | Tetapkan peran, izin, dan matriks otorisasi sebelum kode backend | FL-002 | Peran operator vs perangkat tertulis dan disetujui; menjadi acuan FL-013 |
+| FL-010U | Selaraskan dokumentasi dengan arsitektur **tiga role** (`admin`, `dosen`, `mahasiswa`) dan **Google Sign-In**, serta tegaskan `device` sebagai autentikasi mesin terpisah | FL-010 | **Rancangan Google auth + tiga role** tertulis di `docs/AUTHORIZATION.md` (sumber tunggal matriks peran/izin), `docs/API_CONTRACT.md`, `docs/DATA_MODEL.md`, `docs/UX_FLOWS.md`, `docs/SECURITY_PRIVACY.md`, `docs/TEST_PLAN.md`, `docs/ARCHITECTURE.md`, `docs/OPEN_QUESTIONS.md`, `docs/ROADMAP.md`, `docs/BACKLOG.md`, dan `README.md`; **dokumen diselaraskan, tanpa kode** — keluaran peran pada FL-010 direvisi (role `operator` digantikan `dosen`, akun `mahasiswa` kini ada). FL-010U **bukan** izin implementasi; seluruh skenario runtime berstatus BELUM TERVERIFIKASI |
 | FL-011 | Awal backend dan endpoint kesehatan | FL-002 | Server lokal berjalan; tes kesehatan lulus |
 | FL-012 | Skema dan migrasi operator, orang, kelas, consent | FL-011 | Migrasi diuji; batas unik berfungsi |
-| FL-013 | Login, autentikasi, otorisasi | FL-012 | Akses tanpa izin ditolak pada tes |
+| FL-013 | Login **Google Sign-In**, autentikasi, otorisasi **tiga role** (`admin`, `dosen`, `mahasiswa`), dan sesi berbasis `session_tokens` | FL-012 | Migrasi **00002+** (tabel `user_identities`, `session_tokens` pengganti `operator_tokens`, `class_lecturers`, kolom `people.account_user_id`, penyesuaian `users`/`roles`) diterapkan tanpa mengubah `00001_init_core_schema.sql`; verifikasi ID token Google (JWKS/RS256/`iss`/`aud`/`nonce`) berjalan; akses tanpa izin ditolak pada tes; rancangan acuan: `docs/AUTHORIZATION.md` |
 | FL-014 | Kelola sesi, roster, keterlambatan | FL-012 | Sesi hanya dapat menerima input saat terbuka |
 | FL-015 | Absensi manual dan anti-duplikasi | FL-013/014 | Check-in bersamaan hanya menghasilkan satu catatan |
 | FL-016 | CSV dan riwayat koreksi | FL-015 | CSV tidak berisi biometrik, alasan koreksi tercatat |
@@ -29,3 +30,9 @@ Daftar ini **usulan pembagian tugas**, bukan GitHub Issues yang telah dibuat. Ke
 | FL-062 | APK Android dan panduan presentasi | FL-061 | APK terpasang dan demo dapat diulang |
 
 Aturan: agent harus menunjukkan perubahan kode serta hasil tes nyata sebelum menandai tugas selesai.
+
+## Catatan FL-010U (16 Oktober 2026)
+
+Baris **FL-010U** dan revisi baris **FL-013** berasal dari **FL-010U (16 Oktober 2026)**, cabang `docs/fl-010u-google-three-roles` dari `origin/main` (`804c2f7`). Perubahan ini **dokumentasi saja**: tidak ada kode Go/TypeScript/SQL dan tidak ada berkas migrasi yang ditulis. Nomor tugas lain tidak diubah.
+
+Revisi FL-013 menggantikan cakupan lamanya ("Login, autentikasi, otorisasi") dengan **Google Sign-In, tiga role `admin`/`dosen`/`mahasiswa`, dan sesi `session_tokens`**, serta menambahkan **migrasi 00002+** sebagai bagian penerimaannya. Rancangan acuan matriks peran/izin adalah `docs/AUTHORIZATION.md`. Sampai tugas implementasi dijalankan dan hasil tesnya nyata, seluruh skenario runtime tiga role dan Google Sign-In tetap berstatus **BELUM TERVERIFIKASI**.

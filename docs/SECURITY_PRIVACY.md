@@ -2,6 +2,10 @@
 
 **Status:** Persyaratan minimal untuk MVP akademik. Dokumen ini adalah panduan engineering, **bukan nasihat hukum**. Untuk penggunaan institusional, konsultasikan pengelolaan data dan kebijakan yang berlaku.
 
+**Revisi FL-010U (16 Oktober 2026).** Dokumen ini diselaraskan dengan keputusan FL-010U: **tiga role pengguna manusia (`admin`, `dosen`, `mahasiswa`) dengan Google Sign-In**, dan `device` sebagai **identitas mesin terpisah** yang tidak berubah. Revisi ini bercabang dari `origin/main` (`804c2f7`). Matriks peran dan izin yang mengikat ada di `docs/AUTHORIZATION.md`; seluruh isi yang sudah disetujui — khususnya **D-022, D-030, dan §5a–§5f** — **tidak diubah** oleh revisi ini. Rancangan autentikasi Google dan sesi aplikasi pada dokumen ini berstatus **rancangan** dan **BELUM TERVERIFIKASI** pada runtime mana pun.
+
+**Catatan istilah.** Beberapa bagian lama masih memakai kata "operator" sebagai sebutan umum bagi manusia yang menjalankan sistem. Sejak FL-010U, sebutan itu merujuk pada role yang berlaku menurut `docs/AUTHORIZATION.md` — `admin` untuk operasi administratif dan perangkat, `dosen` untuk kelas yang ditugaskan kepadanya. Kata "operator" pada kutipan keputusan lama **tidak dihapus** agar riwayatnya tetap dapat ditelusuri; ia **bukan** role tersendiri pada FL-010U.
+
 ## 1. Mengapa penting
 
 Data wajah dan template biometrik bersifat sangat sensitif. Di Indonesia, **UU Nomor 27 Tahun 2022 tentang Pelindungan Data Pribadi** menggolongkan data biometrik sebagai data pribadi bersifat spesifik. Walaupun project hanya tugas kampus, peserta tetap perlu mendapat penjelasan, pilihan yang adil, dan perlindungan data.
@@ -15,7 +19,11 @@ Data wajah dan template biometrik bersifat sangat sensitif. Di Indonesia, **UU N
 | Nama/kode peserta | Pribadi | Minimalkan; gunakan kode fiktif untuk konten publik |
 | Kehadiran dan jadwal | Pribadi | Operator yang sah saja; retensi dibatasi |
 | Login, token perangkat, kunci enkripsi | Rahasia | Jangan log/commit; simpan terproteksi |
+| Identitas Google (`sub`, email akun) | Pribadi | `sub` adalah pengenal stabil dan menjadi kunci penautan pada `user_identities`; email disimpan huruf kecil tanpa spasi tepi. Dipakai **hanya** untuk menautkan identitas ke akun, bukan untuk menentukan hak akses; tidak boleh masuk log, audit `safe_metadata`, atau LLM API |
+| Token sesi aplikasi (token akses dan token penyegar) | Rahasia | Token opak 256-bit; server hanya menyimpan **hash SHA-256** (`session_tokens`). Token mentah tidak pernah dicatat, tidak masuk Git, dan disimpan di penyimpanan aman perangkat (Android Keystore) |
 | Log kesehatan perangkat | Operasional | Tanpa JPEG/embedding dan tanpa identitas yang tidak perlu |
+
+Catatan FL-010U: **Google ID token bukan data yang disimpan.** Ia hanya bukti yang diverifikasi pada `POST /api/v1/auth/google` (§6), tidak pernah dijadikan sesi aplikasi, dan tidak pernah ditulis ke log atau `audit_events`. Klasifikasi pada tabel di atas menambahkan dua baris identitas/sesi tanpa mengubah baris biometrik yang sudah ada.
 
 ## 3. Persetujuan dan alternatif
 
@@ -29,8 +37,13 @@ Data wajah dan template biometrik bersifat sangat sensitif. Di Indonesia, **UU N
 
 | Ancaman | Mitigasi awal |
 |---|---|
-| Akses operator tidak sah | Login, hash kata sandi aman, otorisasi tiap endpoint, pembatasan percobaan |
-| Perangkat palsu mengirim absensi | Kredensial khusus device, daftar perangkat diizinkan, rotasi/revokasi |
+| Akses pengguna tidak sah | Google Sign-In (OpenID Connect) untuk `admin`/`dosen`/`mahasiswa`, otorisasi tiap endpoint, pembatasan percobaan. Baris lama "Login, hash kata sandi aman" **DIGANTIKAN pada FL-010U (16 Oktober 2026)**: `users.password_hash` **dihapus** dan tidak ada login email/kata sandi buatan sendiri |
+| Token Google palsu atau token milik aplikasi lain dipantulkan ke layanan ini | Verifikasi penuh ID token sesuai OpenID Connect: tanda tangan lewat **JWKS** (`kid`, kunci di-cache dan dirotasi bila `kid` tidak dikenal); `alg` **wajib** RS256 (menolak `none`, HS256, dan algoritme simetris); `iss` ∈ {`https://accounts.google.com`, `accounts.google.com`}; `aud` ∈ daftar client ID resmi yang dikonfigurasi (**tidak ada client ID yang ditanam di kode**); `exp`/`iat` dengan toleransi selisih waktu terbatas (usulan 120 detik); `nonce` cocok bila dipakai; `azp` diperiksa bila token punya beberapa audience; `email_verified` = true. Gagal → `401 IDENTITY_TOKEN_INVALID`; kunci/penyedia tidak dapat dihubungi → `503 GOOGLE_UNAVAILABLE` |
+| Orang dengan akun Google sah tetapi tanpa izin | Akun **hanya** dibuat oleh `admin`; tidak ada pendaftaran mandiri dan tidak ada role otomatis. Penautan hanya bila sudah ada baris `users` berstatus `invited` dengan email **sama persis** dan `email_verified=true`; selain itu **tidak ada akun yang dibuat**. Penolakan memakai **satu pesan generik** `403 IDENTITY_NOT_LINKED` untuk semua sebab (anti-enumeration). Role **tidak pernah** diambil dari Google, dari klien, atau dari klaim token |
+| Pencurian token sesi | Token **opak** acak 256-bit; server **hanya** menyimpan hash SHA-256 pada `session_tokens`. Rotasi: setiap `POST /auth/refresh` menerbitkan pasangan token baru. Penyegar yang sudah dirotasi lalu dipakai ulang → **seluruh sesi dicabut** + audit `auth.session.reuse_detected`. Penyimpanan di perangkat memakai penyimpanan aman (Android Keystore); token mentah dilarang di log, Git, dan berkas konfigurasi |
+| Perubahan role tidak segera berlaku | Peran **selalu dibaca ulang dari database pada setiap permintaan**; token tidak memuat klaim peran, sehingga perubahan role dan penonaktifan akun berlaku pada permintaan berikutnya, bukan menunggu token kedaluwarsa. Penonaktifan akun mencabut seluruh sesi akun itu (`401 SESSION_REVOKED`) |
+| Google ID token dipakai sebagai sesi aplikasi | **Dilarang keras.** ID token Google **bukan** pengganti sistem otorisasi internal dan **tidak pernah** disimpan sebagai sesi aplikasi: umurnya pendek, tidak dapat dicabut, dan tidak memuat keputusan otorisasi internal |
+| Perangkat palsu mengirim absensi | Kredensial khusus device, daftar perangkat diizinkan, rotasi/revokasi. `device` tetap **identitas mesin terpisah** dan tidak berubah oleh FL-010U |
 | Request JPEG berbahaya | Validasi MIME dan decode, batas ukuran/laju, timeout, perlindungan memori |
 | Foto/video untuk titip absen | Deteksi presentasi dasar yang diuji, pengawasan operator, fallback manual; jangan klaim kebal |
 | Bocor embedding/foto | Penyimpanan lokal terlindungi, enkripsi template AES-256-GCM per baris (D-022), tidak ada telemetri eksternal |
@@ -216,16 +229,26 @@ Klarifikasi ini menetapkan bahwa kebijakan penghapusan **mengakui keterbatasan j
 
 **6. Keterbatasan ini bukan alasan menolak pencabutan persetujuan.** Peserta yang mencabut persetujuannya tetap dilayani seketika (§5d.4 butir 5); keterbatasan jaminan fisik dicatat sebagai keterbatasan sistem, bukan dibebankan kepada peserta. **Absensi manual tetap sah dan operasional** selama proses ini berjalan.
 
+### 5g. Penegasan FL-010U: autentikasi Google bukan persetujuan biometrik
+
+**Ditambahkan pada FL-010U (16 Oktober 2026).** Seluruh keputusan biometrik pada §5 dan §5a–§5f di atas **tidak diubah** oleh revisi ini; paragraf ini hanya menegaskan batasnya. **Berhasil masuk dengan Google Sign-In bukan persetujuan pemrosesan wajah.** Persetujuan biometrik tetap berdiri sendiri, terpisah, tercatat, dan dapat dicabut (§3), dan seorang `mahasiswa` yang berhasil masuk lalu melihat riwayat kehadirannya sendiri **tidak** memperoleh akses ke `face_templates`, embedding, atau data peserta lain: penautan akun ke baris peserta lewat `people.account_user_id` **tidak** membuka akses ke template (lihat pula `docs/AUTHORIZATION.md` §2 dan §4). Hak akses mahasiswa terbatas pada data miliknya sendiri melalui endpoint `/me/*`, sedangkan enrollment, pencatatan konsen, dan pengelolaan peserta tetap jalur `admin`.
+
 ## 6. Pengendalian akses dan transportasi
 
 **Matriks peran dan izin yang mengikat ada di `docs/AUTHORIZATION.md`.** Bagian ini menyebut prinsipnya; dokumen itu menyebut per-endpoint.
 
-- Operator hanya mendapat hak sesuai kebutuhannya; token perangkat tidak boleh digunakan untuk endpoint admin.
+**FL-010U (16 Oktober 2026) — tiga peran manusia dan identitas mesin.** Ada **tiga role pengguna manusia** — `admin`, `dosen`, dan `mahasiswa` — yang semuanya masuk memakai **Google Sign-In**, ditambah **`device` sebagai identitas mesin terpisah** yang tidak memakai Google dan tidak dapat menggantikan sesi manusia. `dosen` dan `mahasiswa` hanya dapat melihat sesuai cakupan yang diberikan `admin` (`dosen`: kelas yang ditugaskan; `mahasiswa`: data miliknya sendiri melalui `/me/*`); rincian matriks ada di `docs/AUTHORIZATION.md` §2 dan §4. Google **hanya** penyedia identitas: ia **tidak** menentukan hak akses, dan role tidak pernah diambil dari Google, dari klien, atau dari klaim token.
+
+**Aturan sesi aplikasi (rancangan MVP).** Sesi FaceLink AI memakai token **opak** 256-bit, bukan JWT. Masa berlaku token akses **60 menit** dan token penyegar **30 hari**, dengan **batas absolut sesi 30 hari** yang tidak diperpanjang tanpa batas; setelah itu pengguna **wajib** Google Sign-In lagi. Server hanya menyimpan **hash SHA-256** pada `session_tokens`. Pencaburan: `POST /auth/logout` mencabut sesi itu (panggilan kedua tetap `204`); `DELETE /auth/sessions/{session_id}` mencabut per sesi oleh `admin`; penonaktifan akun mencabut **seluruh** sesi akun tersebut; pemakaian ulang penyegar yang sudah dirotasi mencabut seluruh sesi disertai audit `auth.session.reuse_detected`. **Efek pencaburan berlaku lintas sesi dan langsung:** peran dibaca ulang dari database pada setiap permintaan, sehingga token yang masih berlaku pun kehilangan haknya pada permintaan berikutnya (`401 SESSION_REVOKED`).
+
+**Larangan menyimpan ID token Google sebagai sesi.** Google ID token **tidak boleh** dijadikan token sesi aplikasi, tidak boleh disimpan di perangkat sebagai kredensial, dan tidak boleh dicatat. Ia hanya bukti identitas berumur pendek yang diverifikasi pada `POST /api/v1/auth/google`, tidak dapat dicabut, dan tidak memuat keputusan otorisasi internal.
+
+- Setiap role hanya mendapat hak sesuai kebutuhannya; token perangkat tidak boleh digunakan untuk endpoint `admin`, `dosen`, atau `mahasiswa`.
 - Endpoint AI Engine hanya untuk backend lokal; batasi ke loopback `127.0.0.1`/IPC dengan kontrak internal `docs/API_CONTRACT.md` §6, dan jangan pernah membukanya pada jaringan kelas.
 - Hanya backend Go yang boleh menulis database dan menetapkan kehadiran (D-027); AI Engine tidak memegang kredensial database, tidak membaca tabel biometrik, dan tidak boleh menyimpan embedding di disk.
 - Hindari hardcode IP, password, kunci, atau token dalam firmware dan aplikasi. Rahasia perangkat bisa diprovisikan saat demo dan diganti bila bocor.
 - Semua penyimpanan, koneksi, dan alur rilis yang terkait biometrik harus diuji sebelum penggunaan orang sungguhan.
-- **Deny by default:** endpoint hanya dapat diakses bila peran pemanggilnya tercantum eksplisit. Token operator, identitas peserta (tidak ada di MVP), dan token perangkat adalah **tiga jalur yang tidak dapat saling menggantikan** (`docs/AUTHORIZATION.md` §1 dan §3).
+- **Deny by default:** endpoint hanya dapat diakses bila peran pemanggilnya tercantum eksplisit. **Tiga jalur autentikasi yang tidak dapat saling menggantikan** adalah sesi pengguna manusia (`admin`/`dosen`/`mahasiswa` lewat Google Sign-In), **identitas mesin `device`** (token perangkat), dan token internal `ai-engine` (loopback) — lihat `docs/AUTHORIZATION.md` §1 dan §3. Akun `mahasiswa` **ada** pada FL-010U; keputusan lama "peserta tidak memiliki akun pada MVP" **DIGANTIKAN** (16 Oktober 2026) dan identitas peserta tetap merupakan **baris data** `people`, bukan kredensial terpisah.
 - **Otorisasi diambil di backend Go, tidak di klien.** Menyembunyikan tombol pada aplikasi bukan pengendalian akses; setiap permintaan diperiksa ulang di server (D-028).
 - **Tidak membocorkan keberadaan sumber daya.** Sumber daya di luar cakupan pemanggil menjawab `404`, bukan `403` (`docs/AUTHORIZATION.md` §5).
 - **Gagal-aman.** Bila autentikasi atau otorisasi operator tidak dapat dijamin, endpoint operator **wajib** menolak melayani, sesuai §5e butir 4. Absensi manual tetap tersedia, tetapi **hanya** lewat endpoint terautentikasi, bukan lewat jalur yang melumpuhkan pemeriksaan keamanan.
@@ -248,7 +271,7 @@ Klarifikasi ini menetapkan bahwa kebijakan penghapusan **mengakui keterbatasan j
 - [ ] Dokumen persetujuan tersedia dan dipahami peserta.
 - [ ] Jalur absensi manual berfungsi, termasuk ketika tidak ada satu pun template yang tersedia (§5d.5).
 - [ ] Data pribadi/bio tidak masuk Git, log, atau LLM API.
-- [ ] Token operator dan perangkat memiliki izin berbeda.
+- [ ] Token sesi pengguna (`admin`/`dosen`/`mahasiswa`) dan token perangkat memiliki izin berbeda; lihat butir tambahan FL-010U di bawah.
 - [ ] Foto mentah tidak ditahan tanpa alasan/izin.
 - [ ] Penghapusan template teruji pada disk, **cache**, **berkas `-wal`/`-shm`, dan salinan cadangan** (§5c, `docs/DATA_MODEL.md` §5.3).
 - [ ] Berkas kunci tersedia, terlindungi DPAPI, dan **tidak** berada di dalam folder yang disinkronkan ke awan.
@@ -264,6 +287,16 @@ Klarifikasi ini menetapkan bahwa kebijakan penghapusan **mengakui keterbatasan j
 - [ ] Pembatasan keamanan kamera/jaringan lokal dan kekurangan anti-spoofing dijelaskan.
 - [ ] Lisensi model pihak ketiga ditinjau.
 
+**Butir tambahan FL-010U (16 Oktober 2026) — autentikasi dan sesi.** Semua butir di bawah berstatus **BELUM TERVERIFIKASI** sampai benar-benar dijalankan dan hasilnya dicatat apa adanya.
+
+- [ ] **Konfigurasi Google:** client ID resmi terdaftar pada konfigurasi backend (bukan ditanam di kode), **tanpa client secret di repositori** — backend hanya memverifikasi ID token sehingga tidak membutuhkan secret.
+- [ ] **Token sesi tidak masuk log atau Git:** periksa keluaran log backend dan klien, `git status`, serta berkas konfigurasi; token akses/penyegar, ID token, dan `sub` tidak boleh muncul (audit `safe_metadata` juga tidak memuatnya).
+- [ ] **Penonaktifan akun mencabut sesi:** akun yang dinonaktifkan langsung ditolak pada permintaan berikutnya meski tokennya belum kedaluwarsa (`401 SESSION_REVOKED`), dan seluruh sesinya tercabut.
+- [ ] **Uji negatif token Google:** token palsu/tanda tangan salah, `aud` milik aplikasi lain, `iss` asing, token kedaluwarsa, `alg` simetris/`none`, dan `nonce` tidak cocok — semuanya ditolak `401 IDENTITY_TOKEN_INVALID`; kunci Google tidak dapat dihubungi → `503 GOOGLE_UNAVAILABLE`.
+- [ ] **Uji penolakan di luar cakupan kelas:** `dosen` menolak kelas yang tidak ditugaskan, `mahasiswa` menolak data peserta lain, dan sumber daya di luar cakupan menjawab `404` (bukan `403`), sesuai `docs/AUTHORIZATION.md` §5.
+- [ ] **Pemakaian ulang penyegar terdeteksi:** penyegar yang sudah dirotasi dipakai ulang → seluruh sesi dicabut dan tercatat `auth.session.reuse_detected`.
+- [ ] **Penautan akun–peserta diuji:** akun `mahasiswa` tanpa tautan `people` menerima `409 ACCOUNT_NOT_LINKED` pada `/me/*`, dan tautan `people.account_user_id` terbukti **tidak** membuka akses ke `face_templates`.
+
 ## 9. Keselarasan dengan keputusan dan kontrak lain
 
 | Dokumen | Bagian yang mengikat |
@@ -272,6 +305,11 @@ Klarifikasi ini menetapkan bahwa kebijakan penghapusan **mengakui keterbatasan j
 | `docs/DATA_MODEL.md` | §4.12 `face_templates` (kolom, AAD, perilaku dekripsi gagal, penghapusan keras), §5.3–§5.4 (penghapusan dan pencabutan), §6, §7.1–§7.3 (WAL dan pencadangan), §11 butir 4–7 (larangan menyimpan kunci, cadangan, dan larangan menulis `face_templates` sebelum D-030) |
 | `docs/API_CONTRACT.md` | §6.7 (penanganan gambar), §6.8 (pemisahan tanggung jawab, kunci dimiliki Go), §7 (status kegagalan wajah) |
 | `docs/OPEN_QUESTIONS.md` | Q-16 (**DIPUTUSKAN** untuk rancangan MVP melalui D-030; implementasi dan pengujian masih tertunda), Q-07 (angka ambang kalibrasi — tetap terbuka), Q-18 (batas laju/ukuran gambar — tetap terbuka) |
+| `docs/AUTHORIZATION.md` | §2 (peran yang berlaku: `admin`, `dosen`, `mahasiswa` + `device` sebagai identitas mesin), §3 (tiga jenis autentikasi yang tidak dapat saling menggantikan), §4 (matriks otorisasi `endpoint × peran`), §5 (aturan kepemilikan/cakupan, `404` di luar cakupan), §6 (aturan 401 vs 403 dan audit). Sumber tunggal matriks peran/izin |
+| `docs/ARCHITECTURE.md` | §1 (Google hanya penyedia identitas), §2 (diagram deployment dengan penyedia identitas Google), §3 (pembagian tanggung jawab klien/backend), §4 (modul `auth`, `accounts`, `self-service`), §5 (temuan loopback vs LAN), §9 (status keputusan otorisasi/autentikasi), §14 (ketergantungan internet) |
+| `docs/API_CONTRACT.md` §1.2, §1.5 (kode kesalahan stabil autentikasi/otorisasi), dan §4 (Modul 1, 2, 14); `docs/DATA_MODEL.md` §4 (`users`, `user_identities`, `session_tokens`, `people.account_user_id`, `class_lecturers`) | Kontrak autentikasi Google, sesi, akun/role, dan portal self-service yang dirujuk dokumen ini |
+
+Revisi FL-010U (16 Oktober 2026) menambahkan baris `docs/AUTHORIZATION.md` dan `docs/ARCHITECTURE.md` di atas serta memperbarui rujukan kontrak autentikasi/sesi. Baris biometrik pada tabel ini **tidak diubah**. Seluruh rancangan autentikasi Google dan sesi pada dokumen ini masih **BELUM TERVERIFIKASI** pada runtime; yang ada baru rancangan, bukan hasil pengujian.
 
 Tidak ada angka ambang kecocokan yang ditetapkan di dokumen ini; Q-07 tetap pekerjaan kalibrasi pada fase AI Engine. Kebijakan pengelolaan kunci pada §5a–§5f **berlaku** sejak D-030 disetujui pemilik project pada FL-004S, **tetapi belum diimplementasikan dan belum diuji**. **Periode pemulihan 30 hari pada §5d adalah batas waktu upaya operator, bukan jaminan pemulihan kunci**, dan **penghapusan pada §5f tidak menjamin data hilang secara fisik dari media penyimpanan**.
 

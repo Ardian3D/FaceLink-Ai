@@ -2,11 +2,13 @@
 
 **Versi:** 1.0 · **Status:** SPESIFIKASI FINAL TAHAP DOKUMENTASI; **BELUM DIIMPLEMENTASIKAN** dan belum ada migrasi yang dijalankan.
 
+**Revisi FL-010U (16 Oktober 2026):** diselaraskan dengan arsitektur **tiga role manusia** (`admin`, `dosen`, `mahasiswa`) yang masuk lewat **Google Sign-In**, dan `device` sebagai **autentikasi mesin terpisah** (bukan role manusia). Revisi ini berasal dari cabang `docs/fl-010u-google-three-roles`, bercabang dari `origin/main` (`804c2f7`). Matriks izin lengkap ada di `docs/AUTHORIZATION.md`. **FL-010U adalah tahap dokumentasi saja:** tidak ada kode, SQL, atau migrasi yang ditulis pada revisi ini. Perubahan skema pada §4.1–§4.4, §4.16, dan §4.17 adalah **model data target**, bukan keadaan database saat ini; selisihnya terhadap migrasi yang sudah dijalankan dicatat di §4.18.
+
 Dokumen ini melengkapi `docs/API_CONTRACT.md` dan tidak menggantikan `docs/PRD.md`. Setiap perubahan skema setelah dokumen ini harus melalui berkas migrasi baru, bukan dengan mengubah migrasi yang sudah pernah dijalankan.
 
 ## 1. Ruang lingkup dan asumsi
 
-1. MVP melayani **satu kelas, satu terminal, satu operator** (batasan AGENTS.md §2). Skema tetap tidak boleh mengunci diri sehingga organisasi lain mustahil ditambahkan (D-020 catatan portabilitas).
+1. MVP melayani **satu kelas dan satu terminal**, dipakai oleh **tiga peran manusia** (`admin`, `dosen`, `mahasiswa`) yang masuk lewat Google Sign-In, ditambah **`device`** yang bukan peran manusia melainkan identitas mesin terpisah (batasan AGENTS.md §2; rujukan peran: `docs/AUTHORIZATION.md` §2). Skema tetap tidak boleh mengunci diri sehingga organisasi lain mustahil ditambahkan (D-020 catatan portabilitas).
 2. **Tidak ada multi-tenancy**, tidak ada payroll, tidak ada billing, dan tidak ada tabel `organization_id` yang dipaksakan pada seluruh tabel. Namun setiap entitas utama memiliki `id` UUID dan `created_at`, sehingga penambahan kolom pengelompokan di masa depan bersifat aditif.
 3. Database MVP: **SQLite mode WAL** (D-020); target lanjutan: **PostgreSQL** (D-011 masih DITUNDA).
 4. Semua waktu disimpan sebagai **TEXT ISO 8601 UTC** (`2026-10-15T08:00:00Z`). Tidak ada waktu lokal yang disimpan tanpa penanda zona.
@@ -18,9 +20,9 @@ Dokumen ini melengkapi `docs/API_CONTRACT.md` dan tidak menggantikan `docs/PRD.m
 
 | # | Tabel | Kegunaan | Modul API terkait |
 |---|---|---|---|
-| 1 | `users` | Akun operator dan admin | §5.1, §5.2 |
-| 2 | `operator_tokens` | Token sesi operator yang dapat dicabut | §5.1 |
-| 3 | `roles` | Daftar peran yang sah beserta deskripsinya | §5.1 |
+| 1 | `users` | Akun manusia (`admin`, `dosen`, `mahasiswa`) | §5.1, §5.2 |
+| 2 | `session_tokens` | Token sesi aplikasi (akses + penyegar) yang dapat dicabut | §5.1 |
+| 3 | `roles` | Daftar peran manusia yang sah beserta deskripsinya | §5.1 |
 | 4 | `people` | Peserta (identitas non-biometrik) | §5.2 |
 | 5 | `classes` | Kelas atau kelompok | §5.5 |
 | 6 | `class_memberships` | Keanggotaan peserta pada kelas | §5.5 |
@@ -30,17 +32,25 @@ Dokumen ini melengkapi `docs/API_CONTRACT.md` dan tidak menggantikan `docs/PRD.m
 | 10 | `face_enrollments` | Sesi pendaftaran wajah berjangka waktu | §5.4 |
 | 11 | `face_enrollment_samples` | Metadata kualitas sampel enrollment (bukan gambar) | §5.4 |
 | 12 | `face_templates` | Template wajah terenkripsi | §5.3, §5.4, §6 |
-| 13 | `devices` | Perangkat kamera terdaftar | §5.9 |
+| 13 | `devices` | Perangkat kamera terdaftar (identitas mesin) | §5.9 |
 | 14 | `audit_events` | Jejak aktivitas penting | §5.13 |
 | 15 | `idempotency_records` | Penjaga pengulangan permintaan jaringan | §8 |
+| 16 | `user_identities` | Penautan identitas penyedia (Google) ke akun `users` (§4.16) | §5.1 |
+| 17 | `class_lecturers` | Penugasan dosen pada kelas (§4.17) | §5.5 |
+
+Tabel 16 dan 17 adalah **tabel baru pada model data target** FL-010U; keduanya **belum ada** pada skema yang sudah dijalankan (§4.18). Penomoran `#` mengikuti nomor sub-bagian pada §4.
 
 Diagram hubungan ringkas (`||--o{` berarti satu-ke-banyak):
 
 ```text
-users ||--o{ operator_tokens
+users ||--o{ session_tokens
+users ||--o{ user_identities         (identitas Google; ON DELETE CASCADE)
 users ||--o{ audit_events            (actor_id, tanpa foreign key keras ke users)
 roles ||--o{ users                   (role disimpan sebagai TEXT + daftar acuan)
+users ||--o{ classes                 (class_lecturers: penugasan dosen, §4.17)
+users ||--o{ people                  (people.account_user_id, ON DELETE SET NULL, unik)
 classes ||--o{ class_memberships
+classes ||--o{ class_lecturers
 people  ||--o{ class_memberships
 classes ||--o{ attendance_sessions
 people  ||--o{ attendance_records
@@ -67,42 +77,57 @@ Konvensi penamaan: `snake_case`; kunci asing bernama `<tabel_tunggal>_id`; indek
 
 ### 4.1 `users`
 
-Akun manusia yang memakai aplikasi. Hanya peran `operator` dan `admin` yang ada di MVP.
+Akun manusia yang memakai aplikasi. Terdapat **tiga peran manusia**: `admin`, `dosen`, dan `mahasiswa`. Tidak ada login email/kata sandi buatan sendiri; autentikasi memakai **Google Sign-In** dan identitas penyedia disimpan di `user_identities` (§4.16). Revisi FL-010U (16 Oktober 2026).
 
 | Kolom | Tipe | Null | Aturan |
 |---|---|---|---|
 | `id` | TEXT | tidak | PK |
 | `email` | TEXT | tidak | Unik, disimpan huruf kecil |
 | `display_name` | TEXT | tidak | 1–120 karakter |
-| `password_hash` | TEXT | tidak | Hash lambat dengan garam unik; **tidak pernah** keluar dari backend |
-| `role` | TEXT | tidak | `CHECK (role IN ('operator','admin'))` |
-| `must_change_password` | INTEGER | tidak | Bawaan 1 untuk akun baru |
-| `is_active` | INTEGER | tidak | Bawaan 1 |
+| `role` | TEXT | tidak | `CHECK (role IN ('admin','dosen','mahasiswa'))` |
+| `status` | TEXT | tidak | `CHECK (status IN ('invited','active','suspended'))`, bawaan `invited` |
+| `created_by` | TEXT | ya | FK → `users.id` — admin yang membuat akun; **null** hanya untuk akun bootstrap pertama |
 | `last_login_at` | TEXT | ya | Diperbarui saat login berhasil |
 | `created_at` | TEXT | tidak | — |
 | `updated_at` | TEXT | ya | — |
 
+- **Dihapus dari model data FL-010U (DIGANTIKAN):** kolom `password_hash` dan `must_change_password`. Alasannya: Google Sign-In menggantikan kata sandi buatan sendiri, sehingga tidak ada kata sandi yang perlu di-hash atau dipaksa diganti. Tidak ada kolom pengganti berbentuk rahasia apa pun pada tabel ini.
 - **Unik:** `email`.
-- **Indeks:** `idx_users_role`.
-- **Penghapusan:** akun tidak dihapus keras selama masih menjadi `actor_id` pada audit; gunakan `is_active = 0`.
+- **Indeks:** `idx_users_role`, `idx_users_status`.
+- **Pembuatan akun:** akun **dibuat oleh `admin` (praregistrasi)** dengan status `invited`; tidak ada pendaftaran mandiri dan **tidak ada role otomatis**. Baris `users` bertambah hanya lewat tindakan admin (atau bootstrap pertama saat sistem masih kosong).
+- **Penautan identitas Google:** identitas Google ditautkan pada **login pertama**. Backend boleh menautkan **hanya bila** ada baris `users` berstatus `invited` dengan `email` yang **sama persis** (huruf kecil, tanpa spasi tepi) dan token Google menyatakan `email_verified=true`; baris itu lalu menjadi `active`. Selain itu **tidak ada** akun yang dibuat dan tidak ada role yang ditetapkan. Rincian kolom ada di §4.16.
+- **Status:** `invited` = akun sudah dipraregistrasi tetapi identitas Google belum tertaut atau belum diaktifkan; `active` = boleh memakai aplikasi; `suspended` = ditolak. `invited` (belum tertaut) dan `suspended` sama-sama **ditolak** dengan satu pesan generik (anti-enumeration).
+- **Perubahan role dan status berlaku pada permintaan berikutnya**, bukan menunggu token kedaluwarsa: role **selalu** dibaca ulang dari database pada setiap permintaan dan **tidak pernah** diambil dari Google, dari aplikasi React Native, atau dari klaim token.
+- **Penghapusan:** akun tidak dihapus keras selama masih menjadi `actor_id` pada audit maupun `created_by`; gunakan `status = 'suspended'`. Penonaktifan akun **mencabut seluruh sesi** akun tersebut (`session_tokens`, §4.2).
 - **Retensi:** selama sistem dipakai.
 
-### 4.2 `operator_tokens`
+### 4.2 `session_tokens`
 
-Menyimpan token sesi operator agar dapat dicabut. Token disimpan dalam bentuk hash.
+Menyimpan token sesi aplikasi agar dapat dicabut. **Nama tabel ini menggantikan `operator_tokens`** (FL-010U §8; lihat §4.18). Yang disimpan **hanya hash SHA-256**; token mentah **tidak pernah** disimpan atau dicatat di log. Token berbentuk **opak acak 256-bit** (bukan JWT) dan dikirim sebagai `Authorization: Bearer <token>`; Google ID token **bukan** token sesi aplikasi ini.
 
 | Kolom | Tipe | Null | Aturan |
 |---|---|---|---|
 | `id` | TEXT | tidak | PK |
 | `user_id` | TEXT | tidak | FK → `users.id` `ON DELETE CASCADE` |
-| `token_hash` | TEXT | tidak | Unik; hash token akses |
-| `refresh_hash` | TEXT | ya | Unik bila ada |
-| `expires_at` | TEXT | tidak | — |
-| `revoked_at` | TEXT | ya | Diisi saat logout atau pencabutan admin |
+| `access_hash` | TEXT | tidak | Unik; hash token akses |
+| `access_expires_at` | TEXT | tidak | Masa berlaku token akses 60 menit |
+| `refresh_hash` | TEXT | tidak | Unik; hash token penyegar aktif |
+| `refresh_expires_at` | TEXT | tidak | Masa berlaku token penyegar 30 hari |
+| `prev_refresh_hash` | TEXT | ya | Unik bila ada; hash penyegar **sebelum** rotasi terakhir, disimpan satu langkah untuk deteksi pemakaian ulang |
+| `revoked_at` | TEXT | ya | Diisi saat logout, pencabutan admin, penonaktifan akun, atau deteksi pemakaian ulang |
+| `revoked_reason` | TEXT | ya | Wajib bila `revoked_at` diisi (mis. `logout`, `admin_revoke`, `account_suspended`, `refresh_reuse`) |
+| `last_seen_at` | TEXT | ya | Diperbarui pada pemakaian token |
 | `user_agent_ringkas` | TEXT | ya | Maksimum 120 karakter |
 | `created_at` | TEXT | tidak | — |
 
-- **Indeks:** `idx_operator_tokens_user`, `idx_operator_tokens_expires`.
+- **Unik:** `access_hash`, `refresh_hash`, `prev_refresh_hash`.
+- **Indeks:** `idx_session_tokens_user`, `idx_session_tokens_expires`.
+- **Batas absolut sesi:** 30 hari. Sesi **tidak** diperpanjang tanpa batas oleh rotasi token penyegar.
+- **Rotasi token penyegar:** setiap `POST /auth/refresh` menerbitkan **pasangan token baru** (akses + penyegar). Hash penyegar sebelumnya dipindahkan ke `prev_refresh_hash` **satu langkah** saja, agar pemakaian kembali penyegar lama dapat dikenali.
+- **Deteksi pemakaian ulang:** penyegar yang **sudah dirotasi** dipakai kembali → **seluruh sesi dicabut** (`revoked_reason = 'refresh_reuse'`) dan ditulis audit `auth.session.reuse_detected`.
+- **Pencabutan:** `POST /auth/logout` mencabut sesi itu (panggilan kedua tetap `204`); `DELETE /auth/sessions/{session_id}` mencabut per sesi oleh `admin`; penonaktifan akun mencabut **seluruh** sesi akun itu. Sesi yang sudah dicabut ditolak sebagai `SESSION_REVOKED`.
+- **Penyimpanan klien:** penyimpanan aman perangkat (Android Keystore lewat penyimpanan aman Expo); **dilarang** di log, Git, atau berkas konfigurasi.
+- **Re-autentikasi:** setelah sesi tidak berlaku lagi, pengguna **wajib** melakukan Google Sign-In lagi; Google Sign-In **tidak** dijanjikan berjalan offline.
 - **Retensi:** baris kedaluwarsa dihapus oleh pemeliharaan setelah 7 hari, terpisah dari audit.
 
 ### 4.3 `roles`
@@ -111,11 +136,13 @@ Tabel acuan kecil agar nama peran tidak tersebar sebagai string bebas. **Tidak**
 
 | Kolom | Tipe | Null | Aturan |
 |---|---|---|---|
-| `name` | TEXT | tidak | PK; `operator`, `admin`, `device` |
+| `name` | TEXT | tidak | PK; `admin`, `dosen`, `mahasiswa` |
 | `description` | TEXT | tidak | Penjelasan singkat |
 | `created_at` | TEXT | tidak | — |
 
-- Baris awal diisi oleh migrasi awal. `users.role` tetap divalidasi `CHECK`, dan tidak ada tabel relasi izin-detail pada MVP.
+- **Daftar peran manusia adalah `admin`, `dosen`, dan `mahasiswa`.** Peran lama `operator` **DIGANTIKAN** oleh `dosen` dengan catatan jujur: cakupan `operator` lama **terbagi** antara `admin` dan `dosen`, sehingga ini **bukan** penggantian nama dengan cakupan identik (`docs/AUTHORIZATION.md`).
+- **`device` bukan peran manusia** dan karena itu **tidak** ada pada tabel ini (DIGANTIKAN dari daftar lama `operator`, `admin`, `device`). Identitas mesin perangkat tetap terpisah dan tersimpan sebagai `devices.token_hash` (§4.13); alur autentikasi perangkat bukan Google Sign-In. `ai-engine` juga bukan peran di tabel ini (proses lokal dengan token internal loopback).
+- Baris acuan ditulis oleh **migrasi baru** (FL-011), bukan dengan mengubah migrasi yang sudah dijalankan (§4.18). `users.role` tetap divalidasi `CHECK`, dan tidak ada tabel relasi izin-detail pada MVP.
 
 ### 4.4 `people`
 
@@ -128,13 +155,17 @@ Peserta absensi. Identitas biometrik **tidak** ada di tabel ini.
 | `display_name` | TEXT | tidak | 1–120 karakter |
 | `status` | TEXT | tidak | `CHECK (status IN ('active','inactive'))`, bawaan `active` |
 | `note` | TEXT | ya | Maksimum 200 karakter |
+| `account_user_id` | TEXT | ya | FK → `users.id` `ON DELETE SET NULL`; **unik** bila tidak null — menautkan baris peserta ke akun `mahasiswa` |
 | `created_at` | TEXT | tidak | — |
 | `updated_at` | TEXT | ya | — |
 | `deleted_at` | TEXT | ya | Penghapusan lunak, lihat §6.3 |
 
 - **Unik:** `external_code` (tanpa memandang `deleted_at`; kode tidak boleh dipakai ulang agar audit lama tetap bermakna).
-- **Indeks:** `idx_people_status`, `idx_people_display_name`.
-- **Penghapusan:** `DELETE /people/{id}` menghapus `face_templates` terkait pada transaksi yang sama (D-015), lalu mengisi `deleted_at`. Baris tidak hilang agar `attendance_records` historis tetap dapat dibaca.
+- **Unik:** `account_user_id` bila tidak null — satu akun `mahasiswa` paling banyak menautkan **satu** baris peserta, dan satu baris peserta paling banyak memiliki **satu** akun. Dijaga oleh indeks unik parsial.
+- **Indeks:** `idx_people_status`, `idx_people_display_name`, `idx_people_account_user`.
+- **Penautan akun mahasiswa:** `account_user_id` diisi oleh `admin` pada tindakan penautan eksplisit, **bukan** otomatis saat login. Kandidat yang sah hanyalah akun berperan `mahasiswa`; akun `admin`/`dosen` tidak ditautkan ke baris peserta. Penautan dan pelepasan penautan dicatat di audit (`person.account_linked`, `person.account_unlinked`). Selama `account_user_id` kosong, endpoint `/me/*` milik akun itu ditolak `409 ACCOUNT_NOT_LINKED`.
+- **Penegasan biometrik (FL-010U):** `account_user_id` **hanya** menghubungkan akun manusia ke baris peserta. Kolom ini **tidak** membuka akses ke `face_templates`, tidak menambah kolom biometrik, dan tidak memberi mahasiswa akses ke data peserta lain. Aturan kunci dan biometrik (D-030) tetap berlaku apa adanya (§11).
+- **Penghapusan:** `DELETE /people/{id}` menghapus `face_templates` terkait pada transaksi yang sama (D-015), lalu mengisi `deleted_at`. Baris tidak hilang agar `attendance_records` historis tetap dapat dibaca. Penghapusan akun `users` **tidak** menghapus baris peserta; `ON DELETE SET NULL` hanya mengosongkan penautan.
 
 ### 4.5 `classes`
 
@@ -301,7 +332,7 @@ Satu-satunya tempat data biometrik disimpan, dan hanya dalam bentuk terenkripsi 
 - **Unik:** `uq_face_templates_person_model` pada `(person_id, model_id, model_version)` — mencegah template ganda untuk model yang sama.
 - **Indeks:** `idx_face_templates_person`, `idx_face_templates_key_version`.
 - **AAD yang diikat (ditulis apa adanya pada kolom `aad` agar dapat diverifikasi ulang):** gabungan berurutan tanpa pemisah ambigu, misalnya `person_id || '|' || model_id || '|' || model_version || '|' || key_version`. Mengikat AAD ke identitas dan versi model membuat ciphertext tidak dapat dipindahkan ke orang lain atau dipakai dengan model lain tanpa gagal verifikasi.
-- **Perilaku saat dekripsi gagal:** baris **tidak** dipakai dan **tidak** diganti dengan tebakan. Backend menandai kegagalan, menulis audit, dan mengembalikan hasil “tidak dapat diverifikasi” kepada operator. Tidak ada kunci pengganti otomatis dan tidak ada pembuatan template baru secara diam-diam. Kunci yang hilang tidak menghasilkan template baru; peserta harus mendaftar ulang dengan persetujuan baru (`docs/SECURITY_PRIVACY.md` §5d). **Kegagalan dekripsi bukan alasan menghapus baris.** Tiga kondisi dibedakan (`docs/SECURITY_PRIVACY.md` §5d.1–§5d.2): kunci **sementara tidak tersedia** dan kunci **ada tetapi tidak dapat dipakai** **dilarang** memicu penghapusan; baris pada kondisi kedua dikarantina (tidak ditampilkan, tidak dihitung cocok) tetapi tetap ada. Penghapusan hanya dijalankan operator setelah kunci **dipastikan tidak dapat dipulihkan**, dan tidak pernah oleh tugas terjadwal otomatis.
+- **Perilaku saat dekripsi gagal:** baris **tidak** dipakai dan **tidak** diganti dengan tebakan. Backend menandai kegagalan, menulis audit, dan mengembalikan hasil “tidak dapat diverifikasi” kepada pemanggil. Tidak ada kunci pengganti otomatis dan tidak ada pembuatan template baru secara diam-diam. Kunci yang hilang tidak menghasilkan template baru; peserta harus mendaftar ulang dengan persetujuan baru (`docs/SECURITY_PRIVACY.md` §5d). **Kegagalan dekripsi bukan alasan menghapus baris.** Tiga kondisi dibedakan (`docs/SECURITY_PRIVACY.md` §5d.1–§5d.2): kunci **sementara tidak tersedia** dan kunci **ada tetapi tidak dapat dipakai** **dilarang** memicu penghapusan; baris pada kondisi kedua dikarantina (tidak ditampilkan, tidak dihitung cocok) tetapi tetap ada. Penghapusan hanya dijalankan oleh manusia berwenang setelah kunci **dipastikan tidak dapat dipulihkan**, dan tidak pernah oleh tugas terjadwal otomatis.
 - **Penghapusan:** pencabutan persetujuan dan penghapusan peserta **menghapus baris ini** (bukan menandai). Template tidak dapat dipulihkan setelah dihapus karena kunci terpisah tidak menyimpan salinan. Penghapusan biometrik **belum selesai** bila jejaknya masih ada di berkas `-wal`/`-shm`, salinan cadangan, atau lapisan cache (`docs/SECURITY_PRIVACY.md` §5c, D-030 konsekuensi butir 5).
 - **Retensi:** selama persetujuan aktif. Bila persetujuan dicabut, baris harus terhapus pada transaksi yang sama.
 - **Pengelolaan kunci (D-030, DISETUJUI pada FL-004S):** `key_version` diisi kunci aktif saat penulisan; versi pertama bernilai teks `'1'`. Kunci disimpan di luar database dan di luar Git, dibungkus DPAPI cakupan pengguna, dan hanya diakses lewat antarmuka `KeyProvider` di Go. Indeks `idx_face_templates_key_version` ada agar penghapusan kunci lama setelah rotasi dapat diperiksa terhadap baris yang menunjuk versinya. Kebijakan penuh: `docs/SECURITY_PRIVACY.md` §5a–§5f.
@@ -357,9 +388,72 @@ Satu-satunya tempat data biometrik disimpan, dan hanya dalam bentuk terenkripsi 
 | `expires_at` | TEXT | tidak | Bawaan `created_at + 24 jam` |
 
 - **Primary key:** `(scope, key)` — kunci dari perangkat berbeda tidak boleh saling bertabrakan.
+- **Catatan FL-010U (16 Oktober 2026):** literal awalan `operator:<user_id>` adalah bentuk yang tertulis pada kontrak yang sudah ada dan **belum** diselaraskan dengan model peran baru (`admin`/`dosen`/`mahasiswa`). Penamaan akhirnya dibiarkan apa adanya pada revisi dokumentasi ini; penyelarasannya harus diputuskan bersama `docs/API_CONTRACT.md` dan diterapkan pada migrasi FL-011. FL-010U tidak mengubah nilainya dan tidak menambah nilai baru.
 - **Indeks:** `idx_idempotency_expires` untuk pembersihan berkala.
 - **Penyimpanan gambar:** **tidak**. Yang disimpan hanya hash permintaan dan respons ringkas.
 - **Retensi:** 24 jam, dihapus oleh proses pemeliharaan. Tabel ini **bukan** penjaga terakhir absensi ganda; penjaga itu ada di `attendance_records`.
+
+### 4.16 `user_identities`
+
+**Tabel baru pada model data target FL-010U (16 Oktober 2026); belum ada pada skema yang sudah dijalankan (§4.18).** Menautkan identitas dari penyedia autentikasi (Google) ke akun internal `users` (§4.1). Tabel ini **tidak** menyimpan ID token, kode otorisasi, atau kredensial apa pun.
+
+| Kolom | Tipe | Null | Aturan |
+|---|---|---|---|
+| `id` | TEXT | tidak | PK |
+| `user_id` | TEXT | tidak | FK → `users.id` `ON DELETE CASCADE` |
+| `provider` | TEXT | tidak | `CHECK (provider = 'google')` |
+| `subject` | TEXT | tidak | Klaim `sub` Google — **pengenal identitas yang stabil** |
+| `email_at_provider` | TEXT | ya | Email yang dilaporkan penyedia saat penautan; **bukan** kunci identitas |
+| `linked_at` | TEXT | tidak | Waktu penautan |
+| `created_at` | TEXT | tidak | — |
+
+- **Unik:** `(provider, subject)` — satu identitas penyedia paling banyak menautkan satu akun.
+- **Unik:** `(user_id, provider)` — satu akun paling banyak memiliki satu identitas per penyedia.
+- **Indeks:** `idx_user_identities_user`.
+- **Kunci pencarian saat login:** identitas dicari dengan kunci `(provider='google', subject=sub)`. **`email` bukan kunci identitas**; email hanya dipakai untuk mencocokkan akun `invited` pada penautan pertama, dan perbandingannya harus **sama persis** (huruf kecil, tanpa spasi tepi) disertai `email_verified=true`.
+- **Aturan penautan:** penautan hanya terjadi bila (a) baris `user_identities` sudah ada untuk `sub` tersebut, atau (b) ada baris `users` berstatus `invited` dengan email identik. Selain itu **tidak ada akun yang dibuat** dan **tidak ada role yang ditetapkan**; permintaan ditolak dengan pesan generik `403 IDENTITY_NOT_LINKED` (anti-enumeration).
+- **Role tidak pernah berasal dari Google.** Identitas penyedia hanya membuktikan siapa yang masuk; keputusan otorisasi tetap di database FaceLink AI.
+- **Penghapusan akun:** baris identitas ikut terhapus lewat `ON DELETE CASCADE`. Pelepasan penautan identitas (tanpa menghapus akun) belum dirancang dan dicatat sebagai butir terbuka (§13).
+- **Audit:** `auth.google.succeeded`, `auth.google.linked`, `auth.login.denied` (dengan `reason` ber-kode, **bukan** email), `user.invited`, `user.role_changed`, `user.status_changed`. `safe_metadata` **tidak pernah** memuat email, ID token, `sub`, atau token sesi.
+- **Retensi:** selama akun `users` terkait ada.
+
+### 4.17 `class_lecturers`
+
+**Tabel baru pada model data target FL-010U (16 Oktober 2026); belum ada pada skema yang sudah dijalankan (§4.18).** Menyatakan dosen mana yang **ditugaskan** pada kelas mana. Inilah dasar cakupan `dosen`: ia hanya boleh mengelola kelas yang ditugaskan kepadanya (`docs/AUTHORIZATION.md`).
+
+| Kolom | Tipe | Null | Aturan |
+|---|---|---|---|
+| `class_id` | TEXT | tidak | FK → `classes.id` `ON DELETE CASCADE`; bagian PK |
+| `user_id` | TEXT | tidak | FK → `users.id` `ON DELETE RESTRICT`; bagian PK |
+| `assigned_by` | TEXT | tidak | FK → `users.id` `ON DELETE RESTRICT`; admin yang menugaskan |
+| `assigned_at` | TEXT | tidak | Waktu penugasan |
+
+- **Primary key gabungan:** `(class_id, user_id)` — satu dosen paling banyak ditugaskan sekali pada sebuah kelas.
+- **Indeks:** `idx_class_lecturers_user` — agar daftar kelas milik seorang dosen dapat dibaca cepat.
+- **Keanggotaan:** hanya akun berperan `dosen` yang sah ditugaskan. `mahasiswa` tidak masuk tabel ini (keanggotaan peserta ada di `class_memberships` §4.6).
+- **Penugasan hanya oleh `admin`**; penugasan dan pencabutan penugasan dicatat di audit (`class.dosen_assigned`, `class.dosen_removed`).
+- **Penghapusan:** baris penugasan dihapus keras (tanpa makna historis sendiri) mengikuti pola `class_memberships`. Penghapusan kelas mengikuti `ON DELETE CASCADE`; penghapusan akun dosen **ditolak** selama masih ada penugasan (`RESTRICT`) agar kelas tidak kehilangan pengampu secara diam-diam.
+- **Retensi:** selama kelas dan akun terkait ada.
+
+### 4.18 Catatan selisih terhadap migrasi yang sudah dijalankan
+
+**Bagian ini penting dan harus dibaca apa adanya.** Migrasi `backend/migrations/00001_init_core_schema.sql` **sudah dijalankan**, sehingga bentuk tabel yang benar-benar ada di database berbeda dari model data target pada §4.1–§4.4, §4.16, dan §4.17. Perbedaan yang diketahui:
+
+| Tabel | Keadaan pada `00001_init_core_schema.sql` | Model data target (§4.1–§4.4, §4.16, §4.17) |
+|---|---|---|
+| `users` | `status` bernilai `active`/`disabled`; ada `deleted_at`; ada `password_hash`; `role` mengacu ke `roles(name)` dengan data `operator`/`admin` | `status` bernilai `invited`/`active`/`suspended`; **tanpa** `password_hash` dan `must_change_password`; tanpa `deleted_at`; tambah `created_by` |
+| `people` | ada `consent_state` (`unknown`/`granted`/`withdrawn`/`expired`) | tanpa `consent_state` pada dokumen ini; tambah `account_user_id` |
+| `operator_tokens` | bernama `operator_tokens`; berkolom `token_hash`/`label`/`last_used_at`/`expires_at` (tanpa pemisahan akses/penyegar) | bernama `session_tokens`; berkolom `access_hash`/`access_expires_at`/`refresh_hash`/`refresh_expires_at`/`prev_refresh_hash`/`revoked_reason`/`last_seen_at` (§4.2) |
+| `roles` | berisi `operator`, `admin`, `device` | berisi `admin`, `dosen`, `mahasiswa` |
+| `classes` | ada kolom `status` (`active`/`archived`) dan `description` | dokumen ini belum menyatakan `status`/`description` pada §4.5 |
+| `consent_records` | berisi `purpose`/`status`/`method`/`document_ref`/`notes` | dokumen ini memakai `purpose`/`version`/`capture_method`/`withdraw_reason` (§4.9) |
+| `user_identities`, `class_lecturers` | **tidak ada** | tabel baru (§4.16, §4.17) |
+| `face_templates`, `face_enrollment_samples` | **tidak dibuat** (sengaja) | tetap **belum dibuat**; kebijakan D-030 tetap berlaku apa adanya |
+
+- **Tidak ada SQL, migrasi, atau kode yang ditulis pada FL-010U.** FL-010U adalah tahap dokumentasi.
+- **Migrasi `00001_init_core_schema.sql` tidak boleh diubah.** Seluruh penyesuaian di atas wajib dituangkan sebagai **migrasi baru (`00002+`) pada tugas implementasi FL-011**, dengan konvensi penomoran §9.3 (nomor tidak pernah dipakai ulang) dan pola *buat tabel baru → salin → tukar nama* untuk bentuk `ALTER TABLE` yang tidak didukung SQLite (§9.3).
+- Sebelum migrasi yang mengubah atau menghapus kolom, cadangan harus dibuat mengikuti §7.3; rollback destruktif **dilarang** (§9.5).
+- Selisih di atas adalah **usulan model target**, bukan keadaan terverifikasi. Semua pernyataan runtime pada dokumen ini berstatus **BELUM TERVERIFIKASI**.
 
 ## 5. Alur transaksi penting
 
@@ -429,7 +523,11 @@ Ketiga operasi ini harus berada dalam **satu** transaksi. Tidak boleh ada keadaa
 
 | Relasi | Aturan | Alasan |
 |---|---|---|
-| `operator_tokens` → `users` | `ON DELETE CASCADE` | Token tanpa pemilik tidak bermakna |
+| `session_tokens` → `users` | `ON DELETE CASCADE` | Token tanpa pemilik tidak bermakna |
+| `user_identities` → `users` | `ON DELETE CASCADE` | Identitas penyedia tidak bermakna tanpa akun |
+| `people.account_user_id` → `users` | `ON DELETE SET NULL` | Penautan akun hilang, baris peserta tetap ada |
+| `class_lecturers` → `classes` | `ON DELETE CASCADE` | Penugasan tidak bermakna tanpa kelas |
+| `class_lecturers` → `users` | `ON DELETE RESTRICT` | Kelas tidak boleh kehilangan pengampu secara diam-diam |
 | `face_templates` → `people` | `ON DELETE CASCADE` | Data biometrik wajib hilang bersama subjeknya |
 | `face_enrollments` → `people` | `ON DELETE CASCADE` | Proses enrollment tidak bermakna tanpa peserta |
 | `face_enrollment_samples` → `face_enrollments` | `ON DELETE CASCADE` | Metadata sampel mengikuti enrollment |
@@ -588,6 +686,8 @@ Strategi:
 5. Kunci enkripsi berada di luar berkas database, sehingga **menyalin `facelink.db`, `-wal`, dan `-shm` saja tidak pernah cukup** untuk memulihkan template. Pencadangan (`docs/DATA_MODEL.md` §7.3) harus diperlakukan sebagai satu kesatuan: tiga berkas database **plus** berkas kunci terlindungi. Cadangan yang tidak memuat kunci harus dijelaskan sebagai cadangan kehadiran, bukan cadangan biometrik.
 6. `PRAGMA wal_checkpoint(TRUNCATE)` dan `VACUUM` **tidak** bergantung pada kunci dan tidak mengubah isi kolom `ciphertext`. Keduanya tidak dapat memulihkan template yang kuncinya sudah hilang, dan tidak boleh diusulkan sebagai cara pemulihan.
 7. Kebijakan kunci lengkap (lokasi, perlindungan, rotasi, pemulihan, dan batas jaminan penghapusan) ada di `docs/SECURITY_PRIVACY.md` §5a–§5f sebagai **D-030 yang sudah disetujui pada FL-004S**. Meskipun begitu, sampai ada tugas implementasi tersendiri yang disetujui pemilik, tabel ini **tidak boleh** ditulis oleh kode apa pun — persetujuan berlaku atas rancangan, bukan izin menulis kode.
+8. **FL-010U (16 Oktober 2026) tidak mengubah aturan kunci atau biometrik apa pun.** D-030, kebijakan `KeyProvider`, AES-256-GCM, AAD, dan seluruh batasan DPAPI tetap berlaku **apa adanya**; revisi tiga peran + Google Sign-In tidak menyentuh kebijakan itu.
+9. **`people.account_user_id` bukan jalur ke template.** Menautkan akun `mahasiswa` ke baris peserta (§4.4) tidak membuat `face_templates` dapat dibaca melalui akun itu, tidak menambah kolom biometrik, dan tidak memperluas akses ke data peserta lain. Enkripsi template tetap satu-satunya perlindungannya (butir 2).
 
 ## 12. Pengujian basis data yang harus ada saat implementasi
 
@@ -614,6 +714,30 @@ Strategi:
 | 17 | `wal_checkpoint(TRUNCATE)` setelah semua penulis berhenti | Ukuran `-wal` menyusut |
 | 18 | Database diletakkan di folder tersinkronisasi awan | Ditolak atau diberi peringatan keras saat inisialisasi |
 
+Pengujian tambahan untuk identitas Google, sesi aplikasi, dan penautan akun (FL-010U, 16 Oktober 2026). Semuanya berstatus **BELUM TERVERIFIKASI**; daftar ini adalah syarat penerimaan untuk tugas implementasi, bukan laporan hasil.
+
+| # | Skenario | Harapan |
+|---|---|---|
+| 19 | Penautan pertama: `sub` Google baru, ada baris `users` berstatus `invited` dengan email **sama persis** dan `email_verified=true` | Satu baris `user_identities` dibuat; `users.status` menjadi `active`; audit `auth.google.linked` |
+| 20 | `sub` Google baru, **tidak** ada baris `users` yang cocok | **Tidak ada akun dibuat**, **tidak ada role ditetapkan**; ditolak `403 IDENTITY_NOT_LINKED` dengan pesan generik |
+| 21 | `sub` Google baru, email cocok tetapi `email_verified=false` | Ditolak; tidak ada penautan dan tidak ada akun baru |
+| 22 | `sub` Google baru, email cocok kecuali beda huruf besar/kecil atau ada spasi tepi | **Tidak** cocok; ditolak (perbandingan sama persis setelah huruf kecil dan pemangkasan) |
+| 23 | Email cocok dengan akun berstatus `suspended` | Ditolak dengan pesan yang **sama** seperti kasus tanpa akun (anti-enumeration) |
+| 24 | Dua baris `user_identities` dengan `(provider, subject)` sama | Yang kedua ditolak indeks unik |
+| 25 | Dua baris `user_identities` dengan `(user_id, provider)` sama | Yang kedua ditolak indeks unik |
+| 26 | `POST /auth/refresh` dipakai dua kali dengan penyegar **yang sama** | Percobaan kedua memicu pencabutan **seluruh sesi** dan audit `auth.session.reuse_detected` |
+| 27 | Token akses dipakai setelah `POST /auth/logout` | Ditolak `401 SESSION_REVOKED`; panggilan logout kedua tetap `204` |
+| 28 | Akun `dosen` diturunkan menjadi `mahasiswa` saat permintaan sedang berjalan | Permintaan **berikutnya** memakai role baru; token tidak memuat klaim role |
+| 29 | Akun dinonaktifkan (`suspended`) saat sesi masih berlaku | **Seluruh** sesi akun itu tercabut; permintaan berikutnya ditolak `401 SESSION_REVOKED` |
+| 30 | Dua baris `people` ditautkan ke `account_user_id` yang sama | Yang kedua ditolak indeks unik parsial |
+| 31 | Penghapusan keras baris `users` yang ditautkan (uji tingkat skema; kebijakan normal memakai `status = 'suspended'`) | `people.account_user_id` menjadi `NULL`; baris peserta dan `attendance_records` historis **tetap ada** |
+| 32 | Akun `mahasiswa` tanpa penautan memanggil `GET /me/attendance` | Ditolak `409 ACCOUNT_NOT_LINKED` |
+| 33 | Akun `dosen` mengakses kelas yang **tidak** ditugaskan padanya | Ditolak `404 NOT_FOUND` (deny by default) |
+| 34 | Penugasan dosen ganda pada `(class_id, user_id)` yang sama | Yang kedua ditolak primary key gabungan |
+| 35 | Akun `dosen` dihapus saat masih punya penugasan `class_lecturers` | Ditolak `RESTRICT`; penugasan harus dicabut lebih dahulu |
+| 36 | Migrasi `00002+` dijalankan di atas database yang sudah menjalankan `00001_init_core_schema.sql` | Berhasil **tanpa** mengubah berkas `00001`; isi `users`/`people` lama tetap terbaca |
+| 37 | Kolom `password_hash` masih dirujuk kode setelah migrasi FL-011 | Terdeteksi sebagai kegagalan (tidak ada kolom kata sandi pada model target) |
+
 ## 13. Pertanyaan terbuka dan hal yang belum diputuskan
 
 1. **Kebijakan retensi kehadiran** dan hubungannya dengan penghapusan peserta belum ditetapkan (lihat `docs/OPEN_QUESTIONS.md`). Ini yang menghambat `DELETE /people` karena `attendance_records` memakai `RESTRICT`.
@@ -623,3 +747,8 @@ Strategi:
 5. **Apakah peserta boleh memiliki lebih dari satu template per model** (misalnya dengan dan tanpa kacamata) belum diputuskan; skema saat ini mengizinkan satu per `(person_id, model_id, model_version)`.
 6. **Enkripsi seluruh berkas database** (mis. SQLCipher) bukan bagian dari MVP dan belum diputuskan.
 7. **Tabel `notifications` atau antrean pesan** tidak ada dan tidak dibutuhkan selama D-021 berlaku (polling, bukan WebSocket).
+8. **DIGANTIKAN (FL-010U, 16 Oktober 2026): asumsi lama "akun peserta opsional / mahasiswa tidak memiliki akun pada MVP" tidak lagi berlaku.** Keputusan pemilik pada FL-010U menetapkan bahwa `mahasiswa` **memiliki akun** dan masuk lewat Google Sign-In; akun itu dibuat `admin` (praregistrasi) dan ditautkan ke baris peserta melalui `people.account_user_id` (§4.4). Karena itu tidak ada lagi butir pada dokumen ini yang menyatakan akun peserta sebagai opsional atau tidak ada. Baris **D-013** pada `docs/DECISIONS.md` belum diubah pada tugas ini; pembaruan statusnya menunggu pemilik (dokumen itu tidak disunting oleh FL-010U).
+9. **Cakupan `dosen`** belum final. Rancangan FL-010U mengikuti daftar tugas pada permintaan FL-010U secara harfiah; konsekuensinya **enrollment biometrik, pencatatan konsen, pengelolaan peserta, ekspor CSV, dan seluruh operasi perangkat menjadi milik `admin`**. Bila alur demo menuntut dosen melakukan enrollment/konsen pada kelas yang ditugaskan, `class_lecturers` (§4.17) tetap sama, tetapi matriks izin `docs/AUTHORIZATION.md` perlu diputuskan lebih dahulu.
+10. **Identitas tunggal per orang:** satu akun Google = satu baris `users` = **satu** role. Menjalankan demo sebagai `admin` sekaligus `dosen` memerlukan **dua akun Google berbeda**. Bila pemilik menghendaki satu orang memegang dua role, itu keputusan model data baru (mis. tabel relasi akun–role, yang belum dirancang).
+11. **Pelepasan penautan identitas Google dari akun yang sudah ada** (unlink tanpa menghapus akun) belum dirancang; baris `user_identities` saat ini hanya hilang lewat `ON DELETE CASCADE` saat akun dihapus (§4.16).
+12. **Bentuk `classes` dan `consent_records` pada model target belum disamakan dengan migrasi yang sudah dijalankan.** `00001_init_core_schema.sql` memuat `classes.status`/`classes.description` serta `consent_records.purpose`/`status`/`method`, sedangkan dokumen ini memakai `version`/`capture_method`/`withdraw_reason` (§4.9, §4.18). Mana yang berlaku pada FL-011 harus diputuskan pemilik sebelum migrasi `00002+` ditulis; FL-010U hanya mencatat selisihnya dan **tidak** menulis migrasi.

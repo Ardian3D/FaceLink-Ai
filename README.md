@@ -2,7 +2,7 @@
 
 > Sistem absensi otomatis berbasis pengenalan wajah, kamera IoT, dan aplikasi React Native. Dibangun secara lokal terlebih dahulu, dengan perhatian khusus pada privasi dan kemudahan pengembangan.
 
-**Status:** Fondasi dokumentasi versi 0.3 — **belum ada implementasi aplikasi**.  
+**Status:** Fondasi dokumentasi versi 0.3 — **belum ada implementasi aplikasi**. Revisi terakhir: **FL-010U (16 Oktober 2026)** menyelaraskan dokumen dengan **tiga role pengguna (`admin`, `dosen`, `mahasiswa`) + Google Sign-In**; keputusan itu masih sebatas rancangan dan **belum ada kode yang mengimplementasikannya**.
 **Lingkup:** Prototipe tugas kampus berskala kecil: satu kelas, satu terminal kamera, dan sekitar 5–10 peserta sukarela yang memberikan persetujuan.  
 **Biaya:** Seluruh perangkat lunak dan pemrosesan AI lokal harus dapat berjalan dengan biaya lisensi/layanan **Rp0**. Anggaran hardware maksimal **Rp1.000.000**.  
 **Cloud:** Google Cloud dan layanan cloud lain ditunda sampai sistem lokal selesai diuji serta mendapat persetujuan pengembang.  
@@ -10,24 +10,31 @@
 
 ## Masalah yang ingin diselesaikan
 
-Absensi manual memerlukan waktu dan dapat menimbulkan kesalahan pencatatan. FaceLink AI menguji apakah proses kehadiran satu kelas dapat dibantu oleh terminal kamera yang mengenali peserta **yang telah mendaftar secara sukarela**, lalu mencatat kehadiran secara otomatis pada sesi yang dibuka operator.
+Absensi manual memerlukan waktu dan dapat menimbulkan kesalahan pencatatan. FaceLink AI menguji apakah proses kehadiran satu kelas dapat dibantu oleh terminal kamera yang mengenali peserta **yang telah mendaftar secara sukarela**, lalu mencatat kehadiran secara otomatis pada sesi yang dibuka **dosen** di kelas yang ditugaskan kepadanya (rancangan **FL-010U**).
 
 Proyek ini adalah **prototipe akademik**, bukan alat pengawasan massal atau sistem biometrik siap produksi. Sistem harus menyediakan jalur absensi manual dan **tidak boleh menyimpulkan seseorang tidak hadir hanya karena pengenalan wajah gagal**.
 
 ## Alur singkat
 
-1. Operator masuk aplikasi dan membuka sesi absensi kelas.
-2. Peserta telah didaftarkan dengan persetujuan yang jelas; data wajah diproses secara lokal.
-3. Peserta berdiri seorang diri di depan webcam atau kamera IoT.
-4. Mesin pengenalan wajah memeriksa kualitas gambar, mencari kecocokan, dan mengembalikan hasil terbatas.
-5. Backend memeriksa persetujuan, keanggotaan kelas, status sesi, dan kemungkinan absensi ganda.
-6. Jika seluruh pemeriksaan lolos, satu catatan kehadiran dibuat; dashboard React Native menampilkan pembaruannya.
-7. Kegagalan deteksi, kecocokan meragukan, atau layanan yang tidak tersedia menghasilkan instruksi coba lagi/verifikasi manual, bukan absensi otomatis.
+Alur di bawah adalah **rancangan FL-010U (16 Oktober 2026)** untuk tiga role pengguna manusia; belum ada bagian mana pun yang diimplementasikan atau diuji.
+
+1. Pengguna masuk aplikasi dengan **Google Sign-In** ("Continue with Google"). Backend memverifikasi Google ID token (OpenID Connect, RS256, `iss`/`aud`/`nonce`), menautkan identitas ke akun internal, lalu mengirim **`role` dari database** — **`admin`, `dosen`, atau `mahasiswa`**. Role tidak pernah berasal dari Google maupun dari aplikasi React Native.
+2. `admin` menyiapkan akun dan role, kelas beserta penugasan dosen, peserta, serta konsen; `dosen` masuk ke **kelas yang ditugaskan kepadanya** dan membuka sesi absensi.
+3. Peserta telah didaftarkan dengan persetujuan yang jelas; data wajah diproses secara lokal.
+4. Peserta berdiri seorang diri di depan webcam atau kamera IoT.
+5. Mesin pengenalan wajah memeriksa kualitas gambar, mencari kecocokan, dan mengembalikan hasil terbatas.
+6. Backend memeriksa persetujuan, keanggotaan kelas, status sesi, dan kemungkinan absensi ganda.
+7. Jika seluruh pemeriksaan lolos, satu catatan kehadiran dibuat; `dosen` melihat daftar hadir berjalan dan rekap kelasnya, sedangkan `mahasiswa` melihat status dan riwayat kehadirannya **sendiri** lewat portal self-service (`/me/*`), tanpa akses ke data biometrik atau data peserta lain.
+8. Kegagalan deteksi, kecocokan meragukan, atau layanan yang tidak tersedia menghasilkan instruksi coba lagi/verifikasi manual, bukan absensi otomatis.
+
+`device` **bukan** role pengguna manusia: perangkat IoT tetap memakai identitas dan autentikasi mesin terpisah (token perangkat) dan hanya boleh memanggil endpoint pengiriman percobaan pengenalan. Rancangan lengkap matriks peran/izin ada di [`docs/AUTHORIZATION.md`](docs/AUTHORIZATION.md). **Belum ada satu pun langkah di atas yang terverifikasi berjalan.**
 
 ## Batasan produk
 
-- **Untuk sekarang:** satu kelas demo, satu kamera, operator, peserta terbatas, rekap kehadiran, ekspor laporan, dan APK Android.
+- **Untuk sekarang:** satu kelas demo, satu kamera, **tiga role pengguna (`admin`, `dosen`, `mahasiswa`) dengan Google Sign-In**, peserta terbatas, rekap kehadiran, ekspor laporan, dan APK Android.
 - **Untuk nanti:** bisa diadaptasi ke kantor/organisasi lain melalui desain modular, tetapi belum perlu fitur multiorganisasi, penggajian, atau integrasi HRIS.
+- **Perangkat IoT (`device`) bukan role manusia:** perangkat tetap memakai identitas dan autentikasi mesin terpisah (token perangkat, bukan Google), hanya untuk mengirim percobaan pengenalan.
+- **Jaringan backend:** rancangan saat ini masih **loopback** (kode FL-005 menolak alamat non-loopback), sehingga HP **belum** dapat menjangkau backend lewat Wi-Fi kelas selama aturan itu berlaku; pilihan penyelesaiannya masih menjadi pertanyaan terbuka Q-19.
 - **Pengenalan wajah dengan kacamata:** tujuan pengujian, **bukan janji akurasi sempurna**.
 - **Pencegahan spoofing dasar:** sasaran eksperimen; kedipan atau gerakan kepala saja tidak menjamin ketahanan terhadap foto/video.
 - **iOS:** dapat mempertimbangkan web/PWA atau pengujian Expo Go, tetapi distribusi native iOS tidak dijanjikan gratis.
@@ -42,12 +49,13 @@ Proyek ini adalah **prototipe akademik**, bukan alat pengawasan massal atau sist
 | 4 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Keputusan disetujui vs usulan yang belum disahkan |
 | 5 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Batas modul, pola komunikasi, dan urutan pengembangan |
 | 6 | [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) dan [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md) | Rancangan API dan database sebelum implementasi |
-| 7 | [`docs/FACE_ENGINE.md`](docs/FACE_ENGINE.md) dan [`docs/SECURITY_PRIVACY.md`](docs/SECURITY_PRIVACY.md) | Pengenalan wajah, keamanan, dan persetujuan data |
-| 8 | [`docs/UX_FLOWS.md`](docs/UX_FLOWS.md) dan [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md) | Alur aplikasi dan pengujian |
-| 9 | [`docs/ROADMAP.md`](docs/ROADMAP.md) dan [`docs/BACKLOG.md`](docs/BACKLOG.md) | Tahapan dan unit pekerjaan AI coding |
-| 10 | [`docs/DEVICE_HARDWARE.md`](docs/DEVICE_HARDWARE.md) | Rencana perangkat IoT di fase berikutnya |
-| 11 | [`docs/AGENT_BOOTSTRAP.md`](docs/AGENT_BOOTSTRAP.md) dan [`docs/COLLABORATION.md`](docs/COLLABORATION.md) | Mulai sesi agent dan kolaborasi GitHub |
-| 12 | [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md) dan [`docs/REFERENCES.md`](docs/REFERENCES.md) | Keputusan terbuka dan bacaan teknis |
+| 7 | [`docs/AUTHORIZATION.md`](docs/AUTHORIZATION.md) | **Sumber tunggal matriks peran dan izin** (`admin`, `dosen`, `mahasiswa`, `device`) |
+| 8 | [`docs/FACE_ENGINE.md`](docs/FACE_ENGINE.md) dan [`docs/SECURITY_PRIVACY.md`](docs/SECURITY_PRIVACY.md) | Pengenalan wajah, keamanan, dan persetujuan data |
+| 9 | [`docs/UX_FLOWS.md`](docs/UX_FLOWS.md) dan [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md) | Alur aplikasi dan pengujian |
+| 10 | [`docs/ROADMAP.md`](docs/ROADMAP.md) dan [`docs/BACKLOG.md`](docs/BACKLOG.md) | Tahapan dan unit pekerjaan AI coding |
+| 11 | [`docs/DEVICE_HARDWARE.md`](docs/DEVICE_HARDWARE.md) | Rencana perangkat IoT di fase berikutnya |
+| 12 | [`docs/AGENT_BOOTSTRAP.md`](docs/AGENT_BOOTSTRAP.md) dan [`docs/COLLABORATION.md`](docs/COLLABORATION.md) | Mulai sesi agent dan kolaborasi GitHub |
+| 13 | [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md) dan [`docs/REFERENCES.md`](docs/REFERENCES.md) | Keputusan terbuka dan bacaan teknis |
 | — | [`research/README.md`](research/README.md) | Tempat terpisah untuk jurnal/riset akademik tim |
 
 ## Kandidat teknologi (stack final MVP setelah FL-003)
@@ -57,12 +65,13 @@ Proyek ini adalah **prototipe akademik**, bukan alat pengawasan massal atau sist
 - **AI lokal:** Python + OpenCV dengan **YuNet** (deteksi) dan **SFace** (pengenalan) sebagai model MVP (D-012); bobot berlisensi non-permisif seperti InsightFace/ArcFace tidak dipakai (D-025). **Ambang kecocokan belum ditetapkan** dan harus dikalibrasi pada peserta uji.
 - **Database:** **SQLite mode WAL** untuk MVP (D-020), dengan skema dan migrasi tetap portabel ke PostgreSQL; PostgreSQL awal ditunda (D-011). Migrasi dijalankan dari sisi Go (D-026).
 - **Perangkat kamera:** webcam selama development; ESP32-S3 CAM setelah software bekerja, sebagai klien pengunggah JPEG (D-023), bukan host model AI.
+- **Autentikasi:** **Google Sign-In** sebagai metode utama bagi tiga role manusia (`admin`, `dosen`, `mahasiswa`) — rancangan FL-010U, belum diimplementasikan. Tidak ada login email/kata sandi buatan sendiri; role **hanya** ditetapkan `admin` di backend dan tidak pernah berasal dari Google atau dari aplikasi. Sesi aplikasi memakai token opak (bukan ID token Google) yang disimpan sebagai hash di tabel `session_tokens`. `device` memakai jalur autentikasi mesin yang terpisah.
 
-Kontrak dan skema rinci ada di [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) dan [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md). **Persetujuan stack ini adalah persetujuan arsitektur, bukan izin implementasi.**
+Kontrak dan skema rinci ada di [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) dan [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md); matriks peran/izin ada di [`docs/AUTHORIZATION.md`](docs/AUTHORIZATION.md). **Persetujuan stack ini adalah persetujuan arsitektur, bukan izin implementasi.**
 
 ## Kode yang sudah ada (FL-005)
 
-Satu bagian sudah benar-benar ditulis dan diuji: **fondasi backend Go** di folder [`backend/`](backend/README.md). Isinya kerangka layanan, basis data SQLite mode WAL, migrasi SQL berversi, log JSON, dan dua titik kesehatan `GET /api/v1/healthz` serta `GET /api/v1/readyz`. Belum ada autentikasi, endpoint absensi, maupun kode biometrik.
+Satu bagian sudah benar-benar ditulis dan diuji: **fondasi backend Go** di folder [`backend/`](backend/README.md). Isinya kerangka layanan, basis data SQLite mode WAL, migrasi SQL berversi, log JSON, dan dua titik kesehatan `GET /api/v1/healthz` serta `GET /api/v1/readyz`. Belum ada autentikasi, endpoint absensi, maupun kode biometrik — **tidak ada satu pun bagian rancangan tiga role dan Google Sign-In pada FL-010U yang sudah ditulis**. Perlu dicatat apa adanya: kode ini masih menolak pengikatan ke alamat non-loopback, sehingga HP belum dapat menjangkau backend lewat Wi-Fi kelas (lihat pertanyaan terbuka Q-19 pada [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md)).
 
 ```powershell
 cd backend
@@ -75,6 +84,15 @@ Seluruh variabel lingkungan didokumentasikan pada [`.env.example`](.env.example)
 `backend/` di akar repositori adalah **lokasi resmi** backend Go (lihat [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §8.1). Usulan lama `apps/api/` tidak dipakai. Quality gate otomatis ada di [`.github/workflows/backend-go.yml`](.github/workflows/backend-go.yml) dan berjalan pada Windows dan Ubuntu untuk setiap Pull Request ke `main`.
 
 > Aplikasi React Native, mesin AI Python, dan firmware ESP32 **belum dimulai**. Jangan membaca keberadaan folder `backend/` sebagai tanda fitur absensi sudah bekerja.
+
+## Catatan revisi FL-010U (16 Oktober 2026)
+
+Revisi README ini berasal dari **FL-010U (16 Oktober 2026)**, cabang `docs/fl-010u-google-three-roles` dari `origin/main` (`804c2f7`), dan **hanya dokumentasi** — tidak ada kode maupun migrasi yang ditulis.
+
+- **Tiga role manusia** (`admin`, `dosen`, `mahasiswa`) dengan **Google Sign-In** sebagai metode masuk; akun mahasiswa kini ada. Role `operator` lama digantikan `dosen`, dan **cakupan `operator` lama terbagi menjadi `admin` dan `dosen`** — bukan penggantian nama dengan cakupan identik.
+- **`device` bukan role pengguna manusia**: perangkat IoT tetap memakai identitas dan autentikasi mesin terpisah.
+- Rancangan lengkap matriks peran/izin: [`docs/AUTHORIZATION.md`](docs/AUTHORIZATION.md). Kontrak API: [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md); model data: [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md); alur aplikasi: [`docs/UX_FLOWS.md`](docs/UX_FLOWS.md); pertanyaan yang masih terbuka (termasuk pengikatan jaringan dan cakupan dosen): [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md).
+- **Tidak ada klaim fitur sudah ada.** Seluruh skenario runtime tiga role dan Google Sign-In berstatus **BELUM TERVERIFIKASI** sampai tugas implementasi dijalankan dan hasil tesnya nyata.
 
 ## Catatan asal README
 

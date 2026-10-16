@@ -1,11 +1,14 @@
 # Arsitektur Teknis FaceLink AI
 
-**Status:** Spesifikasi arsitektur v0.3 untuk stack yang **sudah disetujui pada FL-003**; belum ada kode/deployment yang telah diverifikasi.  
+**Status:** Spesifikasi arsitektur v0.3 untuk stack yang **sudah disetujui pada FL-003**; belum ada kode/deployment yang telah diverifikasi.
 **Gaya rancangan:** modular, lokal terlebih dahulu, biaya perangkat lunak Rp0, kamera dapat diganti.
+
+**Revisi FL-010U (16 Oktober 2026).** Dokumen ini diselaraskan dengan keputusan FL-010U: **tiga role pengguna manusia (`admin`, `dosen`, `mahasiswa`) memakai Google Sign-In**, sementara **`device` tetap identitas mesin terpisah**. Revisi ini bercabang dari `origin/main` (`804c2f7`). Yang berubah hanya bagian yang disebut pada §1, §2, §3, §4, §5, §9, dan §14; seluruh keputusan yang sudah disetujui (D-010, D-020, D-021, D-022, D-026, D-027, D-030, struktur repositori §8, serta catatan historis §11 dan §12) **tidak diubah**. Rancangan autentikasi Google dan sesi di sini berstatus **rancangan** dan **BELUM TERVERIFIKASI**.
 
 ## 1. Prinsip desain
 
 - Backend utama adalah **Go + `chi`**, dan pengenalan wajah dijalankan oleh **AI Engine Python yang terpisah**. Backend tetap modular; jangan menambah microservice lain untuk tugas satu kelas.
+- **Google hanya penyedia identitas, bukan pemilik keputusan otorisasi (FL-010U).** Google Sign-In membuktikan siapa pengguna; **otorisasi tetap milik backend Go**: role, cakupan kelas, dan kepemilikan data dibaca dari database FaceLink AI sendiri. Role **tidak pernah** diambil dari Google, dari klien React Native, atau dari klaim token; Google ID token **tidak pernah** dipakai sebagai sesi aplikasi.
 - Pisahkan **keputusan absensi** dari **hasil pengenalan wajah**. AI Engine mengusulkan identitas dan skor; backend Go yang memutuskan apakah check-in legal (D-027).
 - Gunakan antarmuka kamera seragam agar webcam pada fase software dapat diganti ESP32-S3 CAM tanpa mengubah domain absensi.
 - Jangan membuat ketergantungan pada cloud, penyedia AI berbayar, atau OmO saat aplikasi digunakan.
@@ -14,14 +17,28 @@
 ## 2. Gambaran deployment lokal
 
 ```text
-[React Native / APK operator]
-             |
-     Wi-Fi lokal tepercaya
-             |
+  [Penyedia identitas Google]  ← HANYA dipanggil saat login/re-autentikasi
+   (OpenID Connect / JWKS)          tidak pernah saat operasi harian
+              ^
+              | 1. Google ID token (JWT) diverifikasi backend
+              |
+  +-----------+--------------------------------------------+
+  |                                                        |
+  |   TIGA KLIEN ROLE (satu aplikasi React Native + Expo)  |
+  |                                                        |
+  |   [admin]        [dosen]        [mahasiswa]            |
+  |   dashboard      kelas yang     beranda pribadi,       |
+  |   sistem         ditugaskan     /me/* sendiri          |
+  |                                                        |
+  +---------------------------+----------------------------+
+              |
+     Wi-Fi lokal tepercaya (lihat §5.1 — batas loopback)
+              |
        [API Backend - Go + chi]
       (`/api/v1`, pemilik keputusan domain)
        |       |       \
        |       |        [Database lokal: SQLite WAL]
+       |       |         users · user_identities · session_tokens
        |       |
        |  [Aturan sesi, izin, konsen, absensi, audit, laporan]
        |
@@ -33,7 +50,16 @@
        ^
        |
  [Adapter kamera: webcam sekarang / ESP32 nanti]
+       ^
+       |
+ [device: identitas mesin terpisah, token perangkat — bukan Google]
 ```
+
+Penjelasan tambahan FL-010U (16 Oktober 2026):
+
+- Kotak **Penyedia identitas Google** hanya aktif pada alur login: klien memperoleh ID token di perangkat, lalu backend memverifikasinya (`POST /api/v1/auth/google`). Setelah sesi FaceLink AI terbit, **operasi harian tidak memanggil Google**. Google tidak pernah menjadi bagian dari jalur absensi, tidak menerima gambar wajah, dan tidak menyimpan data kehadiran.
+- **Tiga klien role** di atas adalah **satu aplikasi** dengan navigasi berbeda menurut `role` dari backend; menyembunyikan menu **bukan** pengendalian akses.
+- **`device` bukan klien role.** Perangkat IoT tetap memakai token perangkat dan tidak memakai Google Sign-In; satu-satunya endpoint-nya adalah `POST /api/v1/devices/{device_id}/recognition-attempts`.
 
 Diagram adalah **rancangan tanggung jawab**, bukan pernyataan bahwa service sudah berjalan. Untuk keamanan jaringan, permintaan kamera harus masuk melalui endpoint backend berautentikasi, dan **backend-lah** yang memanggil AI Engine secara internal. Pembagian tanggung jawab lengkap ada pada `docs/API_CONTRACT.md` seksi 6.8.
 
@@ -43,8 +69,8 @@ Diagram adalah **rancangan tanggung jawab**, bukan pernyataan bahwa service suda
 
 | Komponen | Tanggung jawab | Bukan tanggung jawabnya |
 |---|---|---|
-| Aplikasi React Native | Login, kelola sesi, tampilan roster, status, laporan, consent UI | Menentukan identitas dari gambar secara independen |
-| API backend (**Go + `chi`**) | Autentikasi, otorisasi, sesi, persetujuan, check-in idempoten, keputusan hadir, audit, laporan, seluruh penulisan database | Melatih model, menyimpan foto mentah permanen, atau mengimplementasikan visi komputer |
+| Aplikasi React Native | Memuat **Google Sign-In UI** (tombol "Continue with Google"), menyimpan token sesi di **penyimpanan aman perangkat** (Android Keystore melalui penyimpanan aman Expo), mengelola sesi, tampilan roster, status, laporan, consent UI, serta navigasi per role | Menentukan identitas dari gambar secara independen, menentukan role, atau menyimpan ID token Google sebagai kredensial sesi |
+| API backend (**Go + `chi`**) | Memverifikasi **OIDC** (ID token Google) dan **menerbitkan sesi** FaceLink AI; autentikasi, otorisasi, persetujuan, check-in idempoten, keputusan hadir, audit, laporan, seluruh penulisan database | Mempercayai role atau cakupan dari klien, menerima ID token Google sebagai sesi aplikasi, melatih model, menyimpan foto mentah permanen, atau mengimplementasikan visi komputer |
 | **AI Engine Python** (proses terpisah, loopback/IPC) | Cek kualitas, deteksi satu wajah, ekstrak embedding, cocokkan kandidat, kembalikan skor dan alasan gagal | Mengubah catatan kehadiran, menulis database, atau membuka port jaringan |
 | Database | Data pengguna, peserta, kelas, persetujuan, sesi, catatan dan metadata template terlindungi | Menjadi lokasi dump gambar/raw secret di Git |
 | Adapter kamera | Menyediakan frame, waktu tangkap, identitas perangkat dan status | Menentukan kebijakan absensi |
@@ -52,9 +78,11 @@ Diagram adalah **rancangan tanggung jawab**, bukan pernyataan bahwa service suda
 
 ## 4. Modul backend Go (disetujui untuk dirancang)
 
-- `auth`: identitas operator, login, token/sesi, pemeriksaan hak akses.
+- `auth`: **verifikasi OIDC (ID token Google) + sesi aplikasi + bootstrap admin**; identitas, penerbitan/rotasi/pencaburan token, dan pemeriksaan hak akses. Memakai tabel `user_identities` dan `session_tokens` (nama baru dari `operator_tokens`). Google **tidak** menentukan role; role dibaca dari database pada setiap permintaan.
+- `accounts` (**baru, FL-010U**): pengelolaan **akun dan role** — daftar/undang akun `admin`/`dosen`/`mahasiswa`, perubahan role, penonaktifan akun (mencabut seluruh sesi), serta penautan akun `mahasiswa` ke baris `people` (`account_user_id`).
+- `self-service` (**baru, FL-010U**): portal `dosen` dan `mahasiswa` pada `/me/*` — kelas yang ditugaskan/diikuti, jadwal sesi absensi, riwayat kehadiran sendiri, dan status persetujuan sendiri (baca saja). Tidak menyentuh `face_templates`.
 - `people`: profil peserta demo, kode unik, status peserta.
-- `classes`: kelas demo dan keanggotaan.
+- `classes`: kelas demo, keanggotaan, dan **penugasan dosen** (`class_lecturers`).
 - `consent`: persetujuan pemrosesan biometrik, penarikan persetujuan, penghapusan.
 - `sessions`: membuat, membuka, menutup sesi dan aturan keterlambatan.
 - `attendance`: validasi check-in otomatis/manual, pencegahan duplikasi, koreksi.
@@ -65,11 +93,28 @@ Diagram adalah **rancangan tanggung jawab**, bukan pernyataan bahwa service suda
 
 ## 5. Zona kepercayaan dan batas komunikasi
 
-1. **HP operator ↔ backend:** wajib autentikasi; pada demo lokal gunakan jaringan yang dikendalikan, tanpa mengekspos port ke internet. Sebelum penggunaan nyata dengan data personal di jaringan bersama, perlu TLS dan pemeriksaan ancaman lebih lanjut.
-2. **Kamera ↔ backend:** kredensial khusus perangkat; hanya sesi/perangkat yang sah boleh mengirim gambar; batas ukuran dan laju permintaan.
-3. **Backend ↔ AI lokal:** proses terpisah melalui `127.0.0.1` atau komunikasi antarproses; tidak ada endpoint AI publik.
-4. **Backend ↔ database:** kredensial lokal terbatas; backup dan retensi dengan perlindungan.
-5. **Repository ↔ mesin pengembang:** hanya source code dan fixture sintetis; rahasia/data wajah tidak pernah masuk Git.
+1. **HP pengguna ↔ backend:** wajib autentikasi sesi FaceLink AI (token opak, `Authorization: Bearer`); pada demo lokal gunakan jaringan yang dikendalikan, tanpa mengekspos port ke internet. Sebelum penggunaan nyata dengan data personal di jaringan bersama, perlu TLS dan pemeriksaan ancaman lebih lanjut.
+2. **HP pengguna ↔ Google (hanya saat login):** Google Sign-In berjalan di perangkat dan menghasilkan ID token; backend memverifikasi token itu lewat **JWKS** (`iss`, `aud`, `alg` RS256, `exp`/`iat`, `nonce`, `email_verified`) dan **tidak** menyimpan ID token sebagai sesi. Operasi harian tidak memanggil Google; lihat §14 soal ketergantungan internet.
+3. **Kamera ↔ backend:** kredensial khusus perangkat; hanya sesi/perangkat yang sah boleh mengirim gambar; batas ukuran dan laju permintaan.
+4. **Backend ↔ AI lokal:** proses terpisah melalui `127.0.0.1` atau komunikasi antarproses; tidak ada endpoint AI publik.
+5. **Backend ↔ database:** kredensial lokal terbatas; backup dan retensi dengan perlindungan.
+6. **Repository ↔ mesin pengembang:** hanya source code dan fixture sintetis; rahasia/data wajah tidak pernah masuk Git.
+
+### 5.1 Temuan FL-010U: pengikatan loopback menutup jalur HP → backend (temuan kode terverifikasi; konsekuensi runtime **BELUM TERVERIFIKASI**)
+
+**Temuan nyata dari kode yang sudah di-merge, bukan dugaan.** Berkas `backend/internal/config/config.go` memuat fungsi `validateAddr` yang **menolak** alamat listen di luar loopback: hanya `127.0.0.1`, `localhost`, dan `::1` diterima, host kosong ditolak ("host kosong berarti mendengarkan semua antarmuka"), dan alamat lain menghasilkan galat yang berbunyi *"alamat ... berada di luar loopback; MVP hanya boleh mendengarkan 127.0.0.1 atau localhost (docs/SECURITY_PRIVACY.md §6)"*. Nilai bawaan pun sengaja loopback.
+
+**Konsekuensi yang harus dinyatakan apa adanya:** selama aturan itu berlaku, **HP tidak dapat menjangkau backend lewat Wi-Fi kelas**. Backend yang mendengarkan hanya di `127.0.0.1` tidak dapat dihubungi dari perangkat lain di LAN, sehingga aplikasi React Native pada HP tidak dapat menyelesaikan login maupun operasi harian tanpa perlakuan tambahan. Ini bukan masalah konfigurasi yang bisa diabaikan; ia membatasi skenario demo secara langsung.
+
+**Tiga pilihan penyelesaian yang dicatat (belum diputuskan).** Ketiganya berasal dari butir keputusan pemilik pada tiket FL-010U §9 dan **belum satu pun diambil sebagai keputusan pemilik**:
+
+| Pilihan | Isi | Konsekuensi keamanan |
+|---|---|---|
+| (a) Tetap loopback + `adb reverse` | Backend tetap hanya `127.0.0.1`; pada demo dipakai `adb reverse tcp:8080 tcp:8080` agar HP dapat menjangkau lewat USB | Tidak menambah permukaan jaringan; hanya cocok untuk demo dengan kabel USB dan perangkat yang mendukung `adb` |
+| (b) Izinkan alamat LAN privat | Mengizinkan pengikatan ke alamat LAN privat dengan persetujuan eksplisit dan dokumentasi keamanan | Backend terbuka pada jaringan kelas; menuntut transport terenkripsi dan pembatasan jaringan yang lebih ketat |
+| (c) Proksi lokal berautentikasi | Menempatkan proksi lokal berautentikasi di depan backend loopback | Menambah satu komponen dan titik gagal yang harus dipelihara serta diuji |
+
+**Status: keputusan pemilik belum diambil.** FL-010U **hanya mencatat temuan ini**; tidak ada kode, konfigurasi, atau migrasi yang diubah untuk menyelesaikannya, dan tidak ada baris di atas yang boleh dibaca sebagai penyelesaian yang berlaku.
 
 ## 6. Kontrak masukan kamera (usulan)
 
@@ -83,6 +128,21 @@ Adapter menyediakan tangkapan `JPEG`, `device_id`, `captured_at_utc`, `correlati
 - Dua kiriman bersamaan: pembatasan unik database menjadi pengaman terakhir.
 - Sesi selesai saat request diproses: backend wajib memeriksa status sesi pada transaksi pencatatan.
 - Persetujuan ditarik: hapus data pencocokan dan bersihkan cache sebelum pemrosesan selanjutnya.
+
+### 7.1 Ketersediaan layanan: apa yang berhenti dan apa yang tetap jalan (FL-010U)
+
+Karena identitas pengguna diverifikasi **sekali saat login** (bukan pada setiap permintaan), ketergantungan internet tidak sama dengan ketergantungan backend. Perbedaan ini harus tampil di UI dan tidak boleh disatukan menjadi satu pesan "sistem gangguan".
+
+| Keadaan | Yang tetap berjalan | Yang berhenti | Pesan yang benar ke pengguna |
+|---|---|---|---|
+| Internet mati, Google tidak terjangkau, **sesi aplikasi masih sah** | Seluruh operasi aplikasi lewat LAN ke backend (absensi manual, sesi, peserta, rekap) | Hanya login baru dan re-autentikasi | Tidak ada gangguan; aplikasi **tidak** memanggil Google saat operasi harian |
+| Internet mati, **sesi aplikasi tidak berlaku** (kedaluwarsa/dicabut) | — | Seluruh akses aplikasi; **tidak ada** jalur absensi di dalam aplikasi | "Perlu internet untuk masuk dengan Google." Aktivitas kelas dicatat di luar aplikasi sampai jaringan tersedia |
+| LAN/Wi-Fi ke backend mati | — | Seluruh aplikasi (semua keputusan domain ada di backend) | Status koneksi jelas; **tidak ada** catatan kehadiran lokal yang dibuat |
+| Backend mati atau tidak menjawab | — | Seluruh aplikasi | Status layanan tidak tersedia |
+| Backend hidup, mesin AI mati | Absensi manual, kelola peserta/kelas, sesi, rekap, autentikasi, audit | Enrollment, pencocokan otomatis, penulisan template | Kesiapan dilaporkan terpisah pada `/readyz` (`docs/SECURITY_PRIVACY.md` §5e) |
+| Kunci identitas Google tidak dapat dihubungi saat login | Semua yang memakai sesi sah | Login/re-autentikasi | `GOOGLE_UNAVAILABLE` — dibedakan dari backend mati dan dari mesin AI mati |
+
+Ketetapan yang mengikat: **Google Sign-In tidak pernah dijanjikan berjalan offline**; sesi pengguna berumur token akses 60 menit dan token penyegar 30 hari dengan batas absolut 30 hari, sehingga pengguna yang membuka aplikasi saat jaringan tersedia minimal sekali dalam 30 hari tidak perlu internet setiap hari. Bila sesi melewati batas itu, **satu-satunya** jalan masuk adalah Google Sign-In saat internet tersedia. Rincian sesi: `docs/AUTHORIZATION.md` §3.1 dan `docs/DECISIONS.md` D-033.
 
 ## 8. Struktur repository yang direncanakan
 
@@ -128,7 +188,7 @@ Konsekuensi yang berlaku:
 
 ## 9. Status keputusan setelah FL-003
 
-Status per **FL-003 (15 Oktober 2026)**, ditambah catatan **FL-004** dan **FL-004S** pada baris pengelolaan kunci. Tabel ini merangkum keputusan yang **sudah berlaku**; teks keputusan yang mengikat tetap hanya ada di `docs/DECISIONS.md`. Analisis FL-002 yang ditolak dipindahkan ke §11 dan §12 sebagai catatan historis. Usulan FL-004 (D-030) **sudah berlaku sejak disetujui pada FL-004S**, tetapi berlaku sebagai **rancangan** — belum ada kode dan belum ada pengujian, sehingga tidak ada baris di sini yang boleh dibaca sebagai bukti fitur berjalan.
+Status per **FL-003 (15 Oktober 2026)**, ditambah catatan **FL-004**, **FL-004S** pada baris pengelolaan kunci, dan **FL-010U (16 Oktober 2026)** pada baris otorisasi/autentikasi. Tabel ini merangkum keputusan yang **sudah berlaku**; teks keputusan yang mengikat tetap hanya ada di `docs/DECISIONS.md`. Analisis FL-002 yang ditolak dipindahkan ke §11 dan §12 sebagai catatan historis. Usulan FL-004 (D-030) **sudah berlaku sejak disetujui pada FL-004S**, tetapi berlaku sebagai **rancangan** — belum ada kode dan belum ada pengujian, sehingga tidak ada baris di sini yang boleh dibaca sebagai bukti fitur berjalan. Hal yang sama berlaku untuk FL-010U: **yang ada hanya rancangan dan dokumen, belum ada implementasi autentikasi Google, akun, role, maupun sesi.**
 
 | Pertanyaan | Status setelah FL-003 |
 |---|---|
@@ -136,12 +196,14 @@ Status per **FL-003 (15 Oktober 2026)**, ditambah catatan **FL-004** dan **FL-00
 | PostgreSQL vs SQLite | **DIPUTUSKAN** (D-020 DISETUJUI): SQLite mode WAL lebih dahulu; D-011 (PostgreSQL awal) DITUNDA dengan skema tetap portabel. |
 | Polling lebih dahulu atau WebSocket langsung | **DIPUTUSKAN** (D-021 DISETUJUI): polling interval dengan `ETag` lebih dahulu; WebSocket sebagai peningkatan setelah kebutuhan terbukti. |
 | Format otorisasi internal dan penyimpanan template | **Sebagian diputuskan**: penyimpanan template memakai AES-256-GCM per baris (D-022 DISETUJUI) dengan kunci di luar database dan di luar Git; format autentikasi internal mengikuti `API_CONTRACT.md` §6. **Pengelolaan kunci (lokasi, rotasi, pemulihan) sudah ditetapkan sebagai D-030 dan DISETUJUI pada FL-004S**; yang belum ada adalah implementasi dan pengujiannya. |
+| **Otorisasi dan autentikasi pengguna (FL-010U, 16 Oktober 2026)** | **DIPUTUSKAN pemilik pada FL-010U, tetapi hanya sebagai rancangan:** tiga role pengguna manusia (`admin`, `dosen`, `mahasiswa`) dengan **Google Sign-In** sebagai metode autentikasi utama, tanpa login email/kata sandi buatan sendiri; `operator` lama digantikan `dosen`; akun `mahasiswa` kini ada; **`device` tetap identitas mesin terpisah**. Google hanya penyedia identitas — **otorisasi tetap milik backend Go**. Kontrak sesi: token opak, akses 60 menit, penyegar 30 hari dengan batas absolut 30 hari, hash SHA-256 di server, rotasi + deteksi pemakaian ulang, pencaburan per sesi/akun, role dibaca ulang dari database setiap permintaan. Matriks peran dan izin yang mengikat ada di `docs/AUTHORIZATION.md`. **Belum ada implementasi dan belum ada pengujian**; status keputusan formalnya mengikuti `docs/DECISIONS.md` dan `docs/AUTHORIZATION.md`, bukan tabel ini. |
 | Versi model AI, toleransi matching dan jumlah sampel | **Masih terbuka** — YuNet + SFace sudah final (D-012), tetapi angka ambang tetap Q-07; hanya dapat ditetapkan setelah pengukuran memakai peserta uji. Jangan mengarang ambang. |
 
 Lihat `DECISIONS.md` dan `OPEN_QUESTIONS.md`. Konsekuensi yang berlaku:
 
 - Proses backend adalah Go; Python hanya berjalan sebagai AI Engine lokal di balik kontrak internal `docs/API_CONTRACT.md` §6, tanpa akses ke database.
 - Seluruh keputusan kehadiran, penulisan database, dan audit adalah tanggung jawab Go (D-026, D-027).
+- **Konsekuensi FL-010U (16 Oktober 2026):** Google **bukan** pemilik keputusan otorisasi; role, cakupan kelas, dan kepemilikan data dibaca dari database FaceLink AI pada setiap permintaan. Matriks peran/izin yang mengikat ada di `docs/AUTHORIZATION.md`; daftar endpoint beserta kode kesalahan stabil autentikasi/otorisasi ada di `docs/API_CONTRACT.md` §1.5 dan §4. Modul `auth` menangani OIDC + sesi + bootstrap admin, dan modul baru `accounts` serta `self-service` menangani akun/role dan portal `dosen`/`mahasiswa` (§4). **Tidak ada satu pun yang sudah diimplementasikan atau diuji.**
 
 ## 10. Jalur ekspansi masa depan
 
@@ -294,9 +356,13 @@ Prinsip: **domain absensi tidak boleh mengetahui jenis kamera**. Semua sumber ga
 | Risiko teknis | Beban penulisan bersamaan pada SQLite belum diuji untuk skenario antrean kios. |
 | Risiko operasional | Pengelolaan kunci enkripsi template **sudah ditetapkan sebagai D-030 (DISETUJUI pada FL-004S)**, tetapi **implementasi `face_templates` masih belum dikerjakan**. Risiko yang diterima tetap berlaku: kehilangan kunci berarti kehilangan template, dan pemulihan bergantung pada berkas kunci yang tersimpan pada akun Windows yang sama. Ditambah keterbatasan yang diakui pada FL-004S: penghapusan **tidak** menjamin isi media penyimpanan bersih secara fisik (`docs/SECURITY_PRIVACY.md` §5f). |
 | Risiko privasi | Spoofing tidak tertangani secara kuat; verifikasi manual wajib tetap tersedia. |
+| Risiko operasional (**FL-010U, 16 Oktober 2026**) | **Login dan re-autentikasi bergantung pada internet.** Google Sign-In memerlukan koneksi ke penyedia identitas Google; bila internet mati sementara sesi aplikasi masih sah, operasi harian lewat LAN ke backend tetap berjalan karena aplikasi tidak memanggil Google saat itu. Bila sesi tidak berlaku lagi (kedaluwarsa atau dicabut), **login tidak mungkin sampai jaringan tersedia** — pesan yang benar adalah "Perlu internet untuk masuk dengan Google." Konsekuensi rancangan: masa berlaku penyegar **30 hari** dengan batas absolut sesi **30 hari** membuat pengguna yang aktif secara berkala tidak perlu internet setiap hari, tetapi sesi yang melewati 30 hari menuntut Google Sign-In ulang, dan **Google Sign-In tidak boleh dijanjikan berjalan offline**. Tersedianya Google juga bergantung pada cache JWKS: bila kunci tidak dapat dihubungi dan `kid` tidak dikenal, backend menjawab `503 GOOGLE_UNAVAILABLE`. Absensi manual tetap jalur tetap, tetapi **tidak ada jalur absensi di aplikasi tanpa sesi yang sah** — butir kebijakan ini masih menunggu keputusan pemilik. |
+| Risiko operasional (**FL-010U, 16 Oktober 2026**) | **HP belum dapat menjangkau backend lewat Wi-Fi kelas** karena `backend/internal/config/config.go` (`validateAddr`) menolak alamat listen di luar loopback; lihat §5.1. Pilihan penyelesaiannya (a) tetap loopback + `adb reverse`, (b) mengizinkan alamat LAN privat dengan persetujuan eksplisit, atau (c) proksi lokal berautentikasi **belum diputuskan pemilik**. |
 | Risiko proyek | Repositori belum memiliki `LICENSE` (D-017), sehingga ketentuan penggunaan karya belum jelas. |
 | Biaya | Komponen arsitektur yang berlaku berlisensi permisif dan **Rp0**: Go + `chi`, Python + OpenCV (YuNet/SFace), ONNX Runtime, SQLite, React Native/Expo. `cryptography` (Python) **tidak dipakai** — enkripsi template dilakukan di Go memakai pustaka standar `crypto/aes` + `crypto/cipher` (D-022, `docs/API_CONTRACT.md` §6.7). FastAPI sebagai server backend juga tidak dipakai (D-019 DITOLAK). |
 
-Kontrak yang mengikat dan berlaku satu arah dari dokumen ini: `docs/API_CONTRACT.md` (API + kontrak internal Go↔Python) dan `docs/DATA_MODEL.md` (skema 15 tabel, SQLite WAL, migrasi berversi). Bila dokumen ini berbeda dengan keduanya, **kontrak yang menang** dan dokumen ini harus diperbaiki.
+Kontrak yang mengikat dan berlaku satu arah dari dokumen ini: `docs/API_CONTRACT.md` (API + kontrak internal Go↔Python) dan `docs/DATA_MODEL.md` (SQLite WAL, migrasi berversi). Bila dokumen ini berbeda dengan keduanya, **kontrak yang menang** dan dokumen ini harus diperbaiki.
+
+**FL-010U (16 Oktober 2026):** jumlah dan daftar tabel yang berlaku mengikuti `docs/DATA_MODEL.md`, yang pada FL-010U menerima delta tanpa SQL — tabel baru `user_identities` dan `class_lecturers`, penggantian nama `operator_tokens` → `session_tokens`, penghapusan `users.password_hash`, serta kolom `people.account_user_id`. Migrasinya dikerjakan pada tugas tersendiri (FL-011) dan **belum ada**. Jangan menyalin jumlah tabel dari dokumen ini sebagai fakta; rujuk `docs/DATA_MODEL.md`.
 
 Pertanyaan yang harus dijawab pemilik sebelum implementasi: `docs/OPEN_QUESTIONS.md` — terutama **Q-16** (pengelolaan kunci — **sudah diputuskan pada FL-004S**, sisa pekerjaannya implementasi dan pengujian) dan **Q-07** (angka ambang kecocokan, kalibrasi fase AI Engine — **masih terbuka**).

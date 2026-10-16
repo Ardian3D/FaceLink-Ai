@@ -1,10 +1,13 @@
 # Kontrak API FaceLink AI
 
-**Versi:** 1.0 · **Status:** SPESIFIKASI FINAL TAHAP DOKUMENTASI; **BELUM DIIMPLEMENTASIKAN** dan belum menjadi berkas OpenAPI yang dapat dijalankan.
+**Versi:** 1.0 · **Revisi:** FL-010U (16 Oktober 2026) · **Status:** SPESIFIKASI FINAL TAHAP DOKUMENTASI; **BELUM DIIMPLEMENTASIKAN** dan belum menjadi berkas OpenAPI yang dapat dijalankan.
 
 Dokumen ini adalah acuan wajib yang harus ditinjau sebelum membuat handler Go atau layar React Native yang memanggilnya. Kontrak ini **mengikuti** keputusan yang sudah disetujui di `docs/DECISIONS.md` (D-010, D-020, D-021, D-022, D-027, D-028) dan **tidak menggantikan** `docs/PRD.md`.
 
 **Tidak ada kode aplikasi yang ditulis pada tugas ini.** Seluruh contoh di bawah adalah ilustrasi bentuk data, bukan bukti endpoint sudah berjalan.
+
+> **Revisi FL-010U (16 Oktober 2026), cabang `docs/fl-010u-google-three-roles` dari `origin/main` (`804c2f7`).**
+> Revisi ini menyelaraskan kontrak dengan arsitektur tiga role manusia (`admin`, `dosen`, `mahasiswa`) + Google Sign-In, dan `device` sebagai autentikasi mesin yang terpisah. Perubahan bersifat **dokumentasi saja**: tidak ada kode Go, TypeScript, SQL, atau berkas migrasi yang ditulis pada FL-010U. Seluruh skenario runtime di dokumen ini berstatus **BELUM TERVERIFIKASI**. Kontrak kanonik revisi ini ada di dalam repo: matriks peran/izin tunggal pada `docs/AUTHORIZATION.md` §4, ketentuan sesi pada `docs/DECISIONS.md` D-031–D-033, dan tabel ketersediaan layanan pada `docs/ARCHITECTURE.md` §7.1.
 
 ## 1. Aturan umum
 
@@ -16,21 +19,26 @@ Dokumen ini adalah acuan wajib yang harus ditinjau sebelum membuat handler Go at
 4. Format pertukaran normal: **JSON UTF-8**. Unggahan gambar: **`image/jpeg`** biner atau `multipart/form-data` sesuai endpoint.
 5. Identitas record: **UUID v4 tanpa makna** (bukan NIK atau nomor absen). Waktu: **ISO 8601 UTC** dengan akhiran `Z` (`2026-10-15T08:00:00Z`); aplikasi menampilkan zona lokal pengguna.
 6. Setiap respons menyertakan `request_id` yang tidak mengandung data pribadi, untuk penelusuran log.
-7. Semua endpoint selain login dan kesehatan memerlukan autentikasi. Token operator dan token perangkat **terpisah** dan tidak dapat saling menggantikan.
-8. Respons tidak boleh membocorkan embedding, gambar mentah, hash kata sandi, token, atau dugaan identitas yang meragukan.
-9. Jangan pernah mencatat payload biometrik, JPEG, token, atau kunci ke log.
-10. Validasi yang wajib ada di setiap endpoint unggahan: jenis konten, ukuran maksimum, dan batas waktu proses.
+7. **Identitas pengguna manusia ditegakkan lewat Google Sign-In (OpenID Connect).** Aplikasi React Native memperoleh Google ID token di sisi perangkat dan menukarkannya di `POST /auth/google`; backend memverifikasi token itu lalu menerbitkan sesi FaceLink AI sendiri (token opak, §5.1). **Tidak ada kata sandi internal**, tidak ada kata sandi sementara, tidak ada `must_change_password`, dan tidak ada hash kata sandi pada kontrak ini.
+8. **Backend Go tetap pemilik otorisasi.** Role, status akun, dan cakupan kelas selalu dibaca dari database pada setiap permintaan; role tidak pernah diambil dari Google, dari klien, atau dari klaim token. Google hanya membuktikan identitas, **bukan** hak akses.
+9. Semua endpoint selain `POST /auth/google` dan pemeriksaan kesehatan memerlukan autentikasi. Token sesi pengguna (admin/dosen/mahasiswa) dan token perangkat **terpisah** dan tidak dapat saling menggantikan.
+10. Respons tidak boleh membocorkan embedding, gambar mentah, Google ID token, klaim `sub`, token sesi, atau dugaan identitas yang meragukan.
+11. Jangan pernah mencatat payload biometrik, JPEG, token, atau kunci ke log.
+12. Validasi yang wajib ada di setiap endpoint unggahan: jenis konten, ukuran maksimum, dan batas waktu proses.
 
 ### 1.2 Peran dan cakupan akses
 
-| Peran | Cakupan MVP | Catatan |
-|---|---|---|
-| `operator` | Seluruh endpoint operator: orang, kelas, konsen, enrollment, sesi, rekap, koreksi manual, perangkat | Satu-satunya pengguna aplikasi yang wajib ada di MVP (D-013 masih USULAN pada bagian akun peserta) |
-| `admin` | Sama seperti operator, ditambah pengelolaan akun operator dan pencabutan perangkat | Dipisahkan agar audit tetap jelas; jumlah akun admin minimal |
-| `device` | Hanya `POST /api/v1/devices/{device_id}/recognition-attempts` | Token perangkat terikat satu `device_id`; tidak dapat membaca rekap atau daftar peserta |
-| `ai-engine` (internal) | Hanya endpoint internal §6 pada `127.0.0.1` | Bukan peran API publik; tidak melewati router publik |
+| Peran | Jenis | Kredensial | Cakupan MVP |
+|---|---|---|---|
+| `admin` | Manusia | Google Sign-In | Seluruh sistem: akun & role, kelas + penugasan dosen, peserta, konsen, enrollment, perangkat, sesi, rekap, ekspor, audit |
+| `dosen` | Manusia | Google Sign-In | **Hanya kelas yang ditugaskan kepadanya** (lihat §5.5, §5.6, §5.8); kelas di luar penugasan → `404 NOT_FOUND` |
+| `mahasiswa` | Manusia | Google Sign-In | **Hanya data miliknya sendiri** (§5.14); memerlukan penautan akun ke baris `people` |
+| `device` | Mesin | Token perangkat (bukan Google) | Hanya `POST /api/v1/devices/{device_id}/recognition-attempts` |
+| `ai-engine` (internal) | Proses lokal | Token internal loopback | Hanya endpoint internal §6 pada `127.0.0.1`; bukan peran API publik |
 
-**Ketiga peran di atas adalah daftar final MVP.** Tidak ada peran `dosen` atau `mahasiswa`: persona "operator/dosen" pada `docs/PRD.md` §3 dipenuhi oleh `operator`, dan peserta tidak memiliki akun. Dua jalur autentikasi yang berbeda — token operator dan token perangkat — **tidak dapat saling menggantikan**. Matriks `endpoint × peran`, aturan `401`/`403`, dan aturan audit penolakan ada di `docs/AUTHORIZATION.md`.
+**Ketiga role manusia (`admin`, `dosen`, `mahasiswa`) adalah daftar final MVP.** Role `operator` lama **DIGANTIKAN** oleh `dosen` dan `admin`: cakupan `operator` lama terbagi ke keduanya, sehingga ini **bukan penggantian nama dengan cakupan identik** (dinyatakan eksplisit di `docs/AUTHORIZATION.md`). Keputusan lama "mahasiswa tidak memiliki akun pada MVP" juga **DIGANTIKAN** — akun mahasiswa kini ada dan dikelola admin. Persona "operator/dosen" pada `docs/PRD.md` §3 kini dipenuhi oleh `dosen` dan `admin`, bukan oleh role `operator`. Matriks `endpoint × peran` lengkap, aturan `401`/`403`, dan aturan audit penolakan ada di `docs/AUTHORIZATION.md`.
+
+Dua jalur autentikasi yang berbeda — sesi pengguna (Google Sign-In) dan token perangkat — **tidak dapat saling menggantikan**. Role dan cakupan kelas selalu diputuskan backend Go, bukan oleh Google maupun klien.
 
 ### 1.3 Format respons sukses
 
@@ -93,18 +101,18 @@ Aturan keras:
 | `204` | Penghapusan/penutupan berhasil tanpa isi | — |
 | `304` | `If-None-Match` cocok, tidak ada perubahan | — |
 | `400` | JSON rusak, tipe salah, parameter wajib hilang | `MALFORMED_JSON`, `MISSING_FIELD` |
-| `401` | Belum terautentikasi atau token tidak sah | `UNAUTHENTICATED`, `TOKEN_EXPIRED` |
-| `403` | Terautentikasi tetapi tidak berwenang | `FORBIDDEN_ROLE`, `DEVICE_REVOKED` |
+| `401` | Belum terautentikasi, token tidak sah, atau sesi dicabut | `UNAUTHENTICATED`, `TOKEN_EXPIRED`, `IDENTITY_TOKEN_INVALID`, `SESSION_REVOKED` |
+| `403` | Terautentikasi tetapi tidak berwenang | `FORBIDDEN_ROLE`, `DEVICE_REVOKED`, `IDENTITY_NOT_LINKED` |
 | `404` | Sumber daya tidak ada atau tidak terlihat oleh peran ini | `NOT_FOUND` |
 | `405` | Metode tidak diizinkan pada jalur tersebut | `METHOD_NOT_ALLOWED` |
-| `409` | Konflik keadaan atau operasi berulang | `ALREADY_CHECKED_IN`, `SESSION_CLOSED` |
+| `409` | Konflik keadaan atau operasi berulang | `ALREADY_CHECKED_IN`, `SESSION_CLOSED`, `ACCOUNT_NOT_LINKED`, `LAST_ADMIN_PROTECTED`, `SELF_ACCOUNT_PROTECTED` |
 | `412` | `If-Match`/prasyarat versi tidak cocok | `PRECONDITION_FAILED` |
 | `413` | JPEG melampaui batas ukuran | `IMAGE_TOO_LARGE` |
 | `415` | Jenis konten bukan JPEG yang diterima | `UNSUPPORTED_MEDIA_TYPE` |
 | `422` | JSON sah tetapi melanggar aturan domain | `CONSENT_REQUIRED`, `CLASS_MISMATCH` |
 | `429` | Melampaui batas laju | `RATE_LIMITED` |
 | `500` | Kesalahan tak terduga di backend | `INTERNAL_ERROR` |
-| `503` | Ketergantungan tidak tersedia | `AI_ENGINE_UNAVAILABLE`, `DATABASE_BUSY` |
+| `503` | Ketergantungan tidak tersedia | `AI_ENGINE_UNAVAILABLE`, `GOOGLE_UNAVAILABLE`, `DATABASE_BUSY` |
 | `504` | Ketergantungan melewati batas waktu | `AI_ENGINE_TIMEOUT` |
 
 Kode kesalahan stabil minimum yang dipakai lintas modul:
@@ -114,14 +122,20 @@ Kode kesalahan stabil minimum yang dipakai lintas modul:
 | `VALIDATION_FAILED` | 400/422 | Satu atau beberapa field tidak memenuhi aturan |
 | `UNAUTHENTICATED` | 401 | Tidak ada atau token tidak sah |
 | `TOKEN_EXPIRED` | 401 | Token melewati masa berlaku |
+| `IDENTITY_TOKEN_INVALID` | 401 | Google ID token gagal diverifikasi (issuer, audience, tanda tangan, kedaluwarsa, nonce) |
+| `SESSION_REVOKED` | 401 | Sesi sudah dicabut (logout oleh admin, penonaktifan akun, atau deteksi pemakaian ulang penyegar) |
+| `IDENTITY_NOT_LINKED` | 403 | Identitas tidak tertaut akun / akun belum diberi akses — **satu pesan generik** untuk semua sebab (anti-enumeration) |
 | `FORBIDDEN_ROLE` | 403 | Peran tidak memiliki akses |
-| `NOT_FOUND` | 404 | Sumber daya tidak ditemukan |
+| `NOT_FOUND` | 404 | Sumber daya tidak ditemukan (termasuk kelas di luar penugasan `dosen`) |
 | `CONSENT_REQUIRED` | 422 | Peserta tidak memiliki persetujuan biometrik aktif |
 | `CONSENT_WITHDRAWN` | 422 | Persetujuan dicabut; template dihapus |
 | `SESSION_NOT_OPEN` | 422 | Sesi bukan dalam keadaan terbuka |
 | `SESSION_CLOSED` | 409 | Sesi sudah ditutup saat penulisan dilakukan |
 | `CLASS_MISMATCH` | 422 | Peserta bukan anggota kelas sesi |
 | `ALREADY_CHECKED_IN` | 409 | Sudah ada catatan kehadiran pada sesi yang sama |
+| `ACCOUNT_NOT_LINKED` | 409 | Akun `mahasiswa` belum ditautkan ke baris peserta `people` |
+| `LAST_ADMIN_PROTECTED` | 409 | Operasi akan menghilangkan admin aktif terakhir |
+| `SELF_ACCOUNT_PROTECTED` | 409 | Admin mencoba menonaktifkan atau menurunkan peran akunnya sendiri |
 | `DEVICE_REVOKED` | 403 | Perangkat dicabut atau tidak aktif |
 | `DEVICE_SESSION_MISMATCH` | 422 | Perangkat tidak terhubung ke sesi yang dikirim |
 | `IMAGE_TOO_LARGE` | 413 | Melebihi batas ukuran |
@@ -130,6 +144,7 @@ Kode kesalahan stabil minimum yang dipakai lintas modul:
 | `RATE_LIMITED` | 429 | Terlalu banyak permintaan |
 | `AI_ENGINE_UNAVAILABLE` | 503 | Pekerja AI tidak dapat dihubungi |
 | `AI_ENGINE_TIMEOUT` | 504 | Pekerja AI melewati batas waktu |
+| `GOOGLE_UNAVAILABLE` | 503 | Kunci atau penyedia identitas Google tidak dapat dihubungi |
 | `DATABASE_BUSY` | 503 | Database terkunci melewati batas tunggu |
 | `INTERNAL_ERROR` | 500 | Kesalahan tak terduga |
 
@@ -140,156 +155,222 @@ Kode kesalahan stabil minimum yang dipakai lintas modul:
 3. Field yang akan dihapus ditandai `deprecated` di dokumentasi minimal satu rilis sebelum dihapus.
 4. Penghapusan field wajib, perubahan arti field, dan perubahan bentuk `data` dari objek menjadi daftar dianggap **memutus kompatibilitas**.
 5. Versi kontrak internal Go↔Python (§6) bergerak **terpisah** dari versi API publik; keduanya tidak boleh diasumsikan sama.
+6. **Pengecualian tercatat pada FL-010U (16 Oktober 2026):** revisi ini mengganti `POST /auth/login` menjadi `POST /auth/google` dan mengganti nama `GET/DELETE /operator-sessions*` menjadi `GET/DELETE /auth/sessions*`. Menurut aturan butir 1 dan 4 di atas, keduanya seharusnya menaikkan nomor mayor, tetapi **tidak ada kode maupun klien yang memakai jalur lama** (kontrak ini belum diimplementasikan), sehingga jalur lama tidak perlu dipertahankan dan versi mayor tidak dinaikkan. Bila jalur lama ternyata sudah dipakai klien mana pun, aturan butir 1 berlaku penuh.
 
 ## 3. Ikhtisar modul
 
-Tiga belas modul yang diminta, dipetakan ke jalur nyata. Beberapa kebutuhan **sengaja tidak menjadi endpoint publik** karena merupakan operasi internal atau efek samping endpoint lain.
+Empat belas modul, dipetakan ke jalur nyata. Penomoran modul 1–13 **dipertahankan** dari versi kontrak sebelumnya; Modul 14 adalah modul **baru** pada FL-010U. Beberapa kebutuhan **sengaja tidak menjadi endpoint publik** karena merupakan operasi internal atau efek samping endpoint lain.
 
 | # | Modul | Jalur | Catatan |
 |---|---|---|---|
-| 1 | Autentikasi dan manajemen sesi operator | `/auth/*`, `/me`, `/operator-sessions` | Token operator |
-| 2 | Pengelolaan pengguna dan peserta | `/people/*`, `/users/*` | `/users` hanya untuk admin |
-| 3 | Persetujuan biometrik | `/people/{person_id}/consent*` | Wajib sebelum enrollment |
-| 4 | Enrollment wajah | `/people/{person_id}/face-enrollments*` | Gambar tidak disimpan permanen |
-| 5 | Kelas dan keanggotaan | `/classes/*` | Satu kelas untuk demo |
+| 1 | Autentikasi Google dan sesi | `/auth/*`, `/me` | Google Sign-In (OIDC) → sesi opak FaceLink AI |
+| 2 | Akun pengguna, peserta, dan penautan peserta | `/users/*`, `/people/*`, `/people/{person_id}/account-link` | `/users` dan penautan akun hanya untuk admin |
+| 3 | Persetujuan biometrik | `/people/{person_id}/consent*` | Wajib sebelum enrollment; hanya `admin` |
+| 4 | Enrollment wajah | `/people/{person_id}/face-enrollments*` | Gambar tidak disimpan permanen; hanya `admin` |
+| 5 | Kelas, keanggotaan, dan penugasan dosen | `/classes/*` | Termasuk `GET/PUT/DELETE /classes/{class_id}/dosen/{user_id}` |
 | 6 | Sesi absensi | `/sessions/*` | Siklus draft → open → closed |
 | 7 | Hasil verifikasi wajah | Bagian dari `recognition-attempts` | **Bukan** endpoint terpisah |
 | 8 | Pencatatan kehadiran | Efek dari pengenalan atau koreksi manual | **Bukan** endpoint publik terpisah |
 | 9 | Penolakan dan jalur manual | `/sessions/{id}/manual-checkins` | Wajib ada sebagai alternatif |
-| 10 | Pendaftaran dan autentikasi perangkat | `/devices/*` | Token terpisah |
+| 10 | Pendaftaran dan autentikasi perangkat | `/devices/*` | Token terpisah; seluruhnya `admin` |
 | 11 | Rekap dan ekspor laporan | `/sessions/{id}/attendance`, `/export.csv` | Tanpa data biometrik |
 | 12 | Kesehatan dan kesiapan | `/healthz`, `/readyz` | Tidak membocorkan rahasia |
-| 13 | Audit aktivitas penting | `/audit-events` | Hanya admin/operator |
+| 13 | Audit aktivitas penting | `/audit-events` | **Hanya `admin`** |
+| 14 | Portal self-service dosen dan mahasiswa | `/me/classes`, `/me/schedule`, `/me/attendance`, `/me/consent` | Modul **baru** FL-010U; lihat §5.14 |
 
 Justifikasi pemisahan modul 7 dan 8: hasil verifikasi wajah dan pencatatan kehadiran **bukan** dua operasi yang dapat dipanggil klien secara terpisah. Kalau keduanya menjadi endpoint publik, akan ada jalur yang memungkinkan klien menetapkan kehadiran tanpa validasi wajah, atau mencatat hasil pengenalan tanpa memeriksa konsen, kelas, dan sesi. Karena itu modul 7 dan 8 diwujudkan sebagai **hasil satu endpoint terminal** (§5.10) yang di dalam backend Go menjalankan seluruh pemeriksaan berurutan.
 
+Catatan rujukan silang: matriks peran/izin pada `docs/AUTHORIZATION.md` §4 memakai pengelompokan modul yang berbeda (mis. "Modul 6 — Kelas, keanggotaan, penugasan dosen" di sana setara Modul 5 di sini, dan "Modul 7 — Sesi absensi" setara Modul 6 di sini). Yang wajib identik antara kedua dokumen adalah **metode, jalur, dan himpunan peran** tiap endpoint — bukan nomor modulnya.
+
 ## 4. Ikhtisar endpoint
 
-Semua jalur diawali `/api/v1`.
+Semua jalur diawali `/api/v1` **kecuali** `/healthz` (tanpa versi, hanya untuk probe lokal). Matriks di bawah adalah **53 endpoint** dan wajib identik dengan matriks peran pada `docs/AUTHORIZATION.md` §4: metode, jalur, dan himpunan peran harus sama persis. Nomor pada kolom Modul mengikuti penomoran modul §3 dokumen ini.
 
 | Modul | Metode | Jalur | Peran |
 |---|---|---|---|
-| 1 | `POST` | `/auth/login` | publik |
-| 1 | `POST` | `/auth/refresh` | operator, admin |
-| 1 | `POST` | `/auth/logout` | operator, admin |
-| 1 | `GET` | `/me` | operator, admin |
-| 1 | `GET` | `/operator-sessions` | admin |
-| 1 | `DELETE` | `/operator-sessions/{session_id}` | admin |
-| 2 | `GET` | `/people` | operator, admin |
-| 2 | `POST` | `/people` | operator, admin |
-| 2 | `GET` | `/people/{person_id}` | operator, admin |
-| 2 | `PATCH` | `/people/{person_id}` | operator, admin |
-| 2 | `DELETE` | `/people/{person_id}` | admin |
+| 1 | `POST` | `/auth/google` | publik |
+| 1 | `POST` | `/auth/refresh` | admin, dosen, mahasiswa |
+| 1 | `POST` | `/auth/logout` | admin, dosen, mahasiswa |
+| 1 | `GET` | `/me` | admin, dosen, mahasiswa |
+| 1 | `GET` | `/auth/sessions` | admin |
+| 1 | `DELETE` | `/auth/sessions/{session_id}` | admin |
 | 2 | `GET` | `/users` | admin |
 | 2 | `POST` | `/users` | admin |
-| 3 | `GET` | `/people/{person_id}/consent` | operator, admin |
-| 3 | `POST` | `/people/{person_id}/consent` | operator, admin |
-| 3 | `POST` | `/people/{person_id}/consent/withdraw` | operator, admin |
-| 4 | `POST` | `/people/{person_id}/face-enrollments` | operator, admin |
-| 4 | `GET` | `/people/{person_id}/face-enrollments` | operator, admin |
-| 4 | `POST` | `/face-enrollments/{enrollment_id}/samples` | operator, admin |
-| 4 | `POST` | `/face-enrollments/{enrollment_id}/complete` | operator, admin |
-| 4 | `DELETE` | `/face-enrollments/{enrollment_id}` | operator, admin |
-| 5 | `GET` | `/classes` | operator, admin |
-| 5 | `POST` | `/classes` | operator, admin |
-| 5 | `GET` | `/classes/{class_id}/members` | operator, admin |
-| 5 | `PUT` | `/classes/{class_id}/members/{person_id}` | operator, admin |
-| 5 | `DELETE` | `/classes/{class_id}/members/{person_id}` | operator, admin |
-| 6 | `GET` | `/sessions` | operator, admin |
-| 6 | `POST` | `/sessions` | operator, admin |
-| 6 | `GET` | `/sessions/{session_id}` | operator, admin |
-| 6 | `POST` | `/sessions/{session_id}/open` | operator, admin |
-| 6 | `POST` | `/sessions/{session_id}/close` | operator, admin |
-| 9 | `POST` | `/sessions/{session_id}/manual-checkins` | operator, admin |
-| 9 | `GET` | `/sessions/{session_id}/manual-checkins` | operator, admin |
+| 2 | `PATCH` | `/users/{user_id}` | admin |
+| 2 | `PUT` | `/people/{person_id}/account-link` | admin |
+| 2 | `DELETE` | `/people/{person_id}/account-link` | admin |
+| 2 | `GET` | `/people` | admin, dosen |
+| 2 | `POST` | `/people` | admin |
+| 2 | `GET` | `/people/{person_id}` | admin, dosen |
+| 2 | `PATCH` | `/people/{person_id}` | admin |
+| 2 | `DELETE` | `/people/{person_id}` | admin |
+| 3 | `GET` | `/people/{person_id}/consent` | admin |
+| 3 | `POST` | `/people/{person_id}/consent` | admin |
+| 3 | `POST` | `/people/{person_id}/consent/withdraw` | admin |
+| 4 | `POST` | `/people/{person_id}/face-enrollments` | admin |
+| 4 | `GET` | `/people/{person_id}/face-enrollments` | admin |
+| 4 | `POST` | `/face-enrollments/{enrollment_id}/samples` | admin |
+| 4 | `POST` | `/face-enrollments/{enrollment_id}/complete` | admin |
+| 4 | `DELETE` | `/face-enrollments/{enrollment_id}` | admin |
+| 5 | `GET` | `/classes` | admin, dosen |
+| 5 | `POST` | `/classes` | admin |
+| 5 | `GET` | `/classes/{class_id}/members` | admin, dosen |
+| 5 | `PUT` | `/classes/{class_id}/members/{person_id}` | admin |
+| 5 | `DELETE` | `/classes/{class_id}/members/{person_id}` | admin |
+| 5 | `GET` | `/classes/{class_id}/dosen` | admin, dosen |
+| 5 | `PUT` | `/classes/{class_id}/dosen/{user_id}` | admin |
+| 5 | `DELETE` | `/classes/{class_id}/dosen/{user_id}` | admin |
+| 6 | `GET` | `/sessions` | admin, dosen |
+| 6 | `POST` | `/sessions` | admin, dosen |
+| 6 | `GET` | `/sessions/{session_id}` | admin, dosen |
+| 6 | `POST` | `/sessions/{session_id}/open` | admin, dosen |
+| 6 | `POST` | `/sessions/{session_id}/close` | admin, dosen |
+| 9 | `POST` | `/sessions/{session_id}/manual-checkins` | admin, dosen |
+| 9 | `GET` | `/sessions/{session_id}/manual-checkins` | admin, dosen |
 | 10 | `POST` | `/devices` | admin |
-| 10 | `GET` | `/devices` | operator, admin |
+| 10 | `GET` | `/devices` | admin |
 | 10 | `POST` | `/devices/{device_id}/rotate-token` | admin |
 | 10 | `DELETE` | `/devices/{device_id}` | admin |
-| 11 | `GET` | `/sessions/{session_id}/attendance` | operator, admin |
-| 11 | `GET` | `/sessions/{session_id}/export.csv` | operator, admin |
-| 12 | `GET` | `/healthz` | publik (lokal) |
-| 12 | `GET` | `/readyz` | operator, admin |
-| 13 | `GET` | `/audit-events` | operator, admin |
+| 11 | `GET` | `/sessions/{session_id}/attendance` | admin, dosen |
+| 11 | `GET` | `/sessions/{session_id}/export.csv` | admin |
+| 12 | `GET` | `/healthz` | publik |
+| 12 | `GET` | `/readyz` | admin, dosen |
+| 13 | `GET` | `/audit-events` | admin |
+| 14 | `GET` | `/me/classes` | dosen, mahasiswa |
+| 14 | `GET` | `/me/schedule` | mahasiswa |
+| 14 | `GET` | `/me/attendance` | mahasiswa |
+| 14 | `GET` | `/me/consent` | mahasiswa |
 | — | `POST` | `/devices/{device_id}/recognition-attempts` | device |
+
+Rekapitulasi kelompok akses (dihitung dari tabel di atas; satu endpoint dapat diakses beberapa peran sehingga jumlah kolom tidak dijumlahkan menjadi 53):
+
+| Kelompok akses | Jumlah | Cakupan |
+|---|---|---|
+| Hanya `admin` | 29 | Akun, role, penautan, konsen, enrollment, kelola peserta, penugasan dosen, perangkat, ekspor, audit |
+| `admin` + `dosen` | 14 | Baca peserta/kelas, sesi absensi, koreksi manual, rekap, kesiapan |
+| `admin` + `dosen` + `mahasiswa` | 3 | Sesi sendiri: refresh, logout, `/me` |
+| `dosen` + `mahasiswa` | 1 | `GET /me/classes` |
+| Hanya `mahasiswa` | 3 | Jadwal, riwayat kehadiran sendiri, status konsen sendiri |
+| Hanya `device` | 1 | Terminal kamera |
+| Publik tanpa token | 2 | `POST /auth/google`, `GET /healthz` |
+| **Total endpoint** | **53** | 29 + 14 + 3 + 1 + 3 + 1 + 2 |
+
+Jumlah endpoint yang dapat dipanggil tiap peran: `admin` 46 · `dosen` 18 · `mahasiswa` 7 · `device` 1 · publik 2. Angka-angka ini **BELUM TERVERIFIKASI secara programatis** pada FL-010U dan wajib dihitung ulang setelah dokumen ditulis; tabel rekap disesuaikan bila tabel endpoint berubah.
 
 ## 5. Detail endpoint
 
 Notasi: **wajib** berarti field harus ada. Semua contoh JSON memakai UUID dan nilai buatan, tanpa data biometrik nyata.
 
-### 5.1 Modul 1 — Autentikasi dan manajemen sesi operator
+### 5.1 Modul 1 — Autentikasi Google dan manajemen sesi
 
-#### `POST /api/v1/auth/login`
+Ringkasan alur (selengkapnya pada `docs/AUTHORIZATION.md` §3.1 dan `docs/DECISIONS.md` D-031): aplikasi React Native meminta Google ID token (JWT) di sisi perangkat, mengirimkannya ke `POST /auth/google`, backend memverifikasi token menurut OpenID Connect, mencari identitas pada `user_identities` dengan kunci `(provider='google', subject=sub)`, memeriksa status akun `users`, lalu menerbitkan **sesi FaceLink AI** berupa token opak. Google ID token **bukan** sesi aplikasi dan **tidak pernah** disimpan sebagai sesi.
+
+Bentuk sesi (rancangan MVP; `docs/AUTHORIZATION.md` §3.1 dan `docs/DECISIONS.md` D-033): token opak acak 256-bit dikirim sebagai `Authorization: Bearer <token>`; di server hanya **hash SHA-256** yang disimpan pada `session_tokens`; masa berlaku token akses 60 menit; token penyegar 30 hari dengan **batas absolut sesi 30 hari**; penyimpanan klien di penyimpanan aman perangkat. Peran **tidak** disimpan di dalam token: role selalu dibaca ulang dari database pada setiap permintaan.
+
+#### `POST /api/v1/auth/google`
 
 - **Peran:** publik (dengan pembatasan laju ketat).
-- **Tubuh permintaan:** `email` (wajib, string), `password` (wajib, string).
+- **Tubuh permintaan:** `id_token` (wajib, string — Google ID token/JWT), `nonce` (wajib bila aplikasi memakai nonce).
+- **Verifikasi OIDC yang wajib:** tanda tangan lewat **JWKS** Google (`kid`; kunci di-cache dan dirotasi saat `kid` tidak dikenal); `alg` **wajib** RS256 (menolak `none`, HS256, dan algoritme simetris); `iss` ∈ {`https://accounts.google.com`, `accounts.google.com`}; `aud` ∈ daftar client ID resmi yang dikonfigurasi (tidak ada client ID yang ditanam di kode); `exp`/`iat` dengan toleransi selisih waktu terbatas (usulan 120 detik); `nonce` cocok bila dipakai; `azp` diperiksa bila token punya beberapa audience; `email_verified` = true.
+- **Aturan penautan akun:** identitas dicari pada `user_identities` lewat `sub` (pengenal stabil; **email bukan kunci identitas**). Identitas belum tertaut boleh tertaut **hanya bila** ada baris `users` berstatus `invited` dengan `email` yang sama persis (huruf kecil, tanpa spasi tepi) dan klaim `email_verified=true`, lalu baris itu diaktifkan. Selain itu **tidak ada akun yang dibuat**: tidak ada pendaftaran mandiri dan tidak ada role otomatis.
 - **Respons `200`:**
 
 ```json
 {
   "data": {
-    "access_token": "<token>",
+    "access_token": "<token opak>",
+    "refresh_token": "<token opak>",
     "expires_in": 3600,
-    "operator": { "id": "33333333-3333-4333-8333-333333333333", "display_name": "Operator Demo", "role": "operator" }
+    "user": {
+      "id": "33333333-3333-4333-8333-333333333333",
+      "display_name": "Dosen Demo",
+      "role": "dosen",
+      "person_id": null,
+      "class_ids": ["11111111-1111-4111-8111-111111111111"]
+    }
   },
   "request_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 }
 ```
 
-- **Kode status:** `200`, `400`, `401`, `429`.
-- **Kesalahan:** `VALIDATION_FAILED`, `UNAUTHENTICATED`, `RATE_LIMITED`.
-- **Validasi:** email dinormalisasi (huruf kecil, tanpa spasi tepi); kata sandi minimal 8 karakter.
-- **Efek database:** memperbarui `users.last_login_at`; menambah `audit_events` dengan aksi `auth.login.succeeded` atau `auth.login.failed` (tanpa alamat email pada metadata aman; simpan `actor_id` bila diketahui).
-- **Idempotensi:** tidak berlaku; setiap percobaan menambah baris audit.
-- **Catatan keamanan:** pesan kesalahan tidak boleh membedakan “email tidak ada” dan “kata sandi salah”.
+- **Catatan bentuk respons:** `person_id` bernilai `null` untuk akun yang tidak tertaut baris `people` (umumnya `admin`/`dosen`); `class_ids` berisi kelas yang ditugaskan (`dosen`) atau diikuti (`mahasiswa`), dan kosong untuk `admin`. Aplikasi mengarahkan pengguna berdasarkan `role` dari backend.
+- **Kode status:** `200`, `400`, `401`, `403`, `429`, `503`.
+- **Kesalahan:** `VALIDATION_FAILED`, `IDENTITY_TOKEN_INVALID` (401), `IDENTITY_NOT_LINKED` (403), `RATE_LIMITED` (429), `GOOGLE_UNAVAILABLE` (503).
+- **Efek database:** memperbarui `users.last_login_at`; `INSERT INTO user_identities` saat penautan pertama; menambah `audit_events` (`auth.google.succeeded`, `auth.google.linked`, atau `auth.login.denied`). Untuk `auth.login.denied`, `safe_metadata` menyimpan `reason` ber-kode (`no_account`, `not_linked`, `suspended`, `email_mismatch`) — **bukan** email.
+- **Idempotensi:** tidak berlaku; setiap percobaan menambah baris audit. Pengulangan dengan ID token yang sama menerbitkan sesi baru.
+- **Catatan keamanan:** `IDENTITY_NOT_LINKED` memakai **satu pesan generik** untuk semua sebab (anti-enumeration) sehingga pemanggil tidak dapat membedakan "email tidak terdaftar", "belum diberi akses", dan "akun dinonaktifkan". Status `invited` (belum tertaut) dan `suspended` sama-sama ditolak. Google ID token, klaim `sub`, dan `email` **tidak pernah** ditulis ke log.
 
 #### `POST /api/v1/auth/refresh`
 
-- **Peran:** operator, admin.
+- **Peran:** admin, dosen, mahasiswa.
 - **Tubuh permintaan:** `refresh_token` (wajib).
-- **Respons `200`:** sama bentuknya dengan login.
-- **Kode status:** `200`, `401`.
-- **Efek database:** menandai token lama sebagai tidak berlaku; menambah audit `auth.token.refreshed`.
-- **Idempotensi:** token lama tidak dapat dipakai dua kali.
+- **Respons `200`:** pasangan token baru — `{ "data": { "access_token", "refresh_token", "expires_in" } }`. Bentuk `user` tidak dikirim ulang; aplikasi memakai `GET /me` bila memerlukannya.
+- **Kode status:** `200`, `400`, `401`.
+- **Kesalahan:** `VALIDATION_FAILED`, `UNAUTHENTICATED`, `TOKEN_EXPIRED`, `SESSION_REVOKED`.
+- **Rotasi:** setiap penyegaran menerbitkan pasangan token baru; hash penyegar sebelumnya disimpan satu langkah (`prev_refresh_hash`) untuk deteksi pemakaian ulang.
+- **Deteksi penyalahgunaan:** penyegar yang sudah dirotasi dipakai ulang → **seluruh sesi pengguna itu dicabut** dan audit `auth.session.reuse_detected` ditulis.
+- **Batas absolut:** batas sesi 30 hari **tidak** diperpanjang tanpa batas; sesi yang melewatinya menuntut Google Sign-In ulang.
+- **Efek database:** `UPDATE session_tokens`; audit `auth.session.refreshed`.
+- **Idempotensi:** token penyegar lama tidak dapat dipakai dua kali.
 
 #### `POST /api/v1/auth/logout`
 
-- **Peran:** operator, admin.
+- **Peran:** admin, dosen, mahasiswa.
 - **Tubuh permintaan:** kosong.
 - **Respons:** `204` tanpa isi.
-- **Efek database:** mencabut sesi operator aktif; audit `auth.logout`.
+- **Kode status:** `204`, `401`.
+- **Efek database:** mencabut sesi yang sedang dipakai (`session_tokens.revoked_at`); audit `auth.logout`.
 - **Idempotensi:** panggilan kedua tetap `204` tanpa perubahan tambahan.
 
 #### `GET /api/v1/me`
 
-- **Peran:** operator, admin.
+- **Peran:** admin, dosen, mahasiswa.
 - **Query:** —
-- **Respons `200`:** `{ "data": { "id", "display_name", "email", "role" } }`. Hash kata sandi tidak pernah dikirim.
-- **Kode status:** `200`, `401`.
+- **Respons `200`:**
+
+```json
+{
+  "data": {
+    "id": "33333333-3333-4333-8333-333333333333",
+    "display_name": "Dosen Demo",
+    "email": "dosen.demo@example.test",
+    "role": "dosen",
+    "status": "active",
+    "person_id": null,
+    "class_ids": ["11111111-1111-4111-8111-111111111111"]
+  },
+  "request_id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+}
+```
+
+- **Catatan:** `role` dan `status` selalu dibaca dari database pada setiap permintaan, sehingga perubahan role dan penonaktifan akun berlaku pada permintaan berikutnya. `person_id` `null` berarti akun tidak tertaut baris `people`; `class_ids` kosong untuk `admin`. Tidak ada field kata sandi, hash kata sandi, atau token pada respons ini.
+- **Kode status:** `200`, `401`, `403`.
 - **Efek database:** —
 - **Idempotensi:** aman diulang.
 
-#### `GET /api/v1/operator-sessions`
+#### `GET /api/v1/auth/sessions`
 
 - **Peran:** admin.
-- **Respons `200`:** daftar sesi operator aktif dengan `id`, `user_id`, `created_at`, `last_seen_at`, `user_agent_ringkas`.
+- **Catatan penamaan:** endpoint ini **menggantikan** `GET /operator-sessions` (nama lama salah karena kini menampung tiga role manusia). Nama lama tidak dipakai lagi; belum ada klien yang memakainya, sehingga tidak ada klien yang rusak.
+- **Respons `200`:** daftar sesi aktif dengan `id`, `user_id`, `role`, `created_at`, `last_seen_at`, `user_agent_ringkas`.
 - **Kode status:** `200`, `403`.
 - **Efek database:** —
 - **Idempotensi:** aman diulang.
 
-#### `DELETE /api/v1/operator-sessions/{session_id}`
+#### `DELETE /api/v1/auth/sessions/{session_id}`
 
 - **Peran:** admin.
+- **Catatan penamaan:** **menggantikan** `DELETE /operator-sessions/{session_id}`.
 - **Respons:** `204`.
 - **Kode status:** `204`, `403`, `404`.
-- **Efek database:** token sesi dicabut; audit `auth.session.revoked`.
+- **Efek database:** token sesi dicabut (`revoked_at`, `revoked_reason`); audit `auth.session.revoked`. Penonaktifan akun mencabut seluruh sesi akun itu.
 - **Idempotensi:** mencabut sesi yang sudah tercabut mengembalikan `404`.
 
-### 5.2 Modul 2 — Pengelolaan pengguna dan peserta
+### 5.2 Modul 2 — Akun pengguna, peserta, dan penautan peserta
 
 #### `GET /api/v1/people`
 
-- **Peran:** operator, admin.
+- **Peran:** admin, dosen. Untuk `dosen`, hasil dibatasi pada peserta kelas yang ditugaskan kepadanya.
 - **Query:** `status` (opsional: `active`, `inactive`), `class_id` (opsional), `cursor`, `limit`.
 - **Respons `200`:** daftar `{ id, external_code, display_name, status, consent_state, enrollment_state }`.
   - `consent_state`: `active`, `none`, atau `withdrawn`.
@@ -301,7 +382,7 @@ Notasi: **wajib** berarti field harus ada. Semua contoh JSON memakai UUID dan ni
 
 #### `POST /api/v1/people`
 
-- **Peran:** operator, admin.
+- **Peran:** admin.
 - **Tubuh permintaan:** `external_code` (wajib, unik), `display_name` (wajib), `note` (opsional, ≤200 karakter).
 - **Respons `201`:** objek `people` yang dibuat.
 - **Kode status:** `201`, `400`, `409`, `422`.
@@ -312,7 +393,7 @@ Notasi: **wajib** berarti field harus ada. Semua contoh JSON memakai UUID dan ni
 
 #### `GET /api/v1/people/{person_id}`
 
-- **Peran:** operator, admin.
+- **Peran:** admin, dosen. Untuk `dosen`, hanya peserta yang menjadi anggota kelas yang ditugaskan kepadanya; peserta di luar cakupan → `404 NOT_FOUND`.
 - **Respons `200`:** detail peserta termasuk `consent_state` dan `enrollment_state`.
 - **Kode status:** `200`, `404`.
 - **Efek database:** —
@@ -320,7 +401,7 @@ Notasi: **wajib** berarti field harus ada. Semua contoh JSON memakai UUID dan ni
 
 #### `PATCH /api/v1/people/{person_id}`
 
-- **Peran:** operator, admin.
+- **Peran:** admin.
 - **Tubuh permintaan:** `display_name`, `status`, `note` (semua opsional; minimal satu).
 - **Respons `200`:** objek setelah perubahan.
 - **Kode status:** `200`, `400`, `404`, `422`.
@@ -336,19 +417,64 @@ Notasi: **wajib** berarti field harus ada. Semua contoh JSON memakai UUID dan ni
 - **Efek database:** `DELETE FROM face_templates`; menonaktifkan atau menghapus `people`; audit `person.deleted`.
 - **Idempotensi:** penghapusan kedua mengembalikan `404`.
 
-#### `GET /api/v1/users`, `POST /api/v1/users`
+#### `GET /api/v1/users`
 
 - **Peran:** admin.
-- **Tubuh permintaan `POST`:** `email`, `display_name`, `role` (`operator`/`admin`), `password` sementara yang wajib diganti saat login pertama.
-- **Kode status:** `201`, `400`, `409`, `403`.
-- **Efek database:** `INSERT INTO users`; audit `user.created`.
-- **Catatan:** tidak ada pendaftaran mandiri. Tidak ada endpoint manipulasi peran massal.
+- **Query:** `role` (opsional: `admin`/`dosen`/`mahasiswa`), `status` (opsional: `invited`/`active`/`suspended`), `cursor`, `limit`.
+- **Respons `200`:** daftar `{ id, email, display_name, role, status, created_by, created_at, last_login_at }`. Tidak ada field kata sandi atau hash kata sandi.
+- **Kode status:** `200`, `403`.
+- **Efek database:** —
+- **Idempotensi:** aman diulang.
+
+#### `POST /api/v1/users`
+
+- **Peran:** admin.
+- **Tubuh permintaan:** `email` (wajib, email Google; dinormalisasi huruf kecil tanpa spasi tepi), `display_name` (wajib), `role` (wajib: `admin`/`dosen`/`mahasiswa`). **Tidak ada kata sandi** — akun dibuat berstatus `invited` dan diaktifkan pada Google Sign-In pertama.
+- **Respons `201`:** objek `users` yang dibuat, berstatus `invited`.
+- **Kode status:** `201`, `400`, `403`, `409`.
+- **Kesalahan:** `VALIDATION_FAILED`, `FORBIDDEN_ROLE`; `409` bila email sudah dipakai.
+- **Efek database:** `INSERT INTO users` dengan `status='invited'` dan `created_by` = id admin pembuat; audit `user.invited`.
+- **Idempotensi:** tidak idempoten; pengulangan dengan email sama menghasilkan `409`.
+- **Catatan:** tidak ada pendaftaran mandiri, tidak ada role yang berasal dari klien, dan tidak ada endpoint manipulasi peran massal. Google pertama yang login **tidak pernah** otomatis menjadi admin; admin pertama hanya dibuat lewat bootstrap lokal sekali (perintah `-bootstrap-admin` pada `cmd/server`, diimplementasikan pada FL-011, audit `user.bootstrapped`).
+
+#### `PATCH /api/v1/users/{user_id}`
+
+- **Peran:** admin.
+- **Tubuh permintaan:** `role`, `status`, `display_name` (semua opsional; minimal satu).
+- **Respons `200`:** objek akun setelah perubahan.
+- **Kode status:** `200`, `400`, `403`, `404`, `409`.
+- **Kesalahan:** `VALIDATION_FAILED`, `NOT_FOUND`, `LAST_ADMIN_PROTECTED` (409), `SELF_ACCOUNT_PROTECTED` (409).
+- **Aturan pencegahan eskalasi dan penguncian:** tidak ada endpoint yang mengubah role akun sendiri; admin aktif terakhir tidak boleh dinonaktifkan atau diturunkan perannya; admin tidak boleh menonaktifkan atau menurunkan peran akunnya sendiri; penonaktifan akun mencabut seluruh sesi akun itu.
+- **Efek database:** `UPDATE users`; audit `user.role_changed` atau `user.status_changed` beserta nilai sebelum/sesudah.
+- **Idempotensi:** aman diulang untuk nilai yang sama.
+
+#### `PUT /api/v1/people/{person_id}/account-link`
+
+- **Peran:** admin.
+- **Tubuh permintaan:** `user_id` (wajib; akun ber-role `mahasiswa`).
+- **Respons `200`:** objek peserta dengan `account_user_id` terisi.
+- **Kode status:** `200`, `400`, `403`, `404`, `409`.
+- **Kesalahan:** `VALIDATION_FAILED`, `NOT_FOUND`, `409` bila akun sudah tertaut peserta lain (relasi satu-ke-satu) atau role akun bukan `mahasiswa`.
+- **Aturan:** penautan bersifat satu-ke-satu dan **tidak memberi akses apa pun ke template biometrik**; `account_user_id` tidak membuka `face_templates`.
+- **Efek database:** `UPDATE people SET account_user_id`; audit `person.account_linked`.
+- **Idempotensi:** idempoten untuk pasangan yang sama.
+
+#### `DELETE /api/v1/people/{person_id}/account-link`
+
+- **Peran:** admin.
+- **Respons:** `204`.
+- **Kode status:** `204`, `403`, `404`, `409`.
+- **Kesalahan:** `NOT_FOUND`; `409` bila peserta memang belum tertaut.
+- **Efek database:** `UPDATE people SET account_user_id = NULL`; audit `person.account_unlinked`.
+- **Idempotensi:** penghapusan kedua mengembalikan `404`/`409`.
 
 ### 5.3 Modul 3 — Persetujuan biometrik
 
+Seluruh endpoint pada modul ini **hanya `admin`**; `dosen` tidak mencatat atau mencabut konsen (lihat `docs/AUTHORIZATION.md` §9 butir 1).
+
 #### `GET /api/v1/people/{person_id}/consent`
 
-- **Peran:** operator, admin.
+- **Peran:** admin.
 - **Respons `200`:** riwayat persetujuan: `{ id, purpose, version, capture_method, granted_at, withdrawn_at }`.
 - **Kode status:** `200`, `404`.
 - **Efek database:** —
@@ -356,7 +482,7 @@ Notasi: **wajib** berarti field harus ada. Semua contoh JSON memakai UUID dan ni
 
 #### `POST /api/v1/people/{person_id}/consent`
 
-- **Peran:** operator, admin.
+- **Peran:** admin.
 - **Tubuh permintaan:** `purpose` (wajib, mis. `attendance_face_recognition`), `version` (wajib, versi teks persetujuan), `capture_method` (wajib: `written_form`/`digital_form`), `granted_at` (opsional; bawaan waktu server).
 - **Respons `201`:** objek persetujuan.
 - **Kode status:** `201`, `400`, `404`, `409`.
@@ -366,7 +492,7 @@ Notasi: **wajib** berarti field harus ada. Semua contoh JSON memakai UUID dan ni
 
 #### `POST /api/v1/people/{person_id}/consent/withdraw`
 
-- **Peran:** operator, admin.
+- **Peran:** admin.
 - **Tubuh permintaan:** `reason` (wajib, tidak boleh kosong), `withdrawn_at` (opsional).
 - **Respons `200`:** objek persetujuan setelah pencabutan.
 - **Kode status:** `200`, `400`, `404`, `409`.
@@ -376,11 +502,11 @@ Notasi: **wajib** berarti field harus ada. Semua contoh JSON memakai UUID dan ni
 
 ### 5.4 Modul 4 — Enrollment wajah
 
-Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas yang memungkinkan seseorang mendaftarkan wajah ke identitas orang lain.
+Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas yang memungkinkan seseorang mendaftarkan wajah ke identitas orang lain. Seluruh endpoint pada modul ini **hanya `admin`**; `dosen` tidak melakukan enrollment biometrik (lihat `docs/AUTHORIZATION.md` §9 butir 1).
 
 #### `POST /api/v1/people/{person_id}/face-enrollments`
 
-- **Peran:** operator, admin.
+- **Peran:** admin.
 - **Tubuh permintaan:** `model_hint` (opsional; diabaikan bila tidak dikenal).
 - **Respons `201`:** `{ "data": { "id": "44444444-4444-4444-8444-444444444444", "expires_at": "2026-10-15T08:10:00Z", "samples_required_min": 3, "samples_required_max": 10 } }`.
 - **Kode status:** `201`, `404`, `422`.
@@ -391,7 +517,7 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `GET /api/v1/people/{person_id}/face-enrollments`
 
-- **Peran:** operator, admin.
+- **Peran:** admin.
 - **Respons `200`:** daftar sesi enrollment peserta dengan status dan alasan penolakan sampel.
 - **Kode status:** `200`, `404`.
 - **Efek database:** —
@@ -399,7 +525,7 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `POST /api/v1/face-enrollments/{enrollment_id}/samples`
 
-- **Peran:** operator, admin.
+- **Peran:** admin.
 - **Konten:** `image/jpeg` biner.
 - **Header:** `Content-Length` wajib; `If-Match` opsional untuk mencegah sampel ganda akibat retry.
 - **Respons `201`:** `{ "data": { "sample_index": 2, "quality": { "status": "accepted", "score": 0.71 } } }`.
@@ -411,7 +537,7 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `POST /api/v1/face-enrollments/{enrollment_id}/complete`
 
-- **Peran:** operator, admin.
+- **Peran:** admin.
 - **Tubuh permintaan:** kosong.
 - **Respons `200`:** `{ "data": { "template_id": "...", "model_id": "sface", "model_version": "..." , "created_at": "..." } }`.
 - **Kode status:** `200`, `409`, `422`, `503`, `504`.
@@ -422,17 +548,19 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `DELETE /api/v1/face-enrollments/{enrollment_id}`
 
-- **Peran:** operator, admin.
+- **Peran:** admin.
 - **Respons:** `204`.
 - **Kode status:** `204`, `404`, `409`.
 - **Efek database:** enrollment `pending` dibatalkan; bila sudah `completed`, endpoint ini **tidak** menghapus template — penghapusan template memakai §5.3 withdraw atau jalur admin yang diaudit.
 - **Idempotensi:** penghapusan kedua mengembalikan `404`.
 
-### 5.5 Modul 5 — Kelas dan keanggotaan
+### 5.5 Modul 5 — Kelas, keanggotaan, dan penugasan dosen
+
+**Catatan cakupan `dosen`:** `dosen` hanya melihat dan mengelola kelas yang **ditugaskan** kepadanya lewat `class_lecturers`. Objek kelas di luar penugasan → **`404 NOT_FOUND`** (bukan `403`), agar keberadaan kelas lain tidak dapat ditebak.
 
 #### `GET /api/v1/classes`
 
-- **Peran:** operator, admin.
+- **Peran:** admin, dosen. Untuk `dosen`, respons hanya memuat kelas yang ditugaskan kepadanya.
 - **Query:** `cursor`, `limit`.
 - **Respons `200`:** daftar `{ id, code, title, member_count, active_session_id }`.
 - **Kode status:** `200`, `401`.
@@ -441,7 +569,7 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `POST /api/v1/classes`
 
-- **Peran:** operator, admin.
+- **Peran:** admin.
 - **Tubuh permintaan:** `code` (wajib, unik), `title` (wajib).
 - **Respons `201`:** objek kelas.
 - **Kode status:** `201`, `400`, `409`.
@@ -450,7 +578,7 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `GET /api/v1/classes/{class_id}/members`
 
-- **Peran:** operator, admin.
+- **Peran:** admin, dosen. Untuk `dosen`, hanya kelas yang ditugaskan kepadanya.
 - **Respons `200`:** daftar peserta aktif kelas dengan `person_id`, `external_code`, `display_name`.
 - **Kode status:** `200`, `404`.
 - **Efek database:** —
@@ -458,7 +586,7 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `PUT /api/v1/classes/{class_id}/members/{person_id}`
 
-- **Peran:** operator, admin.
+- **Peran:** admin.
 - **Tubuh permintaan:** kosong.
 - **Respons `201`** bila baru dibuat, `200` bila sudah menjadi anggota.
 - **Kode status:** `200`, `201`, `404`.
@@ -467,18 +595,47 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `DELETE /api/v1/classes/{class_id}/members/{person_id}`
 
-- **Peran:** operator, admin.
+- **Peran:** admin.
 - **Respons:** `204`.
 - **Kode status:** `204`, `404`, `409`.
 - **Validasi:** keanggotaan tidak boleh dihapus bila peserta memiliki catatan kehadiran pada sesi **terbuka** untuk kelas itu (`409`).
 - **Efek database:** `DELETE FROM class_memberships`; audit `class.member.removed`.
 - **Idempotensi:** penghapusan kedua `404`.
 
+#### `GET /api/v1/classes/{class_id}/dosen`
+
+- **Peran:** admin, dosen. Untuk `dosen`, hanya kelas yang ditugaskan kepadanya.
+- **Respons `200`:** daftar `{ user_id, display_name, email, assigned_at }` untuk akun ber-role `dosen` yang ditugaskan pada kelas itu.
+- **Kode status:** `200`, `403`, `404`.
+- **Efek database:** —
+- **Idempotensi:** aman diulang.
+
+#### `PUT /api/v1/classes/{class_id}/dosen/{user_id}`
+
+- **Peran:** admin.
+- **Tubuh permintaan:** kosong.
+- **Respons `201`** bila penugasan baru dibuat, `200` bila penugasan sudah ada.
+- **Kode status:** `200`, `201`, `400`, `404`, `409`.
+- **Kesalahan:** `VALIDATION_FAILED` (akun bukan ber-role `dosen`), `NOT_FOUND`.
+- **Aturan:** penugasan **hanya** untuk akun ber-role `dosen`; role `dosen` tidak dapat ditetapkan lewat endpoint ini (penetapan role ada di `PATCH /users/{user_id}`).
+- **Efek database:** `INSERT INTO class_lecturers` (`class_id`, `user_id`, `assigned_by`, `assigned_at`); audit `class.dosen_assigned`.
+- **Idempotensi:** **idempoten**; pengulangan tidak menghasilkan baris ganda.
+
+#### `DELETE /api/v1/classes/{class_id}/dosen/{user_id}`
+
+- **Peran:** admin.
+- **Respons:** `204`.
+- **Kode status:** `204`, `404`, `409`.
+- **Efek database:** `DELETE FROM class_lecturers`; audit `class.dosen_removed`.
+- **Idempotensi:** penghapusan kedua `404`.
+
 ### 5.6 Modul 6 — Sesi absensi
+
+**Catatan cakupan `dosen`:** `dosen` hanya boleh membuat, membuka, dan menutup sesi pada kelas yang ditugaskan kepadanya. Di luar itu → `404 NOT_FOUND`.
 
 #### `GET /api/v1/sessions`
 
-- **Peran:** operator, admin.
+- **Peran:** admin, dosen. Untuk `dosen`, hanya sesi kelas yang ditugaskan kepadanya.
 - **Query:** `class_id`, `status` (`draft`/`open`/`closed`), `from`, `to`, `cursor`, `limit`.
 - **Respons `200`:** daftar sesi dengan ringkasan jumlah hadir.
 - **Kode status:** `200`, `401`.
@@ -487,7 +644,7 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `POST /api/v1/sessions`
 
-- **Peran:** operator, admin.
+- **Peran:** admin, dosen (untuk `dosen`, hanya kelas yang ditugaskan; di luar itu `404`).
 - **Tubuh permintaan:** `class_id` (wajib), `device_id` (opsional), `closes_at` (wajib), `late_after` (opsional), `title` (opsional).
 - **Respons `201`:** sesi berstatus `draft`.
 - **Kode status:** `201`, `400`, `404`, `409`, `422`.
@@ -497,7 +654,7 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `GET /api/v1/sessions/{session_id}`
 
-- **Peran:** operator, admin.
+- **Peran:** admin, dosen (untuk `dosen`, hanya kelas yang ditugaskan; di luar itu `404`).
 - **Respons `200`:** detail sesi termasuk `started_at`, `closes_at`, `late_after`, `status`, `device_id`, `counts` (`present`, `late`, `absent`, `pending_review`).
 - **Kode status:** `200`, `404`.
 - **Efek database:** —
@@ -505,7 +662,7 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `POST /api/v1/sessions/{session_id}/open`
 
-- **Peran:** operator, admin.
+- **Peran:** admin, dosen (untuk `dosen`, hanya kelas yang ditugaskan; di luar itu `404`).
 - **Tubuh permintaan:** kosong.
 - **Respons `200`:** sesi berstatus `open` dengan `started_at`.
 - **Kode status:** `200`, `404`, `409`, `422`.
@@ -515,41 +672,45 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `POST /api/v1/sessions/{session_id}/close`
 
-- **Peran:** operator, admin.
+- **Peran:** admin, dosen (untuk `dosen`, hanya kelas yang ditugaskan; di luar itu `404`).
 - **Tubuh permintaan:** `reason` (opsional).
 - **Respons `200`:** sesi berstatus `closed`.
 - **Kode status:** `200`, `404`, `409`.
 - **Efek database:** `UPDATE attendance_sessions.status='closed'`, `closed_at=now`; audit `session.closed`.
 - **Idempotensi:** menutup sesi yang sudah tertutup mengembalikan `409 SESSION_CLOSED`.
-- **Aturan penting:** sesudah tertutup, kiriman kamera tidak lagi boleh menambah catatan. Koreksi setelah penutupan hanya melalui §5.9 dan selalu diaudit.
+- **Aturan penting:** sesudah tertutup, kiriman kamera tidak lagi boleh menambah catatan. Koreksi setelah penutupan hanya melalui §5.8 dan selalu diaudit.
 
 ### 5.7 Modul 7 dan 8 — Hasil verifikasi dan pencatatan kehadiran
 
-Tidak ada endpoint publik terpisah. Keduanya dijalankan di dalam §5.10. Tabel keputusan domain dan statusnya ada di §7.
+Tidak ada endpoint publik terpisah. Keduanya dijalankan di dalam §5.10. Tabel keputusan domain dan statusnya ada di §7. Pada revisi FL-010U tidak ada perubahan pada kedua modul ini.
 
 ### 5.8 Modul 9 — Koreksi manual dan jalur alternatif absensi
 
+**Catatan cakupan `dosen`:** koreksi manual hanya untuk sesi kelas yang ditugaskan kepadanya. Di luar itu → `404 NOT_FOUND`.
+
 #### `POST /api/v1/sessions/{session_id}/manual-checkins`
 
-- **Peran:** operator, admin.
+- **Peran:** admin, dosen (untuk `dosen`, hanya kelas yang ditugaskan; di luar itu `404`).
 - **Tubuh permintaan:** `person_id` (wajib), `reason` (wajib, tidak boleh kosong, ≤200 karakter), `status` (wajib: `present`/`late`/`excused`), `checked_in_at` (opsional).
 - **Respons `201`** bila catatan baru dibuat; `200` bila mengoreksi catatan yang sudah ada.
 - **Kode status:** `201`, `200`, `400`, `404`, `409`, `422`.
 - **Kesalahan:** `VALIDATION_FAILED`, `CLASS_MISMATCH`, `REASON_REQUIRED`, `NOT_FOUND`.
 - **Validasi:** peserta wajib anggota kelas sesi. Koreksi **diperbolehkan** setelah sesi ditutup — inilah jalur yang menggantikan “peserta dianggap tidak hadir karena pengenalan gagal”.
-- **Efek database:** `INSERT` atau `UPDATE attendance_records` dengan `source='manual'`, `created_by` = id operator, `reason` wajib; audit `attendance.manual_corrected` yang mencatat nilai sebelumnya dan sesudahnya.
+- **Efek database:** `INSERT` atau `UPDATE attendance_records` dengan `source='manual'`, `created_by` = id pengguna yang mengoreksi (`admin`/`dosen`), `reason` wajib; audit `attendance.manual_corrected` yang mencatat nilai sebelumnya dan sesudahnya.
 - **Idempotensi:** `Idempotency-Key` wajib bermanfaat di sini; tanpa kunci, permintaan kedua dengan isi sama menghasilkan `409 ALREADY_CHECKED_IN` kecuali `checked_in_at` dikirim eksplisit untuk koreksi.
-- **Penting:** endpoint ini **tidak boleh** dipakai perangkat dan tidak boleh ada versi publik tanpa autentikasi operator.
+- **Penting:** endpoint ini **tidak boleh** dipakai perangkat dan tidak boleh ada versi publik tanpa autentikasi `admin`/`dosen`.
 
 #### `GET /api/v1/sessions/{session_id}/manual-checkins`
 
-- **Peran:** operator, admin.
+- **Peran:** admin, dosen (untuk `dosen`, hanya kelas yang ditugaskan; di luar itu `404`).
 - **Respons `200`:** daftar koreksi manual pada sesi tersebut, beserta aktor dan alasannya.
 - **Kode status:** `200`, `404`.
 - **Efek database:** —
 - **Idempotensi:** aman diulang.
 
 ### 5.9 Modul 10 — Pendaftaran dan autentikasi perangkat
+
+**Seluruh operasi perangkat hanya `admin`** (FL-010U). `dosen` tidak dapat memanggil `GET /devices` maupun endpoint perangkat lainnya.
 
 #### `POST /api/v1/devices`
 
@@ -562,9 +723,9 @@ Tidak ada endpoint publik terpisah. Keduanya dijalankan di dalam §5.10. Tabel k
 
 #### `GET /api/v1/devices`
 
-- **Peran:** operator, admin.
+- **Peran:** admin.
 - **Respons `200`:** daftar `{ id, display_name, kind, revoked_at, last_seen_at, token_prefix }`.
-- **Kode status:** `200`, `401`.
+- **Kode status:** `200`, `401`, `403`.
 - **Efek database:** —
 - **Idempotensi:** aman diulang.
 - **Catatan:** `token_hash` dan `device_token` **tidak pernah** dikembalikan.
@@ -665,7 +826,7 @@ Tidak ada endpoint publik terpisah. Keduanya dijalankan di dalam §5.10. Tabel k
 
 #### `GET /api/v1/sessions/{session_id}/attendance`
 
-- **Peran:** operator, admin.
+- **Peran:** admin, dosen (untuk `dosen`, hanya kelas yang ditugaskan; di luar itu `404`).
 - **Query:** `cursor`, `limit`, `include` (opsional: `counts`).
 - **Header:** respons menyertakan `ETag`. Klien boleh mengirim `If-None-Match` dan menerima `304` bila tidak ada perubahan (D-021).
 - **Respons `200`:**
@@ -696,7 +857,7 @@ Tidak ada endpoint publik terpisah. Keduanya dijalankan di dalam §5.10. Tabel k
 
 #### `GET /api/v1/sessions/{session_id}/export.csv`
 
-- **Peran:** operator, admin.
+- **Peran:** **admin saja.** Ekspor CSV tidak tersedia untuk `dosen` pada FL-010U; ini butir yang diminta keputusan pemilik (lihat §10 butir 10 dan `docs/AUTHORIZATION.md` §9 butir 2).
 - **Respons `200`:** `text/csv; charset=utf-8` dengan header `Content-Disposition`.
 - **Kolom:** `external_code`, `display_name`, `status`, `source`, `checked_in_at`, `reason`, `session_title`, `class_code`.
 - **Kode status:** `200`, `404`.
@@ -706,7 +867,9 @@ Tidak ada endpoint publik terpisah. Keduanya dijalankan di dalam §5.10. Tabel k
 
 ### 5.12 Modul 12 — Kesehatan dan kesiapan
 
-#### `GET /api/v1/healthz`
+`GET /healthz` adalah **satu-satunya** endpoint pada §5 yang dipanggil tanpa awalan `/api/v1` (lihat §1.1 butir 1 dan §4).
+
+#### `GET /healthz` (tanpa awalan `/api/v1`)
 
 - **Peran:** publik (dibatasi jaringan lokal).
 - **Respons `200`:** `{ "status": "ok", "version": "<versi build>", "time": "2026-10-15T08:00:00Z" }`.
@@ -715,7 +878,7 @@ Tidak ada endpoint publik terpisah. Keduanya dijalankan di dalam §5.10. Tabel k
 
 #### `GET /api/v1/readyz`
 
-- **Peran:** operator, admin.
+- **Peran:** admin, dosen.
 - **Respons `200`:** `{ "database": "ok", "ai_engine": "ok", "migrations": "applied", "wal": { "journal_mode": "wal" } }`.
 - **Respons `503`:** salah satu komponen `unavailable` dengan `code` `AI_ENGINE_UNAVAILABLE` atau `DATABASE_BUSY`.
 - **Kode status:** `200`, `503`.
@@ -726,14 +889,66 @@ Tidak ada endpoint publik terpisah. Keduanya dijalankan di dalam §5.10. Tabel k
 
 #### `GET /api/v1/audit-events`
 
-- **Peran:** operator, admin.
+- **Peran:** **admin saja.** `dosen` tidak dapat membaca audit pada FL-010U.
 - **Query:** `actor_id`, `action`, `entity_type`, `entity_id`, `from`, `to`, `cursor`, `limit`.
 - **Respons `200`:** daftar `{ id, actor_type, actor_id, action, entity_type, entity_id, time, reason, safe_metadata }`.
 - **Kode status:** `200`, `400`, `403`.
-- **Aturan keras:** `safe_metadata` tidak boleh memuat JPEG, embedding, token, kata sandi, atau data biometrik. `reason` memuat alasan manusia untuk koreksi manual.
+- **Aturan keras:** `safe_metadata` tidak boleh memuat JPEG, embedding, token, kata sandi, email, ID token, `sub`, atau data biometrik. `reason` memuat alasan manusia untuk koreksi manual.
 - **Efek database:** —
 - **Idempotensi:** aman diulang.
-- **Aksi yang wajib diaudit (minimum):** `auth.login.*`, `auth.logout`, `auth.session.revoked`, `user.created`, `person.created`, `person.updated`, `person.deleted`, `consent.granted`, `consent.withdrawn`, `enrollment.started`, `enrollment.completed`, `template.deleted`, `class.created`, `class.member.added`, `class.member.removed`, `session.created`, `session.opened`, `session.closed`, `attendance.recorded`, `attendance.manual_corrected`, `session.exported`, `device.created`, `device.token_rotated`, `device.revoked`, `migration.applied`.
+- **Aksi yang berlaku saat ini (minimum, tetap dari rancangan sebelumnya):** `auth.logout`, `auth.session.revoked`, `user.created`, `person.created`, `person.updated`, `person.deleted`, `consent.granted`, `consent.withdrawn`, `enrollment.started`, `enrollment.completed`, `template.deleted`, `class.created`, `class.member.added`, `class.member.removed`, `session.created`, `session.opened`, `session.closed`, `attendance.recorded`, `attendance.manual_corrected`, `session.exported`, `device.created`, `device.token_rotated`, `device.revoked`, `migration.applied`.
+
+**Usulan perluasan daftar aksi minimum (FL-010U) — status USULAN, belum disetujui pemilik:** `auth.google.succeeded`, `auth.google.linked`, `auth.login.denied`, `auth.session.refreshed`, `auth.session.reuse_detected`, `user.bootstrapped`, `user.invited`, `user.role_changed`, `user.status_changed`, `person.account_linked`, `person.account_unlinked`, `class.dosen_assigned`, `class.dosen_removed`. Selama belum disetujui, daftar ini **tidak** boleh diperlakukan sebagai keputusan yang berlaku. `authz.denied` dan `auth.device.mismatch` tetap berstatus usulan lama yang belum disetujui (FL-010 §9 butir 4). Untuk `auth.login.denied`, `safe_metadata` menyimpan `reason` ber-kode (`no_account`, `not_linked`, `suspended`, `email_mismatch`) — **bukan** email. Rujukan: `docs/AUTHORIZATION.md` §6.2.
+
+### 5.14 Modul 14 — Portal self-service dosen dan mahasiswa
+
+Modul **baru** pada FL-010U. Portal self-service hanya membaca data milik sendiri; **tidak ada** endpoint `/me/*` yang mengubah data. Untuk akun `mahasiswa` yang belum tertaut baris `people` (`people.account_user_id` kosong), **keempat** endpoint pada modul ini mengembalikan **`409 ACCOUNT_NOT_LINKED`**, karena daftar kelas, jadwal, riwayat, maupun status konsen tidak dapat ditentukan tanpa penautan. Aturan ini ditetapkan pada FL-010U (bukan hasil uji) dan berstatus **BELUM TERVERIFIKASI**; lihat §10 butir 18. Penautan akun dilakukan `admin` lewat §5.2.
+
+#### `GET /api/v1/me/classes`
+
+- **Peran:** dosen, mahasiswa.
+- **Cakupan:** `dosen` → kelas yang ditugaskan kepadanya; `mahasiswa` → kelas yang diikuti (keanggotaan aktif).
+- **Query:** `cursor`, `limit`.
+- **Respons `200`:** daftar `{ id, code, title, member_count, active_session_id }` dengan bentuk yang sama seperti §5.5.
+- **Kode status:** `200`, `401`, `403`, `409`.
+- **Kesalahan:** `ACCOUNT_NOT_LINKED` (409) untuk akun `mahasiswa` yang belum tertaut baris `people`; berlaku sama untuk keempat endpoint Modul 14 (§5.14 pembuka).
+- **Efek database:** —
+- **Idempotensi:** aman diulang.
+
+#### `GET /api/v1/me/schedule`
+
+- **Peran:** mahasiswa.
+- **Cakupan:** sesi absensi kelas yang diikuti (`closes_at` belum lewat, atau sesi `closed` di dalam rentang kueri).
+- **Query:** `from`, `to` (opsional), `cursor`, `limit`.
+- **Respons `200`:** daftar `{ session_id, class_id, class_code, title, status, started_at, closes_at, late_after }`.
+- **Kode status:** `200`, `401`, `403`, `409`.
+- **Kesalahan:** `ACCOUNT_NOT_LINKED` (409) bila akun belum tertaut baris `people`.
+- **Catatan keras:** **tidak ada tabel jadwal akademik pada MVP**. Yang ditampilkan di sini adalah sesi absensi nyata, bukan jadwal mata kuliah. Kebutuhan jadwal kuliah penuh dicatat sebagai pertanyaan terbuka (lihat §10 butir 13).
+- **Efek database:** —
+- **Idempotensi:** aman diulang.
+
+#### `GET /api/v1/me/attendance`
+
+- **Peran:** mahasiswa.
+- **Cakupan:** riwayat kehadiran milik sendiri — `status`, `source`, `checked_in_at`, `reason` — **tanpa** data biometrik dan **tanpa** data peserta lain.
+- **Query:** `class_id` (opsional), `from`, `to` (opsional), `cursor`, `limit`.
+- **Respons `200`:** daftar `{ session_id, class_id, class_code, session_title, status, source, checked_in_at, reason }`.
+- **Kode status:** `200`, `401`, `403`, `409`.
+- **Kesalahan:** `ACCOUNT_NOT_LINKED` (409).
+- **Aturan keras:** akses ke riwayat sendiri **tidak** memberi akses ke `face_templates`, embedding, atau data peserta lain.
+- **Efek database:** —
+- **Idempotensi:** aman diulang.
+
+#### `GET /api/v1/me/consent`
+
+- **Peran:** mahasiswa.
+- **Cakupan:** status persetujuan biometrik milik sendiri — **baca saja**.
+- **Respons `200`:** `{ "data": { "person_id", "consent_state", "records": [ { "purpose", "version", "capture_method", "granted_at", "withdrawn_at" } ] } }`. `consent_state` bernilai `active`, `none`, atau `withdrawn`.
+- **Kode status:** `200`, `401`, `403`, `409`.
+- **Kesalahan:** `ACCOUNT_NOT_LINKED` (409).
+- **Catatan:** pencatatan dan pencabutan konsen tetap melalui jalur petugas/`admin` (§5.3) sesuai rancangan yang berlaku; **tidak ada** endpoint mahasiswa untuk mencatat atau mencabut konsen pada MVP (lihat §10 butir 12).
+- **Efek database:** —
+- **Idempotensi:** aman diulang.
 
 ## 6. Kontrak internal Go ↔ mesin AI Python
 
@@ -862,7 +1077,7 @@ Catatan tambahan yang harus dibaca bersama tabel:
 
 ## 8. Idempotensi dan transaksi
 
-1. **Kunci idempotensi** dikirim klien pada header `Idempotency-Key` (operator) atau `X-Idempotency-Key` (perangkat), berupa string 8–128 karakter. Kunci disimpan pada `idempotency_records` bersama hash permintaan, kode status, dan badan respons ringkas.
+1. **Kunci idempotensi** dikirim klien pada header `Idempotency-Key` (pengguna aplikasi: `admin`, `dosen`, `mahasiswa`) atau `X-Idempotency-Key` (perangkat), berupa string 8–128 karakter. Kunci disimpan pada `idempotency_records` bersama hash permintaan, kode status, dan badan respons ringkas.
 2. Kunci yang sama dengan hash permintaan yang sama mengembalikan **respons pertama** tanpa efek samping baru.
 3. Kunci yang sama dengan hash permintaan **berbeda** mengembalikan `409 IDEMPOTENCY_KEY_REUSED`.
 4. Kunci disimpan maksimum 24 jam untuk menahan retry jaringan; setelah itu dihapus oleh proses pemeliharaan. **Database tetap menjadi penjaga terakhir**, bukan tabel kunci ini.
@@ -870,16 +1085,16 @@ Catatan tambahan yang harus dibaca bersama tabel:
 6. Pemeriksaan konsen, keanggotaan kelas, dan status sesi dilakukan **di dalam** transaksi penulisan, bukan hanya pada awal permintaan. Sesi dapat ditutup atau konsen dicabut di antara dua langkah.
 7. Bila penulisan gagal karena batasan unik, transaksi di-rollback dan backend membalas `already_recorded` (`200`) dengan mengambil catatan yang sudah ada — bukan `500`.
 8. Waktu `checked_in_at` **tidak** diperbarui oleh percobaan ulang.
-9. Penutupan sesi bersifat idempoten pada keadaan akhir (sesi tertutup), tetapi permintaan kedua tetap membalas `409` agar operator mengetahui klik berulang.
+9. Penutupan sesi bersifat idempoten pada keadaan akhir (sesi tertutup), tetapi permintaan kedua tetap membalas `409` agar `admin`/`dosen` mengetahui klik berulang.
 
 ## 9. Pengujian kontrak wajib
 
-Daftar berikut harus terwujud sebagai pengujian saat implementasi. **Belum ada pengujian yang dijalankan pada FL-003** karena belum ada kode aplikasi.
+Daftar berikut harus terwujud sebagai pengujian saat implementasi. **Belum ada pengujian yang dijalankan** karena belum ada kode aplikasi; seluruh harapan di bawah berstatus **BELUM TERVERIFIKASI**. Baris 1–2 diperbarui pada FL-010U untuk mengganti role `operator`; skenario tambahan untuk Google Sign-In, penautan akun, cakupan `dosen`, dan portal `/me/*` wajib disusun bersama `docs/AUTHORIZATION.md` pada tugas implementasi, bukan pada tahap dokumentasi ini.
 
 | # | Skenario | Harapan |
 |---|---|---|
-| 1 | Operator tanpa token memanggil `/people` | `401 UNAUTHENTICATED` |
-| 2 | Operator memanggil `/users` | `403 FORBIDDEN_ROLE` |
+| 1 | Pengguna tanpa token memanggil `/people` | `401 UNAUTHENTICATED` |
+| 2 | `dosen` memanggil `/users` | `403 FORBIDDEN_ROLE` |
 | 3 | Perangkat memanggil `/sessions/{id}/attendance` | `403 FORBIDDEN_ROLE` |
 | 4 | Persetujuan dicabut sebelum pengenalan | `200`, `outcome: "consent_missing"`, tidak ada template tersisa |
 | 5 | Pengenalan ketika sesi sudah ditutup | `409 SESSION_CLOSED`, tanpa catatan baru |
@@ -909,9 +1124,23 @@ Daftar berikut harus terwujud sebagai pengujian saat implementasi. **Belum ada p
 1. **Pengelolaan kunci biometrik (Q-16).** Kebijakan lengkap ada sebagai **D-030 (DISETUJUI pada FL-004S)** di `docs/DECISIONS.md` dan `docs/SECURITY_PRIVACY.md` §5a–§5f. **Status: disetujui atas rancangan, belum diimplementasikan dan belum diuji**, sehingga tabel `face_templates` masih tidak boleh ditulis sebelum ada tugas implementasi tersendiri yang disetujui pemilik project — jangan menganggap persetujuan rancangan sebagai izin menulis kode.
 2. **Angka batas** ukuran JPEG, resolusi maksimum, batas laju, dan `retry_after_hint_ms` masih kandidat dan harus **diukur** (Q-18), bukan ditetapkan dari perkiraan.
 3. **Ambang kecocokan dan margin** belum ada (Q-07). Kontrak ini hanya menetapkan bahwa ambangnya milik Go dan harus terkalibrasi.
-4. **Masa berlaku token** operator dan perangkat, serta kebijakan rotasi, masih perlu keputusan.
-5. **Akun peserta** (D-013 masih USULAN) akan menambah modul autentikasi kedua bila disetujui.
+4. **Masa berlaku token** sesi pengguna dan token perangkat, serta kebijakan rotasi, masih perlu keputusan. Rancangan MVP yang dipakai sementara (token akses 60 menit, penyegar 30 hari, batas absolut 30 hari) berasal dari `docs/DECISIONS.md` D-033 dan belum disetujui sebagai keputusan pemilik.
+5. ~~**Akun peserta** (D-013 masih USULAN) akan menambah modul autentikasi kedua bila disetujui.~~ **DIGANTIKAN pada FL-010U (16 Oktober 2026):** akun `mahasiswa` kini ada dan merupakan bagian dari keputusan yang sudah disetujui pemilik; penautannya ke baris `people` diatur pada §5.2 (`/people/{person_id}/account-link`) dan portal self-service-nya pada §5.14. Tidak ada lagi "modul autentikasi kedua" yang menunggu persetujuan.
 6. **Liveness** tidak dijanjikan ada pada MVP (D-029). Bila mekanisme dipilih, ia menambah endpoint atau kolom baru.
 7. **Halaman pengelolaan perangkat di aplikasi** belum masuk PRD; endpointnya sudah disiapkan agar tidak menghambat.
 8. **Kebijakan retensi catatan kehadiran** dan hubungannya dengan penghapusan peserta belum diputuskan (`docs/OPEN_QUESTIONS.md`).
 9. **WebSocket** belum diaktifkan (D-021); bila kebutuhan muncul, ia akan menjadi modul baru, bukan perubahan pada endpoint rekap.
+
+Butir berikut ditambahkan pada **FL-010U (16 Oktober 2026)** dari `docs/AUTHORIZATION.md` §9. Seluruhnya masih menunggu keputusan pemilik dan **tidak boleh** ditulis sebagai keputusan yang berlaku.
+
+10. **Cakupan `dosen`.** Rancangan FL-010U mengikuti daftar tugas pada permintaan FL-010U secara harfiah (baca peserta kelas sendiri, buka/tutup sesi, koreksi manual, rekap). Konsekuensinya **enrollment biometrik, pencatatan konsen, pengelolaan peserta, ekspor CSV, dan seluruh operasi perangkat menjadi milik `admin`** (§5.3–§5.5, §5.9, §5.11). Bila alur demo menuntut dosen melakukan enrollment/konsen di kelasnya, perlu keputusan menambah capability itu pada matriks.
+11. **Identitas tunggal per orang.** Satu akun Google = satu baris `users` = satu role. Menjalankan demo sebagai `admin` sekaligus `dosen` memerlukan dua akun Google berbeda. Bila pemilik menghendaki satu orang memegang dua role, itu keputusan model data baru.
+12. **Audit minimum** (§5.13) — daftar aksi usulan FL-010U belum disetujui; status `authz.denied` dan `auth.device.mismatch` juga masih menunggu. Termasuk di dalamnya: apakah penarikan konsen oleh `mahasiswa` sendiri dari aplikasi (P1) akan dirancang, karena saat ini `/me/consent` baca saja.
+13. **Jadwal akademik penuh.** Tidak ada tabel jadwal mata kuliah pada MVP; `/me/schedule` (§5.14) hanya menampilkan sesi absensi nyata. Bila pemilik menghendaki jadwal kuliah penuh, itu model data dan endpoint baru.
+14. **Pengikatan jaringan backend.** Kode FL-005 yang sudah di-merge menolak alamat non-loopback (`backend/internal/config/config.go` menolak `FACELINK_ADDR` selain `127.0.0.1`/`localhost`/`::1`), sehingga HP **tidak dapat** menjangkau backend lewat Wi-Fi kelas selama aturan itu berlaku. Pilihan: (a) tetap loopback + `adb reverse tcp:8080 tcp:8080` pada demo, (b) mengizinkan pengikatan alamat LAN privat dengan persetujuan eksplisit dan dokumentasi keamanan, atau (c) proksi lokal berautentikasi. FL-010U hanya mencatat; tidak mengubah kode.
+15. **Absensi manual tanpa autentikasi tidak dirancang.** Bila internet mati dan sesi habis, tidak ada jalur absensi di aplikasi (§1.1 butir 7). Bila ini tidak dapat diterima untuk demo, perlu keputusan kebijakan (mis. perpanjangan sesi perangkat keras atau pencatatan manual di luar aplikasi).
+16. **Nama kontrak lama `GET/DELETE /operator-sessions` diganti `/auth/sessions`** (§5.1). Penggantian sudah diterapkan pada dokumen ini; persetujuan pemilik atas perubahan nama jalur masih dicatat sebagai butir terbuka.
+17. **Rujukan rusak D-028 → `docs/UX_FLOWS.md` §10.** Dokumen itu hanya memiliki §1–§8. Bagian yang dimaksud tidak boleh ditebak; pemilik perlu menyebut bagian yang benar. (Temuan FL-010U; perbaikannya di luar lingkup `docs/API_CONTRACT.md`.)
+18. **Perilaku `/me/*` pada akun `mahasiswa` yang belum tertaut — ditetapkan pada FL-010U.** Keempat endpoint Modul 14 memakai `409 ACCOUNT_NOT_LINKED` secara konsisten, karena daftar kelas, jadwal, riwayat, maupun status konsen tidak dapat ditentukan tanpa penautan `people.account_user_id`. Tetapan ini adalah perilaku rancangan yang **BELUM TERVERIFIKASI**, bukan hasil uji.
+
+**Ketergantungan Google dan offline.** Google Sign-In **tidak boleh** dijanjikan berjalan offline. Selama sesi aplikasi masih sah, seluruh operasi aplikasi lewat LAN ke backend tetap berjalan tanpa memanggil Google; yang berhenti hanya login baru/re-autentikasi (pesan: "Perlu internet untuk masuk dengan Google"). Bila LAN ke backend mati, seluruh aplikasi berhenti karena semua keputusan ada di backend — **tidak ada** catatan kehadiran lokal. Ketentuan lengkap dan tabel ketersediaan layanan ada di `docs/ARCHITECTURE.md` §7.1 dan `docs/AUTHORIZATION.md` §9 butir 5.
