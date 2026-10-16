@@ -2,7 +2,7 @@
 
 > Sistem absensi otomatis berbasis pengenalan wajah, kamera IoT, dan aplikasi React Native. Dibangun secara lokal terlebih dahulu, dengan perhatian khusus pada privasi dan kemudahan pengembangan.
 
-**Status:** Fondasi dokumentasi versi 0.3 — **belum ada implementasi aplikasi**. Revisi terakhir: **FL-010U (16 Oktober 2026)** menyelaraskan dokumen dengan **tiga role pengguna (`admin`, `dosen`, `mahasiswa`) + Google Sign-In**; keputusan itu masih sebatas rancangan dan **belum ada kode yang mengimplementasikannya**.
+**Status:** Fondasi dokumentasi versi 0.3 — **belum ada implementasi aplikasi**. Revisi terakhir: **FL-010V (16 Oktober 2026)** memfinalkan keputusan arsitektur Google Auth + tiga role (**D-032–D-037 disetujui**; D-035 pada tingkat kebijakan) di atas penyelarasan **FL-010U (16 Oktober 2026)**; keputusan itu masih sebatas rancangan dan **belum ada kode yang mengimplementasikannya**.
 **Lingkup:** Prototipe tugas kampus berskala kecil: satu kelas, satu terminal kamera, dan sekitar 5–10 peserta sukarela yang memberikan persetujuan.  
 **Biaya:** Seluruh perangkat lunak dan pemrosesan AI lokal harus dapat berjalan dengan biaya lisensi/layanan **Rp0**. Anggaran hardware maksimal **Rp1.000.000**.  
 **Cloud:** Google Cloud dan layanan cloud lain ditunda sampai sistem lokal selesai diuji serta mendapat persetujuan pengembang.  
@@ -34,7 +34,7 @@ Alur di bawah adalah **rancangan FL-010U (16 Oktober 2026)** untuk tiga role pen
 - **Untuk sekarang:** satu kelas demo, satu kamera, **tiga role pengguna (`admin`, `dosen`, `mahasiswa`) dengan Google Sign-In**, peserta terbatas, rekap kehadiran, ekspor laporan, dan APK Android.
 - **Untuk nanti:** bisa diadaptasi ke kantor/organisasi lain melalui desain modular, tetapi belum perlu fitur multiorganisasi, penggajian, atau integrasi HRIS.
 - **Perangkat IoT (`device`) bukan role manusia:** perangkat tetap memakai identitas dan autentikasi mesin terpisah (token perangkat, bukan Google), hanya untuk mengirim percobaan pengenalan.
-- **Jaringan backend:** rancangan saat ini masih **loopback** (kode FL-005 menolak alamat non-loopback), sehingga HP **belum** dapat menjangkau backend lewat Wi-Fi kelas selama aturan itu berlaku; pilihan penyelesaiannya masih menjadi pertanyaan terbuka Q-19.
+- **Jaringan backend:** kebijakan final **FL-010V (16 Oktober 2026)** menetapkan **default loopback** (kode FL-005 masih menolak alamat non-loopback) dengan akses HP lewat LAN privat hanya via konfigurasi eksplisit dan **wajib HTTPS bersertifikat tepercaya** (D-035); HP karena itu **belum** dapat menjangkau backend lewat Wi-Fi kelas sampai pengikatan LAN beserta TLS diimplementasikan. Rincian penyediaan sertifikat lokal dan trust chain Android **belum diuji** (pertanyaan terbuka **Q-25**).
 - **Pengenalan wajah dengan kacamata:** tujuan pengujian, **bukan janji akurasi sempurna**.
 - **Pencegahan spoofing dasar:** sasaran eksperimen; kedipan atau gerakan kepala saja tidak menjamin ketahanan terhadap foto/video.
 - **iOS:** dapat mempertimbangkan web/PWA atau pengujian Expo Go, tetapi distribusi native iOS tidak dijanjikan gratis.
@@ -71,7 +71,7 @@ Kontrak dan skema rinci ada di [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) da
 
 ## Kode yang sudah ada (FL-005)
 
-Satu bagian sudah benar-benar ditulis dan diuji: **fondasi backend Go** di folder [`backend/`](backend/README.md). Isinya kerangka layanan, basis data SQLite mode WAL, migrasi SQL berversi, log JSON, dan dua titik kesehatan `GET /api/v1/healthz` serta `GET /api/v1/readyz`. Belum ada autentikasi, endpoint absensi, maupun kode biometrik — **tidak ada satu pun bagian rancangan tiga role dan Google Sign-In pada FL-010U yang sudah ditulis**. Perlu dicatat apa adanya: kode ini masih menolak pengikatan ke alamat non-loopback, sehingga HP belum dapat menjangkau backend lewat Wi-Fi kelas (lihat pertanyaan terbuka Q-19 pada [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md)).
+Satu bagian sudah benar-benar ditulis dan diuji: **fondasi backend Go** di folder [`backend/`](backend/README.md). Isinya kerangka layanan, basis data SQLite mode WAL, migrasi SQL berversi, log JSON, dan dua titik kesehatan `GET /api/v1/healthz` serta `GET /api/v1/readyz`. Belum ada autentikasi, endpoint absensi, maupun kode biometrik — **tidak ada satu pun bagian rancangan tiga role dan Google Sign-In pada FL-010U yang sudah ditulis**. Perlu dicatat apa adanya: kode ini masih menolak pengikatan ke alamat non-loopback, sehingga HP belum dapat menjangkau backend lewat Wi-Fi kelas sampai FL-011 mengimplementasikan pengikatan LAN beserta TLS (kebijakan **D-035/FL-010V**; rincian sertifikat belum diuji, lihat **Q-25** pada [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md)).
 
 ```powershell
 cd backend
@@ -94,6 +94,16 @@ Revisi README ini berasal dari **FL-010U (16 Oktober 2026)**, cabang `docs/fl-01
 - Rancangan lengkap matriks peran/izin: [`docs/AUTHORIZATION.md`](docs/AUTHORIZATION.md). Kontrak API: [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md); model data: [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md); alur aplikasi: [`docs/UX_FLOWS.md`](docs/UX_FLOWS.md); pertanyaan yang masih terbuka (termasuk pengikatan jaringan dan cakupan dosen): [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md).
 - **Tidak ada klaim fitur sudah ada.** Seluruh skenario runtime tiga role dan Google Sign-In berstatus **BELUM TERVERIFIKASI** sampai tugas implementasi dijalankan dan hasil tesnya nyata.
 
+## Catatan revisi FL-010V (16 Oktober 2026)
+
+Revisi README ini berasal dari **FL-010V (16 Oktober 2026)**, cabang `docs/fl-010v-final-auth-decisions`, dan **hanya dokumentasi** — tidak ada kode maupun migrasi yang ditulis, dan matriks 53 endpoint tidak diubah.
+
+- **Keputusan arsitektur difinalkan:** **D-032–D-037 disetujui** (D-035 pada tingkat kebijakan) — lifecycle akun, session management, hak akses `dosen`, akses jaringan lokal, kebijakan audit keamanan, dan **satu role utama per akun**. Status resmi keputusan ada di [`docs/DECISIONS.md`](docs/DECISIONS.md).
+- **Pertanyaan terbuka bergerak sebagian saja:** **Q-19** menjadi kebijakan yang diputuskan (D-035), **Q-20 → D-034**, **Q-21 → D-037**, dan **Q-25** (metode penyediaan sertifikat lokal & trust chain Android) baru dicatat; **Q-22, Q-23, dan Q-24 tetap terbuka** dan tidak otomatis disetujui ([`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md)).
+- **FL-011 siap dimulai** sebagai handoff implementasi Google Authentication & Authorization backend dengan **12 butir lingkup wajib**, dan **FL-005S** didaftarkan sebagai penguatan wajib — access log Go dapat melaporkan status `200` untuk respons `503` batas waktu dan tidak mencatat respons `500` hasil pemulihan panic, sehingga logging keamanan baru dianggap andal setelah tugas itu selesai ([`docs/BACKLOG.md`](docs/BACKLOG.md)). Urutan fase pada [`docs/ROADMAP.md`](docs/ROADMAP.md) **tidak berubah**.
+- **Keamanan jaringan** ditambahkan ke bagian **Keamanan repository** di bawah: default loopback, akses LAN wajib HTTPS bersertifikat tepercaya, dan backend **tidak pernah** dibuka ke internet publik. Rincian teknis TLS LAN **belum diuji**.
+- **Tidak ada klaim fitur sudah ada.** Seluruh skenario runtime tiga role, Google Sign-In, dan TLS LAN berstatus **BELUM TERVERIFIKASI** sampai tugas implementasi dijalankan dan hasil tesnya nyata.
+
 ## Catatan asal README
 
 Teks berikut adalah isi `README.md` asli yang sudah ada di branch `main` sebelum FL-001, dipertahankan apa adanya sebagai rujukan:
@@ -106,6 +116,8 @@ Isi di atas tetap berlaku dan telah diterjemahkan ke seluruh dokumen berbahasa I
 ## Keamanan repository
 
 Jangan commit foto wajah nyata, embedding biometrik, data peserta yang dapat diidentifikasi, kata sandi, token perangkat, `.env`, ekspor database, atau data uji rahasia. Gunakan data sintetis untuk contoh publik. Buat `.gitignore` **sebelum** menambahkan kode dan data lokal.
+
+**Jaringan backend (FL-010V, 16 Oktober 2026):** backend berjalan dengan **default loopback**; akses dari HP lewat **LAN privat** hanya boleh diaktifkan lewat konfigurasi eksplisit dan **wajib HTTPS dengan sertifikat yang dipercaya perangkat** — validasi TLS tidak boleh dimatikan (`InsecureSkipVerify` atau ekuivalen dilarang) dan Wi-Fi privat **tidak** dianggap cukup melindungi access/refresh token. **Jangan pernah membuka backend ke internet publik.**
 
 ## Status hak penggunaan
 

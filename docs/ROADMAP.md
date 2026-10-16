@@ -23,6 +23,16 @@ Revisi ini berasal dari **FL-010U (16 Oktober 2026)**, cabang `docs/fl-010u-goog
 - **Ketergantungan jaringan:** selama kode FL-005 masih menolak alamat non-loopback, HP tidak dapat menjangkau backend lewat Wi-Fi kelas; pilihan penyelesaiannya dicatat sebagai pertanyaan terbuka **Q-19** di `docs/OPEN_QUESTIONS.md` dan belum diputuskan pemilik.
 - Perubahan status peran ini **bukan** bukti fitur berjalan. Sampai tugas implementasi dijalankan dan hasil tesnya nyata, seluruh skenario runtime tiga role dan Google Sign-In berstatus **BELUM TERVERIFIKASI**.
 
+## Catatan FL-010V (16 Oktober 2026)
+
+Revisi ini berasal dari **FL-010V (16 Oktober 2026)**, cabang `docs/fl-010v-final-auth-decisions`, dan **dokumentasi saja** — **tabel fase di atas tidak diubah** dan tidak ada kode maupun migrasi yang ditulis.
+
+- **Keputusan D-031–D-037 kini berstatus disetujui** (D-031 tidak berubah; **D-032** lifecycle akun, **D-033** session management, **D-034** hak akses `dosen`, **D-035** akses jaringan lokal **pada tingkat kebijakan**, **D-036** kebijakan audit keamanan, **D-037** satu role utama per akun). Status resmi tiap keputusan ada di `docs/DECISIONS.md`, dan status pertanyaan terkait ada di `docs/OPEN_QUESTIONS.md`.
+- **FL-011 siap dimulai** sebagai handoff eksplisit implementasi Google Authentication & Authorization backend dengan **12 butir lingkup wajib**: migrasi **00002+** tanpa mengubah `00001_init_core_schema.sql`, verifikasi Google OIDC (JWKS + nonce sekali pakai), bootstrap admin pertama, pengelolaan `users` + identitas Google (penautan atomik, satu role), lifecycle sesi + rotasi + batas absolut 30 hari, RBAC tiga role + middleware, pembatasan kelas `dosen`/data `mahasiswa`, audit sesuai D-036, pengujian negatif TA-01–TA-22 dan GA-01–GA-12, pengikatan LAN eksplisit + TLS, konfigurasi Google OAuth, serta CI Go (`.github/workflows/backend-go.yml`) yang **wajib selalu hijau**. Rincian, prasyarat, dan daftar yang **boleh ditunda** ada di `docs/BACKLOG.md`.
+- **FL-005S adalah penguatan wajib**: access log Go dapat melaporkan `200` untuk respons `503` batas waktu dan tidak mencatat respons `500` hasil pemulihan panic; tugas penguatan log respons & pemulihan panic beserta uji regresinya **harus selesai lebih dahulu** agar logging keamanan D-036 dianggap andal.
+- **Status pertanyaan berubah sebagian saja:** **Q-19** naik dari pertanyaan terbuka menjadi **kebijakan yang diputuskan (D-035)**, sementara **rincian penyediaan sertifikat lokal dan trust chain Android belum diuji** dan dicatat sebagai **Q-25**; **Q-20 → D-034** dan **Q-21 → D-037**. **Q-22, Q-23, dan Q-24 tetap terbuka** dan tidak otomatis disetujui.
+- Perubahan status keputusan ini **bukan** bukti fitur berjalan. Sampai tugas implementasi dijalankan dan hasil tesnya nyata, seluruh skenario runtime tiga role, Google Sign-In, dan TLS LAN berstatus **BELUM TERVERIFIKASI**.
+
 ## Tugas pertama yang disarankan
 
 **FL-001 — Fondasi Git dan pemeriksaan dokumentasi:** periksa repo sebenarnya, tinjau README dan aturan agent, putuskan cara kolaborasi, siapkan `.gitignore` untuk Go/Python/React Native **sebelum source atau data dibuat**, lalu jalankan pemeriksaan agar tidak ada data pribadi/rahasia. **Belum membuat aplikasi pada FL-001**.
