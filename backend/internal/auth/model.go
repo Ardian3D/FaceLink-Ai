@@ -82,8 +82,33 @@ type Identity struct {
 
 // Class adalah kelas yang dipakai untuk menampilkan cakupan seorang dosen
 // (D-034). Hanya kolom yang dibutuhkan pemanggil yang dibawa.
+//
+// MemberCount dan ActiveSessionID adalah nilai turunan yang dihitung pada kueri
+// yang sama (kontrak §5.14). ActiveSessionID kosong berarti tidak ada sesi
+// absensi terbuka untuk kelas itu; kolomnya tidak membocorkan data kehadiran.
 type Class struct {
-	ID    string
-	Code  string
-	Title string
+	ID              string
+	Code            string
+	Title           string
+	MemberCount     int
+	ActiveSessionID string
+}
+
+// LecturerAssignment adalah satu penugasan dosen pada kelas beserta waktu
+// penugasannya (kontrak §5.5).
+type LecturerAssignment struct {
+	UserID      string
+	DisplayName string
+	Email       string
+	AssignedAt  time.Time
+}
+
+// Person adalah potret satu baris peserta seperlunya respons API (kontrak §5.2).
+// AccountUserID kosong berarti peserta belum tertaut akun mana pun.
+type Person struct {
+	ID            string
+	ExternalCode  string
+	DisplayName   string
+	Status        string
+	AccountUserID string
 }

@@ -21,6 +21,7 @@ type akunRing struct {
 	DisplayName string `json:"display_name"`
 	Role        string `json:"role"`
 	Status      string `json:"status"`
+	CreatedBy   string `json:"created_by,omitempty"`
 	CreatedAt   string `json:"created_at"`
 	LastLoginAt string `json:"last_login_at,omitempty"`
 }
@@ -32,6 +33,7 @@ func akunKeRing(u auth.User) akunRing {
 		DisplayName: u.DisplayName,
 		Role:        string(u.Role),
 		Status:      string(u.Status),
+		CreatedBy:   u.CreatedBy,
 		CreatedAt:   audit.FormatWaktu(u.CreatedAt),
 	}
 	if u.LastLoginAt != nil {
@@ -44,12 +46,6 @@ func akunKeRing(u auth.User) akunRing {
 func (s Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	peran := auth.Role(strings.TrimSpace(r.URL.Query().Get("role")))
 	status := auth.Status(strings.TrimSpace(r.URL.Query().Get("status")))
-	for _, nilai := range []string{string(peran), string(status)} {
-		if nilai != "" && !peran.Valid() && !status.Valid() {
-			writeErrorCode(w, r, http.StatusBadRequest, codeValidationFailed, "Filter peran atau status tidak dikenal.")
-			return
-		}
-	}
 	if peran != "" && !peran.Valid() {
 		writeErrorCode(w, r, http.StatusBadRequest, codeValidationFailed, "Filter peran tidak dikenal.")
 		return
@@ -59,16 +55,35 @@ func (s Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	daftar, err := s.Accounts.ListUsers(r.Context(), peran, status, 200)
+	halaman, ok := bacaHalaman(w, r, jenisKursorAkun)
+	if !ok {
+		return
+	}
+
+	// Satu baris diminta lebih banyak daripada `limit` untuk mengetahui apakah
+	// masih ada halaman berikutnya, lalu kelebihannya dibuang sebelum dikirim.
+	daftar, err := s.Accounts.ListUsers(r.Context(), peran, status, halaman.Limit+1,
+		auth.KunciDaftar{CreatedAt: halaman.AfterCreatedAt, ID: halaman.AfterID})
 	if err != nil {
 		s.tulisGalatDomain(w, r, err)
 		return
+	}
+
+	adaLagi := len(daftar) > halaman.Limit
+	if adaLagi {
+		daftar = daftar[:halaman.Limit]
 	}
 	hasil := make([]akunRing, 0, len(daftar))
 	for _, u := range daftar {
 		hasil = append(hasil, akunKeRing(u))
 	}
-	writeData(w, r, http.StatusOK, hasil)
+
+	berikut := ""
+	if adaLagi {
+		terakhir := daftar[len(daftar)-1]
+		berikut = kursorAkun(audit.FormatWaktu(terakhir.CreatedAt), terakhir.ID)
+	}
+	writePage(w, r, hasil, berikut, adaLagi, halaman.Limit)
 }
 
 // handleInviteUser membuat akun berstatus `invited`. Role hanya ditetapkan di
@@ -255,7 +270,8 @@ func (s Server) handleLinkPersonAccount(w http.ResponseWriter, r *http.Request) 
 		writeErrorCode(w, r, http.StatusBadRequest, codeMissingField, "user_id wajib diisi.")
 		return
 	}
-	if err := s.Accounts.LinkPersonAccount(r.Context(), principal.UserID, personID, req.UserID); err != nil {
+	peserta, err := s.Accounts.LinkPersonAccount(r.Context(), principal.UserID, personID, req.UserID)
+	if err != nil {
 		s.tulisGalatDomain(w, r, err)
 		return
 	}
@@ -265,7 +281,26 @@ func (s Server) handleLinkPersonAccount(w http.ResponseWriter, r *http.Request) 
 		Reason:   "Akun mahasiswa ditautkan ke baris peserta",
 		Metadata: map[string]string{"count": "1"},
 	})
-	writeData(w, r, http.StatusOK, map[string]string{"person_id": personID, "user_id": req.UserID})
+	// Kontrak §5.2 menuntut objek peserta dengan `account_user_id` terisi,
+	// sehingga klien dapat membaca hasil penautan tanpa permintaan tambahan.
+	writeData(w, r, http.StatusOK, personRing{
+		ID:            peserta.ID,
+		ExternalCode:  peserta.ExternalCode,
+		DisplayName:   peserta.DisplayName,
+		Status:        peserta.Status,
+		AccountUserID: &peserta.AccountUserID,
+	})
+}
+
+// personRing adalah bentuk peserta yang dikembalikan operasi penautan, diambil
+// dari baris yang benar-benar tersimpan. `account_user_id` selalu dikirim
+// (null bila kosong) sesuai kontrak §5.2.
+type personRing struct {
+	ID            string  `json:"id"`
+	ExternalCode  string  `json:"external_code,omitempty"`
+	DisplayName   string  `json:"display_name,omitempty"`
+	Status        string  `json:"status,omitempty"`
+	AccountUserID *string `json:"account_user_id"`
 }
 
 // handleUnlinkPersonAccount melepas tautan akun peserta tanpa menghapus data.
@@ -299,21 +334,38 @@ func (s Server) handleListClassLecturers(w http.ResponseWriter, r *http.Request)
 		s.tulisGalatDomain(w, r, err)
 		return
 	}
-	hasil := make([]akunRing, 0, len(daftar))
-	for _, u := range daftar {
-		hasil = append(hasil, akunKeRing(u))
+	hasil := make([]penugasanRing, 0, len(daftar))
+	for _, p := range daftar {
+		hasil = append(hasil, penugasanRing{
+			UserID:      p.UserID,
+			DisplayName: p.DisplayName,
+			Email:       p.Email,
+			AssignedAt:  audit.FormatWaktu(p.AssignedAt),
+		})
 	}
 	writeData(w, r, http.StatusOK, hasil)
 }
 
+// penugasanRing adalah bentuk penugasan dosen pada satu kelas (kontrak §5.5):
+// yang dikirim adalah penugasan beserta waktunya, bukan potret akun.
+type penugasanRing struct {
+	UserID      string `json:"user_id"`
+	DisplayName string `json:"display_name"`
+	Email       string `json:"email"`
+	AssignedAt  string `json:"assigned_at"`
+}
+
 // handleAssignLecturer menugaskan dosen pada kelas. Hanya admin, dan hanya
-// akun ber-role dosen yang sah ditugaskan.
+// akun ber-role dosen yang sah ditugaskan. Kontrak §5.5 membedakan `201` untuk
+// penugasan baru dan `200` untuk penugasan yang sudah ada, sehingga hasilnya
+// bergantung pada apakah baris benar-benar dibuat.
 func (s Server) handleAssignLecturer(w http.ResponseWriter, r *http.Request) {
 	principal, _ := PrincipalFrom(r.Context())
 	classID := chi.URLParam(r, "class_id")
 	userID := chi.URLParam(r, "user_id")
 
-	if err := s.Accounts.AssignLecturer(r.Context(), principal.UserID, classID, userID); err != nil {
+	dibuat, err := s.Accounts.AssignLecturer(r.Context(), principal.UserID, classID, userID)
+	if err != nil {
 		s.tulisGalatDomain(w, r, err)
 		return
 	}
@@ -323,7 +375,12 @@ func (s Server) handleAssignLecturer(w http.ResponseWriter, r *http.Request) {
 		Reason:   "Penugasan dosen pada kelas",
 		Metadata: map[string]string{"count": "1"},
 	})
-	writeData(w, r, http.StatusCreated, map[string]string{"class_id": classID, "user_id": userID})
+
+	status := http.StatusOK
+	if dibuat {
+		status = http.StatusCreated
+	}
+	writeData(w, r, status, map[string]string{"class_id": classID, "user_id": userID})
 }
 
 // handleRemoveLecturer mencabut penugasan dosen pada kelas.
@@ -345,17 +402,41 @@ func (s Server) handleRemoveLecturer(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// kelasRing adalah bentuk ringkas baris `classes`.
+// kelasRing adalah bentuk kelas pada kontrak §5.5/§5.14: identitas kelas
+// beserta nilai turunan `member_count` dan `active_session_id`. Sesi aktif
+// dikirim sebagai null bila tidak ada, supaya klien tidak perlu membedakan
+// string kosong dari ketiadaan.
 type kelasRing struct {
-	ID    string `json:"id"`
-	Code  string `json:"code"`
-	Title string `json:"title"`
+	ID              string  `json:"id"`
+	Code            string  `json:"code"`
+	Title           string  `json:"title"`
+	MemberCount     int     `json:"member_count"`
+	ActiveSessionID *string `json:"active_session_id"`
+}
+
+func kelasKeRing(k auth.Class) kelasRing {
+	ring := kelasRing{
+		ID:          k.ID,
+		Code:        k.Code,
+		Title:       k.Title,
+		MemberCount: k.MemberCount,
+	}
+	if k.ActiveSessionID != "" {
+		id := k.ActiveSessionID
+		ring.ActiveSessionID = &id
+	}
+	return ring
 }
 
 // handleMeClasses mengembalikan kelas milik pemanggil: kelas yang ditugaskan
 // untuk dosen, kelas yang diikuti untuk mahasiswa.
 func (s Server) handleMeClasses(w http.ResponseWriter, r *http.Request) {
 	principal, _ := PrincipalFrom(r.Context())
+
+	halaman, ok := bacaHalaman(w, r, jenisKursorKelas)
+	if !ok {
+		return
+	}
 
 	var daftar []auth.Class
 	var err error
@@ -377,11 +458,38 @@ func (s Server) handleMeClasses(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hasil := make([]kelasRing, 0, len(daftar))
-	for _, k := range daftar {
-		hasil = append(hasil, kelasRing{ID: k.ID, Code: k.Code, Title: k.Title})
+	// Daftar kelas seorang pemanggil berukuran kecil (kelas yang ditugaskan atau
+	// diikuti pada satu kelas demo), sehingga halaman dipotong setelah dibaca.
+	// Kursor tetap dikirim bila masih ada sisa, agar klien tidak perlu tahu
+	// ukuran data di baliknya.
+	mulai := 0
+	if halaman.Lanjut {
+		for i, k := range daftar {
+			if k.ID == halaman.AfterID {
+				mulai = i + 1
+				break
+			}
+		}
 	}
-	writeData(w, r, http.StatusOK, hasil)
+	if mulai > len(daftar) {
+		mulai = len(daftar)
+	}
+	sisa := daftar[mulai:]
+	adaLagi := len(sisa) > halaman.Limit
+	if adaLagi {
+		sisa = sisa[:halaman.Limit]
+	}
+
+	hasil := make([]kelasRing, 0, len(sisa))
+	for _, k := range sisa {
+		hasil = append(hasil, kelasKeRing(k))
+	}
+
+	berikut := ""
+	if adaLagi && len(sisa) > 0 {
+		berikut = kursorKelas(sisa[len(sisa)-1].ID)
+	}
+	writePage(w, r, hasil, berikut, adaLagi, halaman.Limit)
 }
 
 // tulisGalatDomain memetakan galat domain ke kode status kontrak. Pemetaan ini
@@ -398,11 +506,18 @@ func (s Server) tulisGalatDomain(w http.ResponseWriter, r *http.Request, err err
 	case errors.Is(err, auth.ErrConflict), errors.Is(err, auth.ErrAlreadyLinked):
 		writeErrorCode(w, r, http.StatusConflict, codeConflict, "Operasi bertentangan dengan keadaan data saat ini.")
 	case errors.Is(err, auth.ErrNotMahasiswa):
-		writeErrorCode(w, r, http.StatusUnprocessableEntity, codeValidationFailed, "Akun yang ditautkan harus ber-role mahasiswa.")
+		// Kontrak §5.2: penautan akun yang bukan `mahasiswa` dijawab `409`,
+		// bukan `422` — himpunan kode status endpoint itu hanya `200, 400, 403,
+		// 404, 409`, sehingga `422` tidak dapat dipakai klien.
+		writeErrorCode(w, r, http.StatusConflict, codeConflict, "Akun yang ditautkan harus ber-role mahasiswa.")
 	case errors.Is(err, auth.ErrInvalidInput), errors.Is(err, auth.ErrRoleInvalid), errors.Is(err, auth.ErrStatusInvalid):
 		writeErrorCode(w, r, http.StatusBadRequest, codeValidationFailed, "Nilai yang dikirim tidak memenuhi aturan.")
 	case errors.Is(err, auth.ErrIdentityTaken), errors.Is(err, auth.ErrNotInvited):
 		writeErrorCode(w, r, http.StatusConflict, codeConflict, "Identitas atau akun tidak dapat dipakai untuk operasi ini.")
+	case errors.Is(err, auth.ErrNotLinked):
+		// Kontrak §5.2: pelepasan tautan yang tidak ada dijawab `409`, bukan
+		// `204` — tidak ada yang berubah, dan klien harus dapat membedakannya.
+		writeErrorCode(w, r, http.StatusConflict, codeConflict, "Peserta belum tertaut akun mana pun.")
 	default:
 		s.logger().Error("galat domain tak terduga", "request_id", reqID(r), "error", logging.Redact(err.Error()))
 		writeErrorCode(w, r, http.StatusInternalServerError, codeInternalError, "Terjadi kesalahan internal.")

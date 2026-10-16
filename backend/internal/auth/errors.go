@@ -37,6 +37,9 @@ var (
 	// ErrAlreadyLinked dipakai bila akun sudah memiliki identitas atau sudah
 	// tertaut ke peserta lain.
 	ErrAlreadyLinked = errors.New("auth: akun sudah tertaut")
+	// ErrNotLinked dipakai bila operasi pelepasan diminta untuk peserta yang
+	// memang belum tertaut ke akun mana pun (kontrak §5.2).
+	ErrNotLinked = errors.New("auth: peserta belum tertaut akun")
 )
 
 // isUniqueViolation memeriksa galat batasan unik SQLite. Indeks unik adalah

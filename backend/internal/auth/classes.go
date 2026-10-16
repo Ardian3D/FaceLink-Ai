@@ -13,15 +13,17 @@ import (
 //
 // Hanya akun ber-role `dosen` yang boleh ditugaskan; role lain ditolak dengan
 // ErrRoleInvalid. Penugasan yang sama diulang bersifat idempoten: baris yang
-// sudah ada tidak diubah, termasuk `assigned_by` dan `assigned_at`-nya, agar
-// riwayat penugasan awal tetap terbaca.
-func (s *Store) AssignLecturer(ctx context.Context, actorID, classID, userID string) error {
+// sudah ada tidak diubah. Nilai balik kedua bernilai true hanya bila baris
+// penugasan benar-benar dibuat, sehingga lapisan HTTP dapat menjawab `201` atau
+// `200` sesuai kontrak §5.5.
+func (s *Store) AssignLecturer(ctx context.Context, actorID, classID, userID string) (bool, error) {
 	actorID, classID, userID = teks(actorID), teks(classID), teks(userID)
 	if actorID == "" || classID == "" || userID == "" {
-		return fmt.Errorf("%w: actorID, classID, dan userID wajib diisi", ErrInvalidInput)
+		return false, fmt.Errorf("%w: actorID, classID, dan userID wajib diisi", ErrInvalidInput)
 	}
 
-	return s.immediateTx(ctx, func(ctx context.Context, conn *sql.Conn) error {
+	dibuat := false
+	err := s.immediateTx(ctx, func(ctx context.Context, conn *sql.Conn) error {
 		user, err := userByIDTx(ctx, conn, userID)
 		if err != nil {
 			return err
@@ -36,16 +38,26 @@ func (s *Store) AssignLecturer(ctx context.Context, actorID, classID, userID str
 			return err
 		}
 
-		if _, err := conn.ExecContext(ctx,
+		hasil, err := conn.ExecContext(ctx,
 			`INSERT INTO class_lecturers (class_id, user_id, assigned_by, assigned_at)
 			 VALUES (?, ?, ?, ?)
 			 ON CONFLICT (class_id, user_id) DO NOTHING`,
 			classID, userID, actorID, formatWaktu(s.waktuSekarang()),
-		); err != nil {
+		)
+		if err != nil {
 			return fmt.Errorf("auth: gagal menugaskan dosen %s ke kelas %s: %w", userID, classID, err)
 		}
+		jumlah, err := hasil.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("auth: jumlah penugasan dibuat tidak dapat dibaca: %w", err)
+		}
+		dibuat = jumlah == 1
 		return nil
 	})
+	if err != nil {
+		return false, err
+	}
+	return dibuat, nil
 }
 
 // RemoveLecturer mencabut penugasan seorang dosen dari satu kelas. Penugasan
@@ -72,16 +84,18 @@ func (s *Store) RemoveLecturer(ctx context.Context, classID, userID string) erro
 	return nil
 }
 
-// LecturersForClass mengembalikan seluruh dosen yang ditugaskan pada satu kelas.
-func (s *Store) LecturersForClass(ctx context.Context, classID string) ([]User, error) {
+// LecturersForClass mengembalikan seluruh penugasan dosen pada satu kelas
+// beserta waktu penugasannya (kontrak §5.5). Waktu itu hanya dapat dibaca dari
+// tabel penugasan, sehingga kueri mengembalikan bentuk penugasan — bukan bentuk
+// akun — supaya `assigned_at` tidak hilang di lapisan HTTP.
+func (s *Store) LecturersForClass(ctx context.Context, classID string) ([]LecturerAssignment, error) {
 	classID = teks(classID)
 	if classID == "" {
 		return nil, fmt.Errorf("%w: classID wajib diisi", ErrInvalidInput)
 	}
 
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT u.id, u.email, u.display_name, u.role, u.status, u.created_by,
-		        u.last_login_at, u.created_at, u.updated_at
+		`SELECT u.id, u.display_name, u.email, cl.assigned_at
 		   FROM class_lecturers cl
 		   JOIN users u ON u.id = cl.user_id
 		  WHERE cl.class_id = ?
@@ -91,18 +105,50 @@ func (s *Store) LecturersForClass(ctx context.Context, classID string) ([]User, 
 	}
 	defer rows.Close()
 
-	daftar := make([]User, 0, 4)
+	daftar := make([]LecturerAssignment, 0, 4)
 	for rows.Next() {
-		user, err := scanUser(rows)
-		if err != nil {
+		var (
+			p        LecturerAssignment
+			assigned string
+		)
+		if err := rows.Scan(&p.UserID, &p.DisplayName, &p.Email, &assigned); err != nil {
 			return nil, fmt.Errorf("auth: gagal membaca baris dosen kelas %s: %w", classID, err)
 		}
-		daftar = append(daftar, user)
+		waktu, err := parseWaktu(assigned)
+		if err != nil {
+			return nil, fmt.Errorf("auth: waktu penugasan dosen kelas %s tidak terbaca: %w", classID, err)
+		}
+		p.AssignedAt = waktu
+		daftar = append(daftar, p)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("auth: penelusuran dosen kelas %s gagal: %w", classID, err)
 	}
 	return daftar, nil
+}
+
+// kolomKelas adalah proyeksi kelas beserta nilai turunan yang diwajibkan
+// kontrak §5.14: jumlah anggota aktif dan sesi absensi yang sedang terbuka.
+// Keduanya dihitung dengan subkueri berkorelasi supaya satu kelas tetap satu
+// baris tanpa GROUP BY dan tanpa menggandakan hasil.
+const kolomKelas = `c.id, c.code, c.title,
+	(SELECT COUNT(*) FROM class_memberships cm
+	  WHERE cm.class_id = c.id AND cm.left_at IS NULL) AS member_count,
+	(SELECT s.id FROM attendance_sessions s
+	  WHERE s.class_id = c.id AND s.status = 'open'
+	  ORDER BY s.closes_at LIMIT 1) AS active_session_id`
+
+// scanKelas memindai satu baris proyeksi kolomKelas.
+func scanKelas(sc interface{ Scan(...any) error }) (Class, error) {
+	var (
+		k             Class
+		activeSession sql.NullString
+	)
+	if err := sc.Scan(&k.ID, &k.Code, &k.Title, &k.MemberCount, &activeSession); err != nil {
+		return Class{}, err
+	}
+	k.ActiveSessionID = activeSession.String
+	return k, nil
 }
 
 // ClassesForLecturer mengembalikan kelas yang ditugaskan kepada seorang dosen.
@@ -114,7 +160,7 @@ func (s *Store) ClassesForLecturer(ctx context.Context, userID string) ([]Class,
 	}
 
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT c.id, c.code, c.title
+		`SELECT `+kolomKelas+`
 		   FROM class_lecturers cl
 		   JOIN classes c ON c.id = cl.class_id
 		  WHERE cl.user_id = ? AND c.deleted_at IS NULL
@@ -126,8 +172,8 @@ func (s *Store) ClassesForLecturer(ctx context.Context, userID string) ([]Class,
 
 	daftar := make([]Class, 0, 4)
 	for rows.Next() {
-		var k Class
-		if err := rows.Scan(&k.ID, &k.Code, &k.Title); err != nil {
+		k, err := scanKelas(rows)
+		if err != nil {
 			return nil, fmt.Errorf("auth: gagal membaca baris kelas dosen %s: %w", userID, err)
 		}
 		daftar = append(daftar, k)
@@ -149,7 +195,7 @@ func (s *Store) ClassesForPerson(ctx context.Context, personID string) ([]Class,
 	}
 
 	rows, err := s.db.QueryContext(ctx,
-		`SELECT c.id, c.code, c.title
+		`SELECT `+kolomKelas+`
 		   FROM class_memberships cm
 		   JOIN classes c ON c.id = cm.class_id
 		  WHERE cm.person_id = ? AND cm.left_at IS NULL AND c.deleted_at IS NULL
@@ -161,8 +207,8 @@ func (s *Store) ClassesForPerson(ctx context.Context, personID string) ([]Class,
 
 	daftar := make([]Class, 0, 4)
 	for rows.Next() {
-		var k Class
-		if err := rows.Scan(&k.ID, &k.Code, &k.Title); err != nil {
+		k, err := scanKelas(rows)
+		if err != nil {
 			return nil, fmt.Errorf("auth: gagal membaca baris kelas peserta %s: %w", personID, err)
 		}
 		daftar = append(daftar, k)
@@ -202,13 +248,14 @@ func (s *Store) IsLecturerAssigned(ctx context.Context, userID, classID string) 
 // lain). Indeks unik parsial `uq_people_account_user` adalah penjaga terakhir
 // untuk permintaan bersamaan, dan pelanggarannya dipetakan ke sentinel yang
 // sama dengan pemeriksaan di dalam transaksi.
-func (s *Store) LinkPersonAccount(ctx context.Context, actorID, personID, userID string) error {
+func (s *Store) LinkPersonAccount(ctx context.Context, actorID, personID, userID string) (Person, error) {
 	actorID, personID, userID = teks(actorID), teks(personID), teks(userID)
 	if actorID == "" || personID == "" || userID == "" {
-		return fmt.Errorf("%w: actorID, personID, dan userID wajib diisi", ErrInvalidInput)
+		return Person{}, fmt.Errorf("%w: actorID, personID, dan userID wajib diisi", ErrInvalidInput)
 	}
 
-	return s.immediateTx(ctx, func(ctx context.Context, conn *sql.Conn) error {
+	var hasil Person
+	err := s.immediateTx(ctx, func(ctx context.Context, conn *sql.Conn) error {
 		user, err := userByIDTx(ctx, conn, userID)
 		if err != nil {
 			return err
@@ -222,17 +269,29 @@ func (s *Store) LinkPersonAccount(ctx context.Context, actorID, personID, userID
 
 		// Baris peserta sekaligus membawa pengaitan yang sudah ada, sehingga
 		// keberadaan peserta dan keadaan pengaitannya dibaca sekali saja.
-		var akunPeserta sql.NullString
+		var (
+			akunPeserta        sql.NullString
+			externalCode, nama string
+			statusPeserta      string
+		)
 		if err := conn.QueryRowContext(ctx,
-			`SELECT account_user_id FROM people WHERE id = ? AND deleted_at IS NULL`,
-			personID).Scan(&akunPeserta); err != nil {
+			`SELECT account_user_id, external_code, display_name, status
+			   FROM people WHERE id = ? AND deleted_at IS NULL`,
+			personID).Scan(&akunPeserta, &externalCode, &nama, &statusPeserta); err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
 				return fmt.Errorf("%w: peserta %s", ErrNotFound, personID)
 			}
 			return fmt.Errorf("auth: gagal membaca pengaitan peserta %s: %w", personID, err)
 		}
+		hasil = Person{
+			ID:           personID,
+			ExternalCode: externalCode,
+			DisplayName:  nama,
+			Status:       statusPeserta,
+		}
 		if akunPeserta.Valid && akunPeserta.String == userID {
 			// Pengaitan yang sama diulang tidak mengubah apa pun.
+			hasil.AccountUserID = userID
 			return nil
 		}
 		if akunPeserta.Valid {
@@ -263,8 +322,13 @@ func (s *Store) LinkPersonAccount(ctx context.Context, actorID, personID, userID
 			}
 			return fmt.Errorf("auth: gagal mengaitkan peserta %s dengan akun %s: %w", personID, userID, err)
 		}
+		hasil.AccountUserID = userID
 		return nil
 	})
+	if err != nil {
+		return Person{}, err
+	}
+	return hasil, nil
 }
 
 // UnlinkPersonAccount melepas pengaitan akun dari satu peserta. Peserta yang
@@ -283,6 +347,20 @@ func (s *Store) UnlinkPersonAccount(ctx context.Context, actorID, personID strin
 		if err := pastikanPesertaAda(ctx, conn, personID); err != nil {
 			return err
 		}
+
+		// Peserta yang memang belum tertaut tidak menghasilkan perubahan apa
+		// pun; kontrak §5.2 menuntut jawaban `409`, bukan `204`, supaya klien
+		// dapat membedakan "tautan dilepas" dari "tidak ada tautan" dan audit
+		// tidak mencatat pelepasan yang tidak pernah terjadi.
+		var akunSekarang sql.NullString
+		if err := conn.QueryRowContext(ctx,
+			`SELECT account_user_id FROM people WHERE id = ?`, personID).Scan(&akunSekarang); err != nil {
+			return fmt.Errorf("auth: gagal membaca pengaitan peserta %s: %w", personID, err)
+		}
+		if !akunSekarang.Valid || akunSekarang.String == "" {
+			return fmt.Errorf("%w: peserta %s", ErrNotLinked, personID)
+		}
+
 		if _, err := conn.ExecContext(ctx,
 			`UPDATE people SET account_user_id = NULL, updated_at = ? WHERE id = ?`,
 			formatWaktu(s.waktuSekarang()), personID,

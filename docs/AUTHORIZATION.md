@@ -262,7 +262,7 @@ Istilah: `publik` = boleh tanpa token · `device` = token perangkat, bukan role 
 
 Jumlah endpoint yang boleh dipanggil tiap peran: `admin` **46** · `dosen` **18** · `mahasiswa` **7** · `device` **1** · publik **3**.
 
-**Jumlah lintas peran tidak dijumlahkan menjadi 53.** Satu endpoint dapat diakses beberapa peran; karena itu kolom "Kelompok akses" di atas memakai pengelompokan yang **saling lepas** (setiap endpoint tepat satu kelompok), sedangkan baris "jumlah per peran" boleh tumpang tindih. Angka pada tabel ini **wajib diverifikasi programatis** terhadap tabel §4.1–§4.13 sebelum dipakai sebagai acuan implementasi. Panjang baris 53 dan rekap ini menggantikan rekap 43 endpoint FL-010/FL-010R.
+**Jumlah lintas peran tidak dijumlahkan menjadi 54.** Satu endpoint dapat diakses beberapa peran; karena itu kolom "Kelompok akses" di atas memakai pengelompokan yang **saling lepas** (setiap endpoint tepat satu kelompok), sedangkan baris "jumlah per peran" boleh tumpang tindih. Angka pada tabel ini **wajib diverifikasi programatis** terhadap tabel §4.1–§4.13 sebelum dipakai sebagai acuan implementasi. Panjang baris 54 dan rekap ini menggantikan rekap 43 endpoint FL-010/FL-010R.
 
 ### 4.15 Status implementasi FL-011 (16 Oktober 2026)
 
@@ -272,7 +272,7 @@ Bagian ini **tidak mengubah satu pun baris matriks §4.1–§4.13**. Ia hanya me
 
 | Peran | Endpoint yang **sudah berjalan** | Endpoint yang **masih kontrak** |
 |---|---|---|
-| `admin` | `POST /auth/google`, `POST /auth/refresh`, `POST /auth/logout`, `GET /me`, `GET /auth/sessions` (wajib `user_id`), `DELETE /auth/sessions/{session_id}`, `GET /users`, `POST /users`, `PATCH /users/{user_id}`, `PUT|DELETE /people/{person_id}/account-link`, `GET|PUT|DELETE /classes/{class_id}/dosen[/{user_id}]`, `GET /me/classes` | `/people*` (5), `/people/{id}/consent*` (3), `/face-enrollments*` (5), `/classes` dan anggota kelas (4), `/sessions*` (5), `/manual-checkins` (2), `/devices*` (4), `/sessions/{id}/attendance` dan `/export.csv` (2), `/audit-events` (1), `/me/schedule`, `/me/attendance`, `/me/consent` (3) |
+| `admin` | `POST /auth/google`, `POST /auth/refresh`, `POST /auth/logout`, `GET /me`, `GET /auth/sessions` (wajib `user_id`), `DELETE /auth/sessions/{session_id}`, `GET /users`, `POST /users`, `PATCH /users/{user_id}`, `PUT|DELETE /people/{person_id}/account-link`, `GET|PUT|DELETE /classes/{class_id}/dosen[/{user_id}]` | `/people*` (5), `/people/{id}/consent*` (3), `/face-enrollments*` (5), `/classes` dan anggota kelas (4), `/sessions*` (5), `/manual-checkins` (2), `/devices*` (4), `/sessions/{id}/attendance` dan `/export.csv` (2), `/audit-events` (1), `/me/schedule`, `/me/attendance`, `/me/consent` (3) |
 | `dosen` | `POST /auth/refresh`, `POST /auth/logout`, `GET /me`, `GET /me/classes`, `GET /classes/{class_id}/dosen` | Baca peserta (`/people*`), baca kelas dan anggota (`GET /classes`, `GET /classes/{id}/members`), seluruh `/sessions*` dan `/manual-checkins`, `GET /sessions/{id}/attendance` (isinya belum dapat terisi tanpa endpoint kelas yang ada) |
 | `mahasiswa` | `POST /auth/refresh`, `POST /auth/logout`, `GET /me`, `GET /me/classes` | `GET /me/schedule`, `GET /me/attendance`, `GET /me/consent` |
 | `device` | — (**belum ada satu pun**) | `POST /devices/{device_id}/recognition-attempts` |

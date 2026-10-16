@@ -141,9 +141,22 @@ func (s *Store) UserByID(ctx context.Context, id string) (User, error) {
 // di lapisan HTTP; batas ini menjaga kueri tetap terbatas.
 const batasDaftarPengguna = 500
 
+// KunciDaftar adalah posisi satu baris dalam urutan `(created_at, id)` menurun.
+// Nilai nol berarti halaman pertama. Lapisan HTTP menerjemahkannya dari kursor
+// buram, sehingga paket ini tidak perlu tahu bentuk kursor.
+type KunciDaftar struct {
+	CreatedAt string
+	ID        string
+}
+
 // ListUsers mengembalikan daftar akun dengan penyaringan opsional. Role atau
 // status kosong berarti tanpa penyaringan; limit <= 0 memakai batas bawaan.
-func (s *Store) ListUsers(ctx context.Context, role Role, status Status, limit int) ([]User, error) {
+//
+// Paginasi memakai kunci `(created_at, id)` menurun (kontrak §1.3): `after`
+// kosong berarti halaman pertama. Kunci dipakai, bukan nomor baris, supaya baris
+// yang disisipkan di antara dua permintaan tidak membuat halaman berikutnya
+// melewatkan atau mengulang data.
+func (s *Store) ListUsers(ctx context.Context, role Role, status Status, limit int, after KunciDaftar) ([]User, error) {
 	if role != "" && !role.Valid() {
 		return nil, fmt.Errorf("%w: %q", ErrRoleInvalid, string(role))
 	}
@@ -164,7 +177,11 @@ func (s *Store) ListUsers(ctx context.Context, role Role, status Status, limit i
 		kueri += ` AND status = ?`
 		args = append(args, string(status))
 	}
-	kueri += ` ORDER BY created_at, id LIMIT ?`
+	if after.CreatedAt != "" {
+		kueri += ` AND (created_at < ? OR (created_at = ? AND id < ?))`
+		args = append(args, after.CreatedAt, after.CreatedAt, after.ID)
+	}
+	kueri += ` ORDER BY created_at DESC, id DESC LIMIT ?`
 	args = append(args, limit)
 
 	rows, err := s.db.QueryContext(ctx, kueri, args...)

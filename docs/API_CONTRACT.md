@@ -97,7 +97,7 @@ Aturan keras:
 - `details` bersifat opsional, tidak boleh memuat data biometrik, dan hanya menyebut nama field.
 - Kesalahan validasi tidak memakai pesan internal database.
 
-**Kesenjangan bentuk galat yang dicatat apa adanya (FL-011, 16 Oktober 2026).** Amplop di atas dipakai **seluruh endpoint FL-011** dan lapisan respons baru (`internal/httpapi/respond.go`). Namun **`GET /api/v1/healthz`, `404` rute tidak dikenal, dan `405` metode tidak diizinkan masih memakai bentuk datar lama** (`{ "code", "message", "request_id" }` tanpa pembungkus `error`), warisan FL-005 yang belum diseragamkan. Akibatnya klien **tidak boleh** mengasumsikan satu bentuk galat tunggal untuk seluruh API: klien yang mem-parse `error.code` akan gagal membaca galat dari ketiga jalur itu, dan klien yang mem-parse bentuk datar akan gagal membaca galat dari endpoint FL-011. Penyeragaman bentuk galat ini **belum dikerjakan** dan dicatat sebagai sisa pekerjaan pada §10.
+**Kesenjangan bentuk galat yang dicatat apa adanya (FL-011, 16 Oktober 2026).** Amplop di atas dipakai **seluruh endpoint FL-011** dan lapisan respons baru (`internal/httpapi/respond.go`). Namun bentuk datar lama (`{ "code", "message", "request_id" }` tanpa pembungkus `error`) **masih dipakai lebih luas daripada yang tampak**: selain **`GET /api/v1/healthz`, `404` rute tidak dikenal, dan `405` metode tidak diizinkan** (warisan FL-005 yang belum diseragamkan), galat yang dihasilkan **middleware pada setiap rute FL-011** juga memakai bentuk datar itu — panic → `500 INTERNAL_ERROR`, batas waktu permintaan → `503 PROCESSING_TIMEOUT`, dan tubuh melebihi batas → `413 PAYLOAD_TOO_LARGE`, ditambah `GET /api/v1/readyz` → `503`. Akibatnya klien **tidak boleh** mengasumsikan satu bentuk galat tunggal untuk seluruh API: klien yang mem-parse `error.code` akan gagal membaca galat dari jalur-jalur itu, dan klien yang mem-parse bentuk datar akan gagal membaca galat dari endpoint FL-011. **Dua kode yang dihasilkan middleware itu, `PROCESSING_TIMEOUT` dan `PAYLOAD_TOO_LARGE`, belum terdaftar pada tabel §1.5**; tabel itu hanya menyebut `IMAGE_TOO_LARGE` untuk `413`, yang merupakan kode berbeda dan **belum diimplementasikan**. Penyeragaman bentuk galat dan pendaftaran kode-kode ini **belum dikerjakan** dan dicatat sebagai sisa pekerjaan pada §10.
 
 ### 1.5 Kode status HTTP dan kode kesalahan stabil
 
@@ -143,6 +143,7 @@ Kode kesalahan stabil minimum yang dipakai lintas modul:
 | `ACCOUNT_NOT_LINKED` | 409 | Akun `mahasiswa` belum ditautkan ke baris peserta `people` |
 | `LAST_ADMIN_PROTECTED` | 409 | Operasi akan menghilangkan admin aktif terakhir |
 | `SELF_ACCOUNT_PROTECTED` | 409 | Admin mencoba menonaktifkan atau menurunkan peran akunnya sendiri |
+| `CONFLICT` | 409 | Konflik keadaan data yang tidak punya kode yang lebih spesifik (mis. email undangan sudah dipakai) |
 | `DEVICE_REVOKED` | 403 | Perangkat dicabut atau tidak aktif |
 | `DEVICE_SESSION_MISMATCH` | 422 | Perangkat tidak terhubung ke sesi yang dikirim |
 | `IMAGE_TOO_LARGE` | 413 | Melebihi batas ukuran |
@@ -264,7 +265,7 @@ Semua jalur diawali `/api/v1` **kecuali** `/healthz` (tanpa versi, hanya untuk p
 | 14 | `GET` | `/me/consent` | mahasiswa |
 | — | `POST` | `/devices/{device_id}/recognition-attempts` | device |
 
-Rekapitulasi kelompok akses (dihitung dari tabel di atas; satu endpoint dapat diakses beberapa peran sehingga jumlah kolom tidak dijumlahkan menjadi 53):
+Rekapitulasi kelompok akses (dihitung dari tabel di atas; satu endpoint dapat diakses beberapa peran sehingga jumlah kolom tidak dijumlahkan menjadi 54):
 
 | Kelompok akses | Jumlah | Cakupan |
 |---|---|---|
@@ -520,8 +521,10 @@ Aturan berikut menetapkan **lifecycle akun** dan berlaku sebagai kebijakan yang 
 - **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.**
 - **Peran:** admin.
 - **Query:** `role` (opsional: `admin`/`dosen`/`mahasiswa`), `status` (opsional: `invited`/`active`/`suspended`), `cursor`, `limit`.
-- **Respons `200`:** daftar `{ id, email, display_name, role, status, created_by, created_at, last_login_at }`. Tidak ada field kata sandi atau hash kata sandi.
-- **Kode status:** `200`, `403`.
+- **Respons `200`:** amplop daftar berhalaman (§1.3) berisi `{ id, email, display_name, role, status, created_by, created_at, last_login_at }`. Tidak ada field kata sandi atau hash kata sandi. `created_by` kosong pada akun yang dibuat sistem (bootstrap).
+- **Kode status:** `200`, `400`, `403`.
+- **Kesalahan:** `VALIDATION_FAILED` (400) untuk `role`/`status`/`limit`/`cursor` yang tidak sah.
+- **Catatan implementasi (FL-011, 16 Oktober 2026):** paginasi kursor **sudah berjalan** — `limit` bawaan 50, maksimum 200, kursor buram pada `page.next_cursor`; kursor yang berasal dari daftar lain ditolak `400`.
 - **Efek database:** —
 - **Idempotensi:** aman diulang.
 
@@ -554,9 +557,9 @@ Aturan berikut menetapkan **lifecycle akun** dan berlaku sebagai kebijakan yang 
 - **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.**
 - **Peran:** admin.
 - **Tubuh permintaan:** `user_id` (wajib; akun ber-role `mahasiswa`).
-- **Respons `200`:** objek peserta dengan `account_user_id` terisi.
+- **Respons `200`:** objek peserta dengan `account_user_id` terisi (`{ id, external_code, display_name, status, account_user_id }`).
 - **Kode status:** `200`, `400`, `403`, `404`, `409`.
-- **Kesalahan:** `VALIDATION_FAILED`, `NOT_FOUND`, `409` bila akun sudah tertaut peserta lain (relasi satu-ke-satu) atau role akun bukan `mahasiswa`.
+- **Kesalahan:** `VALIDATION_FAILED`, `NOT_FOUND`, `CONFLICT` (409) bila akun sudah tertaut peserta lain (relasi satu-ke-satu) atau role akun bukan `mahasiswa`. **Catatan implementasi (FL-011, 16 Oktober 2026):** akun yang bukan `mahasiswa` dijawab `409 CONFLICT`, bukan `422` — `422` tidak ada pada himpunan kode status endpoint ini.
 - **Aturan:** penautan bersifat satu-ke-satu dan **tidak memberi akses apa pun ke template biometrik**; `account_user_id` tidak membuka `face_templates`.
 - **Efek database:** `UPDATE people SET account_user_id`; audit `person.account_linked`.
 - **Idempotensi:** idempoten untuk pasangan yang sama.
@@ -567,9 +570,9 @@ Aturan berikut menetapkan **lifecycle akun** dan berlaku sebagai kebijakan yang 
 - **Peran:** admin.
 - **Respons:** `204`.
 - **Kode status:** `204`, `403`, `404`, `409`.
-- **Kesalahan:** `NOT_FOUND`; `409` bila peserta memang belum tertaut.
+- **Kesalahan:** `NOT_FOUND`; `409 CONFLICT` bila peserta memang belum tertaut.
 - **Efek database:** `UPDATE people SET account_user_id = NULL`; audit `person.account_unlinked`.
-- **Idempotensi:** penghapusan kedua mengembalikan `404`/`409`.
+- **Idempotensi:** penghapusan kedua mengembalikan `409 CONFLICT`; audit hanya ditulis bila pelepasan benar-benar terjadi.
 
 ### 5.3 Modul 3 — Persetujuan biometrik
 
@@ -724,6 +727,7 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 - **Kode status:** `200`, `403`, `404`.
 - **Efek database:** —
 - **Idempotensi:** aman diulang.
+- **Catatan implementasi (FL-011, 16 Oktober 2026):** daftar ini mengembalikan **bentuk penugasan** `{ user_id, display_name, email, assigned_at }`, bukan potret akun; `assigned_at` dibaca dari `class_lecturers`.
 
 #### `PUT /api/v1/classes/{class_id}/dosen/{user_id}`
 
@@ -1052,8 +1056,9 @@ Modul **baru** pada FL-010U. Portal self-service hanya membaca data milik sendir
 - **Peran:** dosen, mahasiswa.
 - **Cakupan:** `dosen` → kelas yang ditugaskan kepadanya; `mahasiswa` → kelas yang diikuti (keanggotaan aktif).
 - **Query:** `cursor`, `limit`.
-- **Respons `200`:** daftar `{ id, code, title, member_count, active_session_id }` dengan bentuk yang sama seperti §5.5.
-- **Kode status:** `200`, `401`, `403`, `409`.
+- **Respons `200`:** amplop daftar berhalaman (§1.3) berisi `{ id, code, title, member_count, active_session_id }` dengan bentuk yang sama seperti §5.5. `active_session_id` bernilai `null` bila tidak ada sesi absensi terbuka.
+- **Kode status:** `200`, `400`, `401`, `403`, `409`.
+- **Catatan implementasi (FL-011, 16 Oktober 2026):** `member_count` (keanggotaan aktif) dan `active_session_id` **sudah dihitung** pada kueri yang sama.
 - **Kesalahan:** `ACCOUNT_NOT_LINKED` (409) untuk akun `mahasiswa` yang belum tertaut baris `people`; berlaku sama untuk keempat endpoint Modul 14 (§5.14 pembuka).
 - **Efek database:** —
 - **Idempotensi:** aman diulang.
@@ -1296,7 +1301,7 @@ Catatan riwayat yang dipertahankan: butir lama **"akun peserta" (D-013) yang aka
 Bagian ini **menambah** daftar di atas, bukan menggantikannya, dan hanya memuat pekerjaan yang **belum dikerjakan** pada FL-011. Tidak satu pun butir di bawah boleh dibaca sebagai sudah berjalan.
 
 1. **Pembatasan laju (rate limit) BELUM diimplementasikan.** Endpoint `POST /auth/google` dan `POST /auth/refresh` **belum** memiliki pembatasan laju per alamat maupun per identitas; yang berlaku saat ini hanya **batas ukuran badan permintaan** (64 KiB untuk jalur autentikasi, 1 MiB dari middleware umum) dan batas waktu permintaan. Akibatnya kode kesalahan `429 RATE_LIMITED` **tidak pernah dihasilkan**, sementara matriks §1.5 dan `docs/AUTHORIZATION.md` §4.1 masih menyebutnya sebagai kewajiban tambahan endpoint tersebut. Kewajiban itu tetap berlaku sebagai sasaran dan **belum dipenuhi**.
-2. **Bentuk galat belum diseragamkan.** `GET /api/v1/healthz`, `404` rute tidak dikenal, dan `405` metode tidak diizinkan masih memakai bentuk datar lama, berbeda dari amplop `{"error": {...}}` yang dipakai seluruh endpoint FL-011 (lihat §1.4). Penyeragaman ini pekerjaan tersendiri karena menyentuh kontrak respons yang sudah diuji FL-005.
+2. **Bentuk galat belum diseragamkan.** `GET /api/v1/healthz`, `404` rute tidak dikenal, `405` metode tidak diizinkan, serta galat yang dihasilkan **middleware pada setiap rute FL-011** (panic → `500 INTERNAL_ERROR`, batas waktu → `503 PROCESSING_TIMEOUT`, tubuh melebihi batas → `413 PAYLOAD_TOO_LARGE`) dan `GET /api/v1/readyz` → `503` masih memakai bentuk datar lama, berbeda dari amplop `{"error": {...}}` yang dipakai endpoint FL-011 pada umumnya (lihat §1.4). Penyeragaman ini pekerjaan tersendiri karena menyentuh kontrak respons yang sudah diuji FL-005.
 3. **Selisih jalur `/healthz`.** Kode memasang liveness pada `/api/v1/healthz`, sedangkan matriks §4 menyebut `GET /healthz` tanpa awalan. Salah satu harus diselaraskan; sampai itu diputuskan, pembaca tidak boleh menganggap `/healthz` tanpa awalan tersedia (§5.12).
 4. **`GET /api/v1/readyz` belum terlindungi peran.** Endpoint terpasang tanpa middleware autentikasi, sehingga dapat dipanggil tanpa token meskipun matriks §4 menyebut `admin` dan `dosen`. Ini **belum** sesuai matriks dan harus diperbaiki atau diputuskan ulang secara eksplisit; jangan menganggap kesiapan backend sudah terlindungi (§5.12).
 5. **`GET /auth/sessions` belum mendaftar lintas akun.** Endpoint yang berjalan menuntut parameter `user_id` dan hanya mengembalikan sesi satu akun; belum ada tampilan sesi seluruh akun yang diasumsikan kontrak sebelumnya (§5.1).

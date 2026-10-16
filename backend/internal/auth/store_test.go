@@ -351,7 +351,7 @@ func TestUserByIDDanListUsers(t *testing.T) {
 		t.Fatalf("UserByID() tidak ada = %v, ingin ErrNotFound", err)
 	}
 
-	semua, err := s.ListUsers(ctx, "", "", 0)
+	semua, err := s.ListUsers(ctx, "", "", 0, KunciDaftar{})
 	if err != nil {
 		t.Fatalf("ListUsers() gagal: %v", err)
 	}
@@ -359,7 +359,7 @@ func TestUserByIDDanListUsers(t *testing.T) {
 		t.Errorf("ListUsers() = %d baris, ingin 3", len(semua))
 	}
 
-	hanyaDosen, err := s.ListUsers(ctx, RoleDosen, "", 10)
+	hanyaDosen, err := s.ListUsers(ctx, RoleDosen, "", 10, KunciDaftar{})
 	if err != nil {
 		t.Fatalf("ListUsers() role gagal: %v", err)
 	}
@@ -367,7 +367,7 @@ func TestUserByIDDanListUsers(t *testing.T) {
 		t.Errorf("ListUsers(dosen) = %+v, ingin hanya %s", hanyaDosen, dosen.ID)
 	}
 
-	undangan, err := s.ListUsers(ctx, "", StatusInvited, 10)
+	undangan, err := s.ListUsers(ctx, "", StatusInvited, 10, KunciDaftar{})
 	if err != nil {
 		t.Fatalf("ListUsers() status gagal: %v", err)
 	}
@@ -375,14 +375,14 @@ func TestUserByIDDanListUsers(t *testing.T) {
 		t.Errorf("ListUsers(invited) = %d baris, ingin 3", len(undangan))
 	}
 
-	if _, err := s.ListUsers(ctx, Role("operator"), "", 10); !errors.Is(err, ErrRoleInvalid) {
+	if _, err := s.ListUsers(ctx, Role("operator"), "", 10, KunciDaftar{}); !errors.Is(err, ErrRoleInvalid) {
 		t.Fatalf("ListUsers() role tidak sah = %v, ingin ErrRoleInvalid", err)
 	}
-	if _, err := s.ListUsers(ctx, "", Status("disabled"), 10); !errors.Is(err, ErrStatusInvalid) {
+	if _, err := s.ListUsers(ctx, "", Status("disabled"), 10, KunciDaftar{}); !errors.Is(err, ErrStatusInvalid) {
 		t.Fatalf("ListUsers() status tidak sah = %v, ingin ErrStatusInvalid", err)
 	}
 
-	hanyaMahasiswa, err := s.ListUsers(ctx, RoleMahasiswa, StatusInvited, 10)
+	hanyaMahasiswa, err := s.ListUsers(ctx, RoleMahasiswa, StatusInvited, 10, KunciDaftar{})
 	if err != nil {
 		t.Fatalf("ListUsers() gabungan gagal: %v", err)
 	}
@@ -391,7 +391,7 @@ func TestUserByIDDanListUsers(t *testing.T) {
 	}
 
 	// Batas limit dihormati.
-	if terbatas, err := s.ListUsers(ctx, "", "", 1); err != nil || len(terbatas) != 1 {
+	if terbatas, err := s.ListUsers(ctx, "", "", 1, KunciDaftar{}); err != nil || len(terbatas) != 1 {
 		t.Errorf("ListUsers(limit=1) = (%d baris, %v), ingin 1 baris tanpa galat", len(terbatas), err)
 	}
 }
@@ -864,18 +864,26 @@ func TestAssignLecturerDanCakupan(t *testing.T) {
 		t.Error("IsLecturerAssigned() sebelum penugasan = true, ingin false")
 	}
 
-	if err := s.AssignLecturer(ctx, admin.ID, "kelas-1", dosen.ID); err != nil {
+	dibuat, err := s.AssignLecturer(ctx, admin.ID, "kelas-1", dosen.ID)
+	if err != nil {
 		t.Fatalf("AssignLecturer() gagal: %v", err)
 	}
-	// Penugasan ganda idempoten.
-	if err := s.AssignLecturer(ctx, admin.ID, "kelas-1", dosen.ID); err != nil {
+	if !dibuat {
+		t.Error("AssignLecturer() pertama = false, ingin true (baris baru dibuat)")
+	}
+	// Penugasan ganda idempoten: tidak ada baris baru, dan itu dilaporkan.
+	dibuatUlang, err := s.AssignLecturer(ctx, admin.ID, "kelas-1", dosen.ID)
+	if err != nil {
 		t.Fatalf("AssignLecturer() ulang gagal: %v", err)
+	}
+	if dibuatUlang {
+		t.Error("AssignLecturer() ulang = true, ingin false (penugasan sudah ada)")
 	}
 	if got := hitung(t, db, `SELECT COUNT(*) FROM class_lecturers WHERE class_id = 'kelas-1'`); got != 1 {
 		t.Errorf("jumlah penugasan = %d, ingin 1", got)
 	}
-	if err := s.AssignLecturer(ctx, admin.ID, "kelas-2", dosen.ID); err != nil {
-		t.Fatalf("AssignLecturer() kelas kedua gagal: %v", err)
+	if dibuat, err := s.AssignLecturer(ctx, admin.ID, "kelas-2", dosen.ID); err != nil || !dibuat {
+		t.Fatalf("AssignLecturer() kelas kedua = (%v, %v), ingin (true, nil)", dibuat, err)
 	}
 
 	terassign, err = s.IsLecturerAssigned(ctx, dosen.ID, "kelas-1")
@@ -890,20 +898,20 @@ func TestAssignLecturerDanCakupan(t *testing.T) {
 	}
 
 	// Role selain dosen ditolak.
-	if err := s.AssignLecturer(ctx, admin.ID, "kelas-1", mahasiswa.ID); !errors.Is(err, ErrRoleInvalid) {
+	if _, err := s.AssignLecturer(ctx, admin.ID, "kelas-1", mahasiswa.ID); !errors.Is(err, ErrRoleInvalid) {
 		t.Fatalf("AssignLecturer() mahasiswa = %v, ingin ErrRoleInvalid", err)
 	}
-	if err := s.AssignLecturer(ctx, admin.ID, "kelas-1", admin.ID); !errors.Is(err, ErrRoleInvalid) {
+	if _, err := s.AssignLecturer(ctx, admin.ID, "kelas-1", admin.ID); !errors.Is(err, ErrRoleInvalid) {
 		t.Fatalf("AssignLecturer() admin = %v, ingin ErrRoleInvalid", err)
 	}
 	// Kelas dan pengguna harus ada.
-	if err := s.AssignLecturer(ctx, admin.ID, "kelas-tidak-ada", dosen.ID); !errors.Is(err, ErrNotFound) {
+	if _, err := s.AssignLecturer(ctx, admin.ID, "kelas-tidak-ada", dosen.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("AssignLecturer() kelas tidak ada = %v, ingin ErrNotFound", err)
 	}
-	if err := s.AssignLecturer(ctx, admin.ID, "kelas-1", "dosen-tidak-ada"); !errors.Is(err, ErrNotFound) {
+	if _, err := s.AssignLecturer(ctx, admin.ID, "kelas-1", "dosen-tidak-ada"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("AssignLecturer() dosen tidak ada = %v, ingin ErrNotFound", err)
 	}
-	if err := s.AssignLecturer(ctx, "", "kelas-1", dosen.ID); !errors.Is(err, ErrInvalidInput) {
+	if _, err := s.AssignLecturer(ctx, "", "kelas-1", dosen.ID); !errors.Is(err, ErrInvalidInput) {
 		t.Fatalf("AssignLecturer() aktor kosong = %v, ingin ErrInvalidInput", err)
 	}
 
@@ -911,11 +919,15 @@ func TestAssignLecturerDanCakupan(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LecturersForClass() gagal: %v", err)
 	}
-	if len(daftar) != 1 || daftar[0].ID != dosen.ID {
+	if len(daftar) != 1 || daftar[0].UserID != dosen.ID {
 		t.Fatalf("LecturersForClass() = %+v, ingin hanya %s", daftar, dosen.ID)
 	}
-	if daftar[0].Role != RoleDosen {
-		t.Errorf("role dosen = %q, ingin %q", daftar[0].Role, RoleDosen)
+	if daftar[0].DisplayName == "" || daftar[0].Email == "" {
+		t.Errorf("penugasan tanpa identitas dosen: %+v", daftar[0])
+	}
+	// Waktu penugasan dibawa, karena kontrak memuat assigned_at pada bentuk ini.
+	if daftar[0].AssignedAt.IsZero() {
+		t.Errorf("assigned_at kosong pada penugasan: %+v", daftar[0])
 	}
 
 	kelas, err := s.ClassesForLecturer(ctx, dosen.ID)
@@ -970,8 +982,15 @@ func TestLinkPersonAccountHanyaMahasiswaDanTolakGanda(t *testing.T) {
 		t.Fatalf("PersonForUser() sebelum pengaitan = (%v, %v), ingin (false, nil)", ada, err)
 	}
 
-	if err := s.LinkPersonAccount(ctx, admin.ID, "orang-1", mahasiswa.ID); err != nil {
+	tertaut, err := s.LinkPersonAccount(ctx, admin.ID, "orang-1", mahasiswa.ID)
+	if err != nil {
 		t.Fatalf("LinkPersonAccount() gagal: %v", err)
+	}
+	if tertaut.ID != "orang-1" || tertaut.AccountUserID != mahasiswa.ID {
+		t.Fatalf("LinkPersonAccount() = %+v, ingin orang-1 tertaut %s", tertaut, mahasiswa.ID)
+	}
+	if tertaut.ExternalCode != "2026001" || tertaut.DisplayName != "Peserta Satu" {
+		t.Errorf("bentuk peserta tidak lengkap: %+v", tertaut)
 	}
 	personID, ada, err := s.PersonForUser(ctx, mahasiswa.ID)
 	if err != nil {
@@ -980,35 +999,40 @@ func TestLinkPersonAccountHanyaMahasiswaDanTolakGanda(t *testing.T) {
 	if !ada || personID != "orang-1" {
 		t.Fatalf("PersonForUser() = (%q, %v), ingin (orang-1, true)", personID, ada)
 	}
-	// Pengaitan yang sama diulang tidak mengubah apa pun.
-	if err := s.LinkPersonAccount(ctx, admin.ID, "orang-1", mahasiswa.ID); err != nil {
+	// Pengaitan yang sama diulang tidak mengubah apa pun, dan tetap melaporkan
+	// baris yang sama sehingga responsnya idempoten.
+	ulang, err := s.LinkPersonAccount(ctx, admin.ID, "orang-1", mahasiswa.ID)
+	if err != nil {
 		t.Fatalf("LinkPersonAccount() ulang gagal: %v", err)
+	}
+	if ulang.AccountUserID != mahasiswa.ID {
+		t.Errorf("LinkPersonAccount() ulang = %+v, ingin tetap tertaut %s", ulang, mahasiswa.ID)
 	}
 
 	// Hanya mahasiswa yang boleh dikaitkan.
-	if err := s.LinkPersonAccount(ctx, admin.ID, "orang-2", dosen.ID); !errors.Is(err, ErrNotMahasiswa) {
+	if _, err := s.LinkPersonAccount(ctx, admin.ID, "orang-2", dosen.ID); !errors.Is(err, ErrNotMahasiswa) {
 		t.Fatalf("LinkPersonAccount() dosen = %v, ingin ErrNotMahasiswa", err)
 	}
-	if err := s.LinkPersonAccount(ctx, admin.ID, "orang-2", admin.ID); !errors.Is(err, ErrNotMahasiswa) {
+	if _, err := s.LinkPersonAccount(ctx, admin.ID, "orang-2", admin.ID); !errors.Is(err, ErrNotMahasiswa) {
 		t.Fatalf("LinkPersonAccount() admin = %v, ingin ErrNotMahasiswa", err)
 	}
 
 	// Satu peserta hanya untuk satu akun.
-	if err := s.LinkPersonAccount(ctx, admin.ID, "orang-1", mahasiswa2.ID); !errors.Is(err, ErrAlreadyLinked) {
+	if _, err := s.LinkPersonAccount(ctx, admin.ID, "orang-1", mahasiswa2.ID); !errors.Is(err, ErrAlreadyLinked) {
 		t.Fatalf("LinkPersonAccount() peserta sudah tertaut = %v, ingin ErrAlreadyLinked", err)
 	}
 	// Satu akun hanya untuk satu peserta.
-	if err := s.LinkPersonAccount(ctx, admin.ID, "orang-2", mahasiswa.ID); !errors.Is(err, ErrConflict) {
+	if _, err := s.LinkPersonAccount(ctx, admin.ID, "orang-2", mahasiswa.ID); !errors.Is(err, ErrConflict) {
 		t.Fatalf("LinkPersonAccount() akun sudah tertaut = %v, ingin ErrConflict", err)
 	}
 	// Peserta harus ada.
-	if err := s.LinkPersonAccount(ctx, admin.ID, "orang-tidak-ada", mahasiswa2.ID); !errors.Is(err, ErrNotFound) {
+	if _, err := s.LinkPersonAccount(ctx, admin.ID, "orang-tidak-ada", mahasiswa2.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("LinkPersonAccount() peserta tidak ada = %v, ingin ErrNotFound", err)
 	}
-	if err := s.LinkPersonAccount(ctx, admin.ID, "orang-2", "akun-tidak-ada"); !errors.Is(err, ErrNotFound) {
+	if _, err := s.LinkPersonAccount(ctx, admin.ID, "orang-2", "akun-tidak-ada"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("LinkPersonAccount() akun tidak ada = %v, ingin ErrNotFound", err)
 	}
-	if err := s.LinkPersonAccount(ctx, "", "orang-2", mahasiswa2.ID); !errors.Is(err, ErrInvalidInput) {
+	if _, err := s.LinkPersonAccount(ctx, "", "orang-2", mahasiswa2.ID); !errors.Is(err, ErrInvalidInput) {
 		t.Fatalf("LinkPersonAccount() aktor kosong = %v, ingin ErrInvalidInput", err)
 	}
 
@@ -1018,6 +1042,12 @@ func TestLinkPersonAccountHanyaMahasiswaDanTolakGanda(t *testing.T) {
 
 	if err := s.UnlinkPersonAccount(ctx, admin.ID, "orang-1"); err != nil {
 		t.Fatalf("UnlinkPersonAccount() gagal: %v", err)
+	}
+	// Melepas tautan yang sudah lepas dilaporkan sebagai ErrNotLinked, bukan
+	// sukses: kontrak menuntut 409 dan audit tidak boleh mencatat pelepasan
+	// yang tidak terjadi.
+	if err := s.UnlinkPersonAccount(ctx, admin.ID, "orang-1"); !errors.Is(err, ErrNotLinked) {
+		t.Fatalf("UnlinkPersonAccount() ulang = %v, ingin ErrNotLinked", err)
 	}
 	if _, ada, err := s.PersonForUser(ctx, mahasiswa.ID); err != nil || ada {
 		t.Errorf("PersonForUser() setelah pelepasan = (%v, %v), ingin (false, nil)", ada, err)
@@ -1173,7 +1203,7 @@ func TestClassesForPersonMengabaikanKeanggotaanBerakhir(t *testing.T) {
 	buatKelas(t, db, "kelas-2", "IF102", "Struktur Data")
 	buatKelas(t, db, "kelas-3", "IF103", "Basis Data")
 
-	if err := s.LinkPersonAccount(ctx, admin.ID, "orang-1", mahasiswa.ID); err != nil {
+	if _, err := s.LinkPersonAccount(ctx, admin.ID, "orang-1", mahasiswa.ID); err != nil {
 		t.Fatalf("LinkPersonAccount() gagal: %v", err)
 	}
 
