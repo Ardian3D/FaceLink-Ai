@@ -773,6 +773,43 @@ func TestNonceTersimpanSebagaiHash(t *testing.T) {
 	}
 }
 
+// TestStoreNonceMembersihkanBarisKedaluwarsa membuktikan tabel `auth_nonces`
+// tidak tumbuh tanpa batas: penerbitan nonce juga membuang baris yang masa
+// simpannya sudah lewat. Endpoint penerbitnya publik, sehingga pembersihan tidak
+// boleh hanya bergantung pada pemeliharaan terjadwal.
+func TestStoreNonceMembersihkanBarisKedaluwarsa(t *testing.T) {
+	s, db, jam := bukaStore(t)
+	ctx := context.Background()
+
+	if err := s.StoreNonce(ctx, "nonce-lama"); err != nil {
+		t.Fatalf("StoreNonce() gagal: %v", err)
+	}
+	if got := hitung(t, db, `SELECT COUNT(*) FROM auth_nonces`); got != 1 {
+		t.Fatalf("jumlah nonce = %d, ingin 1", got)
+	}
+
+	// Melewati masa simpan, lalu menerbitkan nonce baru.
+	jam.Advance(masaSimpanNonce + time.Minute)
+	if err := s.StoreNonce(ctx, "nonce-baru"); err != nil {
+		t.Fatalf("StoreNonce() gagal: %v", err)
+	}
+
+	if got := hitung(t, db, `SELECT COUNT(*) FROM auth_nonces`); got != 1 {
+		t.Errorf("jumlah nonce setelah pembersihan = %d, ingin 1 (hanya yang baru)", got)
+	}
+	if got := hitung(t, db, `SELECT COUNT(*) FROM auth_nonces WHERE nonce_hash = ?`, NonceHash("nonce-lama")); got != 0 {
+		t.Errorf("nonce kedaluwarsa masih tersimpan = %d, ingin 0", got)
+	}
+
+	// Nonce baru tetap dapat dipakai; nonce lama tetap ditolak.
+	if err := s.ConsumeNonce(ctx, "nonce-baru"); err != nil {
+		t.Errorf("ConsumeNonce() nonce baru = %v, ingin nil", err)
+	}
+	if err := s.ConsumeNonce(ctx, "nonce-lama"); !errors.Is(err, ErrNonceNotFound) {
+		t.Errorf("ConsumeNonce() nonce lama = %v, ingin ErrNonceNotFound", err)
+	}
+}
+
 func TestCleanupExpiredNonces(t *testing.T) {
 	s, db, jam := bukaStore(t)
 	ctx := context.Background()
@@ -780,13 +817,9 @@ func TestCleanupExpiredNonces(t *testing.T) {
 	if err := s.StoreNonce(ctx, "nonce-pendek"); err != nil {
 		t.Fatalf("StoreNonce() gagal: %v", err)
 	}
-	// Baris kedua didaftarkan setelah waktu maju, sehingga masa simpannya
-	// berakhir lebih lambat daripada baris pertama.
+	// Baris pertama dibiarkan melewati masa simpannya tanpa pembersihan otomatis
+	// ikut berjalan (pembersihan terjadi saat penerbitan berikutnya).
 	jam.Advance(masaSimpanNonce + time.Minute)
-	if err := s.StoreNonce(ctx, "nonce-panjang"); err != nil {
-		t.Fatalf("StoreNonce() gagal: %v", err)
-	}
-
 	jumlah, err := s.CleanupExpiredNonces(ctx)
 	if err != nil {
 		t.Fatalf("CleanupExpiredNonces() gagal: %v", err)
@@ -794,11 +827,14 @@ func TestCleanupExpiredNonces(t *testing.T) {
 	if jumlah != 1 {
 		t.Errorf("jumlah nonce terhapus = %d, ingin 1", jumlah)
 	}
-	if got := hitung(t, db, `SELECT COUNT(*) FROM auth_nonces`); got != 1 {
-		t.Errorf("jumlah nonce tersisa = %d, ingin 1", got)
+	if got := hitung(t, db, `SELECT COUNT(*) FROM auth_nonces`); got != 0 {
+		t.Errorf("jumlah nonce tersisa = %d, ingin 0", got)
 	}
 
 	// Nonce yang masih berlaku tetap dapat dipakai setelah pembersihan.
+	if err := s.StoreNonce(ctx, "nonce-panjang"); err != nil {
+		t.Fatalf("StoreNonce() gagal: %v", err)
+	}
 	if err := s.ConsumeNonce(ctx, "nonce-panjang"); err != nil {
 		t.Errorf("ConsumeNonce() setelah pembersihan = %v, ingin nil", err)
 	}

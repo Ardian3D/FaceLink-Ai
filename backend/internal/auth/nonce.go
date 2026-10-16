@@ -61,6 +61,13 @@ func (s *Store) StoreNonce(ctx context.Context, nonce string) error {
 	); err != nil {
 		return fmt.Errorf("auth: gagal menyimpan nonce: %w", err)
 	}
+
+	// Baris yang masa simpannya sudah lewat dibuang pada kesempatan yang sama.
+	// Endpoint penerbit nonce bersifat publik dan belum dibatasi lajunya, jadi
+	// tanpa pembersihan di jalur ini tabel `auth_nonces` tumbuh tanpa batas.
+	// Kegagalan pembersihan tidak menggagalkan penerbitan: nonce yang baru
+	// tersimpan tetap sah, dan sisa baris lama akan dibersihkan lain kali.
+	_, _ = s.CleanupExpiredNonces(ctx)
 	return nil
 }
 
