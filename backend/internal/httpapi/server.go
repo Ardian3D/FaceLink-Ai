@@ -9,8 +9,14 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Ardian3D/FaceLink-Ai/backend/internal/audit"
+	"github.com/Ardian3D/FaceLink-Ai/backend/internal/auth"
+	"github.com/Ardian3D/FaceLink-Ai/backend/internal/authz"
+	"github.com/Ardian3D/FaceLink-Ai/backend/internal/clock"
 	"github.com/Ardian3D/FaceLink-Ai/backend/internal/database"
 	"github.com/Ardian3D/FaceLink-Ai/backend/internal/migrations"
+	"github.com/Ardian3D/FaceLink-Ai/backend/internal/oidc"
+	"github.com/Ardian3D/FaceLink-Ai/backend/internal/session"
 )
 
 // Server adalah dependensi yang dibutuhkan router.
@@ -19,6 +25,23 @@ type Server struct {
 	DB         *database.DB
 	Migrations migrations.Status
 	Logger     *slog.Logger
+
+	// Komponen autentikasi dan otorisasi (FL-011). Boleh nil pada pengujian
+	// yang hanya memeriksa routing atau kesehatan; dalam keadaan itu endpoint
+	// autentikasi menjawab "layanan tidak tersedia" alih-alih panik.
+	Accounts *auth.Store
+	Sessions *session.Store
+	Google   *oidc.Verifier
+	Audit    *audit.Writer
+	Scope    authz.Directory
+	Clock    clock.Clock
+}
+
+// authSiap melaporkan apakah komponen autentikasi tersedia. Pemeriksaan ini
+// membuat konfigurasi yang belum lengkap berperilaku jelas (menolak melayani)
+// tanpa melumpuhkan endpoint lokal lain seperti /healthz (SECURITY_PRIVACY §5e).
+func (s Server) authSiap() bool {
+	return s.Accounts != nil && s.Sessions != nil && s.Scope != nil
 }
 
 func (s Server) logger() *slog.Logger {
@@ -26,6 +49,17 @@ func (s Server) logger() *slog.Logger {
 		return s.Logger
 	}
 	return slog.New(slog.NewJSONHandler(io.Discard, nil))
+}
+
+// waktuSekarang mengembalikan waktu dari jam server yang disuntikkan. Seluruh
+// perhitungan masa berlaku pada lapisan HTTP memakai sumber ini supaya kebijakan
+// sesi dan respons memakai satu acuan waktu yang sama — termasuk pada pengujian
+// dengan jam palsu.
+func (s Server) waktuSekarang() time.Time {
+	if s.Clock == nil {
+		return time.Now().UTC()
+	}
+	return s.Clock.Now().UTC()
 }
 
 // ServerConfig memuat nilai yang dipakai lapisan HTTP tanpa menarik paket

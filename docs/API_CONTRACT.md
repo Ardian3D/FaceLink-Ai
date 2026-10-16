@@ -97,6 +97,8 @@ Aturan keras:
 - `details` bersifat opsional, tidak boleh memuat data biometrik, dan hanya menyebut nama field.
 - Kesalahan validasi tidak memakai pesan internal database.
 
+**Kesenjangan bentuk galat yang dicatat apa adanya (FL-011, 16 Oktober 2026).** Amplop di atas dipakai **seluruh endpoint FL-011** dan lapisan respons baru (`internal/httpapi/respond.go`). Namun **`GET /api/v1/healthz`, `404` rute tidak dikenal, dan `405` metode tidak diizinkan masih memakai bentuk datar lama** (`{ "code", "message", "request_id" }` tanpa pembungkus `error`), warisan FL-005 yang belum diseragamkan. Akibatnya klien **tidak boleh** mengasumsikan satu bentuk galat tunggal untuk seluruh API: klien yang mem-parse `error.code` akan gagal membaca galat dari ketiga jalur itu, dan klien yang mem-parse bentuk datar akan gagal membaca galat dari endpoint FL-011. Penyeragaman bentuk galat ini **belum dikerjakan** dan dicatat sebagai sisa pekerjaan pada §10.
+
 ### 1.5 Kode status HTTP dan kode kesalahan stabil
 
 | HTTP | Kapan dipakai | Contoh `code` |
@@ -203,10 +205,11 @@ Catatan rujukan silang: matriks peran/izin pada `docs/AUTHORIZATION.md` §4 mema
 
 ## 4. Ikhtisar endpoint
 
-Semua jalur diawali `/api/v1` **kecuali** `/healthz` (tanpa versi, hanya untuk probe lokal). Matriks di bawah adalah **53 endpoint** dan wajib identik dengan matriks peran pada `docs/AUTHORIZATION.md` §4: metode, jalur, dan himpunan peran harus sama persis. Nomor pada kolom Modul mengikuti penomoran modul §3 dokumen ini.
+Semua jalur diawali `/api/v1` **kecuali** `/healthz` (tanpa versi, hanya untuk probe lokal). Matriks di bawah adalah **54 endpoint** dan wajib identik dengan matriks peran pada `docs/AUTHORIZATION.md` §4: metode, jalur, dan himpunan peran harus sama persis. Nomor pada kolom Modul mengikuti penomoran modul §3 dokumen ini.
 
 | Modul | Metode | Jalur | Peran |
 |---|---|---|---|
+| 1 | `POST` | `/auth/nonce` | publik |
 | 1 | `POST` | `/auth/google` | publik |
 | 1 | `POST` | `/auth/refresh` | admin, dosen, mahasiswa |
 | 1 | `POST` | `/auth/logout` | admin, dosen, mahasiswa |
@@ -271,10 +274,37 @@ Rekapitulasi kelompok akses (dihitung dari tabel di atas; satu endpoint dapat di
 | `dosen` + `mahasiswa` | 1 | `GET /me/classes` |
 | Hanya `mahasiswa` | 3 | Jadwal, riwayat kehadiran sendiri, status konsen sendiri |
 | Hanya `device` | 1 | Terminal kamera |
-| Publik tanpa token | 2 | `POST /auth/google`, `GET /healthz` |
-| **Total endpoint** | **53** | 29 + 14 + 3 + 1 + 3 + 1 + 2 |
+| Publik tanpa token | 3 | `POST /auth/nonce`, `POST /auth/google`, `GET /healthz` |
+| **Total endpoint** | **54** | 29 + 14 + 3 + 1 + 3 + 1 + 3 |
 
-Jumlah endpoint yang dapat dipanggil tiap peran: `admin` 46 · `dosen` 18 · `mahasiswa` 7 · `device` 1 · publik 2. Angka-angka ini **BELUM TERVERIFIKASI secara programatis** pada FL-010U dan wajib dihitung ulang setelah dokumen ditulis; tabel rekap disesuaikan bila tabel endpoint berubah.
+Jumlah endpoint yang dapat dipanggil tiap peran: `admin` 46 · `dosen` 18 · `mahasiswa` 7 · `device` 1 · publik 3. Angka-angka ini **BELUM TERVERIFIKASI secara programatis** pada FL-010U dan wajib dihitung ulang setelah dokumen ditulis; tabel rekap disesuaikan bila tabel endpoint berubah.
+
+**Status implementasi per endpoint (FL-011, 16 Oktober 2026).** Matriks 54 endpoint di atas **tidak diubah** oleh FL-011 kecuali satu baris baru — `POST /auth/nonce`, penerbit nonce yang membuat aturan nonce dapat ditegakkan. Dari 54 endpoint, **18 sudah terimplementasi** dan **36 masih kontrak saja**. Daftar ringkas berikut adalah penanda, bukan matriks baru; status per endpoint juga diulang pada pembuka tiap sub-bagian §5.
+
+| # | Metode | Jalur | Status (FL-011) |
+|---|---|---|---|
+| 1 | `POST` | `/auth/nonce` | **TERIMPLEMENTASI** |
+| 2 | `POST` | `/auth/google` | **TERIMPLEMENTASI** |
+| 3 | `POST` | `/auth/refresh` | **TERIMPLEMENTASI** |
+| 4 | `POST` | `/auth/logout` | **TERIMPLEMENTASI** |
+| 5 | `GET` | `/me` | **TERIMPLEMENTASI** |
+| 6 | `GET` | `/auth/sessions` | **TERIMPLEMENTASI** — wajib parameter `user_id` (lihat §5.1) |
+| 7 | `DELETE` | `/auth/sessions/{session_id}` | **TERIMPLEMENTASI** |
+| 8 | `GET` | `/users` | **TERIMPLEMENTASI** |
+| 9 | `POST` | `/users` | **TERIMPLEMENTASI** |
+| 10 | `PATCH` | `/users/{user_id}` | **TERIMPLEMENTASI** |
+| 11 | `PUT` | `/people/{person_id}/account-link` | **TERIMPLEMENTASI** |
+| 12 | `DELETE` | `/people/{person_id}/account-link` | **TERIMPLEMENTASI** |
+| 13 | `GET` | `/classes/{class_id}/dosen` | **TERIMPLEMENTASI** |
+| 14 | `PUT` | `/classes/{class_id}/dosen/{user_id}` | **TERIMPLEMENTASI** |
+| 15 | `DELETE` | `/classes/{class_id}/dosen/{user_id}` | **TERIMPLEMENTASI** |
+| 16 | `GET` | `/healthz` | **TERIMPLEMENTASI** — kode yang ada memasangnya pada `/api/v1/healthz` (lihat §5.12) |
+| 17 | `GET` | `/readyz` | **TERIMPLEMENTASI** |
+| 18 | `GET` | `/me/classes` | **TERIMPLEMENTASI** |
+
+Seluruh **36 endpoint lainnya** pada matriks di atas berstatus **BELUM DIIMPLEMENTASIKAN (kontrak saja)**: modul konsen biometrik (§5.3), enrollment (§5.4), sesi absensi (§5.6), koreksi manual (§5.8), perangkat dan terminal kamera (§5.9, §5.10), rekap/ekspor (§5.11), audit-events (§5.13), portal `/me/schedule` `/me/attendance` `/me/consent` (§5.14), serta seluruh endpoint `/people` dan `/classes` selain penugasan dosen. **Tidak ada satu pun endpoint pada daftar 36 itu yang boleh dianggap berfungsi**, dan tidak ada pernyataan di dokumen ini yang boleh dibaca seolah-olah ia sudah berjalan.
+
+Kesenjangan yang wajib dibaca bersama status di atas dicatat pada §5.1 (nonce wajib dan diterbitkan backend, `user_id` pada daftar sesi), §1.4 (bentuk galat yang belum diseragamkan), dan §10 (pembatasan laju, endpoint yang belum ada, TLS LAN).
 
 ## 5. Detail endpoint
 
@@ -282,17 +312,35 @@ Notasi: **wajib** berarti field harus ada. Semua contoh JSON memakai UUID dan ni
 
 ### 5.1 Modul 1 — Autentikasi Google dan manajemen sesi
 
+**Status implementasi (FL-011, 16 Oktober 2026): ketujuh endpoint pada modul ini TERIMPLEMENTASI** — `POST /auth/nonce`, `POST /auth/google`, `POST /auth/refresh`, `POST /auth/logout`, `GET /me`, `GET /auth/sessions`, dan `DELETE /auth/sessions/{session_id}`. Deviasi yang berlaku pada implementasi dan **tercatat langsung pada endpointnya**: **`nonce` kini wajib dan diterbitkan backend** (`POST /auth/nonce`, bukan "wajib bila aplikasi memakai nonce"), **`GET /auth/sessions` menuntut parameter `user_id`** dan hanya menyajikan sesi **aktif**, serta **respons `POST /auth/refresh` hanya memuat pasangan token** tanpa objek `user`. Pembatasan laju pada `/auth/google`, `/auth/nonce`, dan `/auth/refresh` **belum diimplementasikan** (§10).
+
 Ringkasan alur (selengkapnya pada `docs/AUTHORIZATION.md` §3.1 dan `docs/DECISIONS.md` D-031): aplikasi React Native meminta Google ID token (JWT) di sisi perangkat, mengirimkannya ke `POST /auth/google`, backend memverifikasi token menurut OpenID Connect, mencari identitas pada `user_identities` dengan kunci `(provider='google', subject=sub)`, memeriksa status akun `users`, lalu menerbitkan **sesi FaceLink AI** berupa token opak. Google ID token **bukan** sesi aplikasi dan **tidak pernah** disimpan sebagai sesi.
 
 Bentuk sesi (`docs/AUTHORIZATION.md` §3.1 dan `docs/DECISIONS.md` **D-033, DISETUJUI pada FL-010V**): token opak acak 256-bit dikirim sebagai `Authorization: Bearer <token>`; di server hanya **hash SHA-256** yang disimpan pada `session_tokens`; masa berlaku token akses 60 menit; token penyegar 30 hari dengan **batas absolut sesi 30 hari dihitung sejak sesi awal dibuat**; penyimpanan klien di penyimpanan aman perangkat. Peran **tidak** disimpan di dalam token: role selalu dibaca ulang dari database pada setiap permintaan.
 
 #### `POST /api/v1/auth/google`
 
+- **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.** Endpoint ini menjawab `503 GOOGLE_UNAVAILABLE` selama `FACELINK_GOOGLE_CLIENT_IDS` kosong; endpoint lokal lain (termasuk `/healthz`, `/readyz`, dan seluruh jalur sesi yang sudah ada) tetap berjalan. Endpoint **belum** memiliki pembatasan laju (§10).
 - **Peran:** publik (dengan pembatasan laju ketat).
-- **Tubuh permintaan:** `id_token` (wajib, string — Google ID token/JWT), `nonce` (wajib bila aplikasi memakai nonce).
-- **Verifikasi OIDC yang wajib:** tanda tangan lewat **JWKS** Google (`kid`; kunci di-cache dan dirotasi saat `kid` tidak dikenal); `alg` **wajib** RS256 (menolak `none`, HS256, dan algoritme simetris); `iss` ∈ {`https://accounts.google.com`, `accounts.google.com`}; `aud` ∈ daftar client ID resmi yang dikonfigurasi (tidak ada client ID yang ditanam di kode); `exp`/`iat` dengan toleransi selisih waktu terbatas (usulan 120 detik); `nonce` cocok bila dipakai; `azp` diperiksa bila token punya beberapa audience; `email_verified` = true.
-- **Aturan nonce (FL-010V, 16 Oktober 2026):** aplikasi menghasilkan **nonce acak per percobaan login** dan mengirimkannya **ke Google maupun ke backend**. Backend memverifikasi kecocokan nonce, lalu **menolak nonce yang sudah pernah dipakai** — nonce bersifat **sekali pakai** dengan **TTL 5 menit**, disimpan sebagai **hash** (bukan nilai mentah) pada tabel target **`auth_nonces`**. Login tanpa nonce yang sah atau dengan nonce kedaluwarsa/terpakai gagal dengan `401 IDENTITY_TOKEN_INVALID`. Rujukan kebijakan: `docs/DECISIONS.md` D-031 dan `docs/SECURITY_PRIVACY.md` §2.
+- **Tubuh permintaan:** `id_token` (wajib, string — Google ID token/JWT), `nonce` (**wajib** sejak FL-011, 16 Oktober 2026; lihat aturan nonce di bawah).
+- **Verifikasi OIDC yang wajib:** tanda tangan lewat **JWKS** Google (`kid`; kunci di-cache dan dirotasi saat `kid` tidak dikenal); `alg` **wajib** RS256 (menolak `none`, HS256, dan algoritme simetris); `iss` ∈ {`https://accounts.google.com`, `accounts.google.com`}; `aud` ∈ daftar client ID resmi yang dikonfigurasi (tidak ada client ID yang ditanam di kode); `exp`/`iat` dengan toleransi selisih waktu terbatas (usulan 120 detik); `nonce` **wajib cocok**; `azp` diperiksa bila token punya beberapa audience; `email_verified` = true. Alamat JWKS diambil dari konfigurasi `FACELINK_GOOGLE_JWKS_URL` (bawaan endpoint Google, wajib HTTPS), bukan dari klaim token.
+- **Aturan nonce (FL-010V, 16 Oktober 2026; ditegaskan wajib pada FL-011):** aplikasi meminta **nonce acak sekali pakai** ke backend lewat `POST /auth/nonce` (lihat di bawah), mengirimkannya **ke Google** sebagai parameter `nonce` pada permintaan otorisasi, lalu mengirimkannya kembali bersama ID token ke endpoint ini. Backend memverifikasi kecocokan nonce, lalu **menolak nonce yang sudah pernah dipakai atau sudah kedaluwarsa** — nonce bersifat **sekali pakai** dengan **TTL 5 menit**, disimpan sebagai **hash** (bukan nilai mentah) pada tabel `auth_nonces`. Login tanpa nonce yang sah atau dengan nonce kedaluwarsa/terpakai gagal dengan `401 IDENTITY_TOKEN_INVALID`. Rujukan kebijakan: `docs/DECISIONS.md` D-031 dan `docs/SECURITY_PRIVACY.md` §2.
+- **Konsekuensi penerbitan nonce di backend (FL-011, 16 Oktober 2026).** Nonce **hanya sah bila terdaftar lebih dahulu** oleh backend. Alasannya: pengikatan nonce yang dituntut kontrak ini tidak dapat dipenuhi bila klien mendaftarkan sendiri nonce-nya **setelah** login — token yang bocor dapat diputar ulang dengan nonce karangan. Karena itu backend menyediakan penerbitnya (`POST /auth/nonce`) dan menolak nonce yang tidak pernah diterbitkannya. Nonce yang sudah dipakai tidak pernah didaftarkan ulang: barisnya dipertahankan 10 menit (dua kali TTL) agar pemakaian ulang tetap dikenali sebagai `nonce_replay`, bukan sebagai nonce asing.
+- **`nonce` kini WAJIB — penguatan FL-011 (16 Oktober 2026).** Kontrak sebelumnya berbunyi "`nonce` wajib bila aplikasi memakai nonce", sehingga implementasi yang tidak mengirim nonce tetap sah. **FL-011 mempersempitnya: `nonce` wajib dikirim pada setiap permintaan**, dan backend menolak permintaan tanpa nonce sebagai `400 MISSING_FIELD` sebelum ID token diverifikasi. Alasannya: nonce adalah pengikat tunggal antara ID token dan percobaan login aplikasi ini, sehingga tanpa nonce token yang bocor/tertangkap dapat dipakai ulang terhadap backend. **Konsekuensi bagi aplikasi klien React Native:** aplikasi **wajib** meminta nonce ke `POST /auth/nonce`, mengirimkannya **sebagai parameter `nonce` pada permintaan otorisasi Google** dan **dengan nilai yang sama** pada field `nonce` tubuh `POST /auth/google`; aplikasi yang tidak mengirim nonce ke Google akan selalu gagal di sini, dan aplikasi yang mengirim nonce berbeda di kedua jalur gagal dengan `401 IDENTITY_TOKEN_INVALID`. Ini adalah **penguatan untuk D-033**, bukan penolakan keputusan; tidak ada klaim bahwa nonce sebelumnya opsional pada implementasi yang berlaku.
 - **Tujuan ID token (FL-010V, 16 Oktober 2026):** Google ID token dipakai **hanya untuk pertukaran identitas** pada endpoint ini — ia **bukan** token otorisasi API FaceLink AI dan **tidak pernah** menjadi sesi aplikasi. Setelah pertukaran berhasil, seluruh permintaan berikutnya memakai token sesi opak FaceLink AI, dan role/cakupan tetap diputuskan backend dari database.
+- **Aturan penautan akun:** identitas dicari pada `user_identities` lewat `sub` (pengenal stabil; **email bukan kunci identitas**). Identitas belum tertaut boleh tertaut **hanya bila** ada baris `users` berstatus `invited` dengan `email` yang sama persis (huruf kecil, tanpa spasi tepi) dan klaim `email_verified=true`, lalu baris itu diaktifkan. Selain itu **tidak ada akun yang dibuat**: tidak ada pendaftaran mandiri dan tidak ada role otomatis.
+
+#### `POST /api/v1/auth/nonce`
+
+- **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.** Endpoint baru; kontrak sebelumnya menyebut "aplikasi menghasilkan nonce" tanpa menyediakan jalurnya, sehingga pengikatan nonce tidak dapat ditegakkan.
+- **Peran:** publik. Tidak menerima rahasia apa pun; pembatasan laju menyusul bersama `/auth/google` (§10).
+- **Tubuh permintaan:** kosong.
+- **Respons `200`:** `{ "data": { "nonce": "<43 karakter base64url>", "expires_in": 300 }, "request_id": "..." }`. Nilai `nonce` adalah 256 bit acak dari sumber kriptografis.
+- **Kode status:** `200`, `503`.
+- **Kesalahan:** `AUTH_UNAVAILABLE` (503) bila komponen autentikasi belum dikonfigurasi.
+- **Efek database:** `INSERT INTO auth_nonces` (hanya hash SHA-256 yang disimpan).
+- **Idempotensi:** tidak; setiap panggilan menerbitkan nonce baru.
+- **Catatan:** satu nonce untuk satu percobaan login. Aplikasi yang mengulang percobaan harus meminta nonce baru.
 - **Aturan penautan akun:** identitas dicari pada `user_identities` lewat `sub` (pengenal stabil; **email bukan kunci identitas**). Identitas belum tertaut boleh tertaut **hanya bila** ada baris `users` berstatus `invited` dengan `email` yang sama persis (huruf kecil, tanpa spasi tepi) dan klaim `email_verified=true`, lalu baris itu diaktifkan. Selain itu **tidak ada akun yang dibuat**: tidak ada pendaftaran mandiri dan tidak ada role otomatis.
 - **Respons `200`:**
 
@@ -315,27 +363,29 @@ Bentuk sesi (`docs/AUTHORIZATION.md` §3.1 dan `docs/DECISIONS.md` **D-033, DISE
 ```
 
 - **Catatan bentuk respons:** `person_id` bernilai `null` untuk akun yang tidak tertaut baris `people` (umumnya `admin`/`dosen`); `class_ids` berisi kelas yang ditugaskan (`dosen`) atau diikuti (`mahasiswa`), dan kosong untuk `admin`. Aplikasi mengarahkan pengguna berdasarkan `role` dari backend.
-- **Kode status:** `200`, `400`, `401`, `403`, `429`, `503`.
-- **Kesalahan:** `VALIDATION_FAILED`, `IDENTITY_TOKEN_INVALID` (401), `IDENTITY_NOT_LINKED` (403), `RATE_LIMITED` (429), `GOOGLE_UNAVAILABLE` (503).
+- **Kode status:** `200`, `400`, `401`, `403`, `429`, `503`. **Catatan implementasi (FL-011):** `400` (JSON rusak / `id_token` atau `nonce` tidak diisi), `401`, `403`, dan `503 GOOGLE_UNAVAILABLE` sudah dihasilkan kode; **`429` belum pernah dihasilkan** karena pembatasan laju belum diimplementasikan (§10).
+- **Kesalahan:** `VALIDATION_FAILED`, `MISSING_FIELD` (400 — termasuk `nonce` tidak diisi), `IDENTITY_TOKEN_INVALID` (401), `IDENTITY_NOT_LINKED` (403), `RATE_LIMITED` (429 — **belum dihasilkan kode**), `GOOGLE_UNAVAILABLE` (503).
 - **Efek database:** memperbarui `users.last_login_at`; `INSERT INTO user_identities` saat penautan pertama; menambah `audit_events` (`auth.google.succeeded`, `auth.google.linked`, atau `auth.login.denied`). Untuk `auth.login.denied`, `safe_metadata` menyimpan `reason` ber-kode (`no_account`, `not_linked`, `suspended`, `email_mismatch`) — **bukan** email.
 - **Idempotensi:** tidak berlaku; setiap percobaan menambah baris audit. Pengulangan dengan ID token yang sama menerbitkan sesi baru.
 - **Catatan keamanan:** `IDENTITY_NOT_LINKED` memakai **satu pesan generik** untuk semua sebab (anti-enumeration) sehingga pemanggil tidak dapat membedakan "email tidak terdaftar", "belum diberi akses", dan "akun dinonaktifkan". Status `invited` (belum tertaut) dan `suspended` sama-sama ditolak. Google ID token, klaim `sub`, dan `email` **tidak pernah** ditulis ke log.
 
 #### `POST /api/v1/auth/refresh`
 
+- **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.** Pembatasan laju **belum** ada (§10).
 - **Peran:** admin, dosen, mahasiswa.
 - **Tubuh permintaan:** `refresh_token` (wajib).
 - **Respons `200`:** pasangan token baru — `{ "data": { "access_token", "refresh_token", "expires_in" } }`. Bentuk `user` tidak dikirim ulang; aplikasi memakai `GET /me` bila memerlukannya.
 - **Kode status:** `200`, `400`, `401`.
 - **Kesalahan:** `VALIDATION_FAILED`, `UNAUTHENTICATED`, `TOKEN_EXPIRED`, `SESSION_REVOKED`.
-- **Rotasi:** setiap penyegaran menerbitkan pasangan token baru; hash penyegar sebelumnya disimpan satu langkah (`prev_refresh_hash`) untuk deteksi pemakaian ulang.
-- **Deteksi penyalahgunaan:** penyegar yang sudah dirotasi dipakai ulang → **seluruh sesi pengguna itu dicabut** dan audit `auth.session.reuse_detected` ditulis.
-- **Batas absolut 30 hari sejak sesi awal dibuat (FL-010V, 16 Oktober 2026):** batas absolut dihitung dari **waktu sesi awal dibuat**, bukan dari penyegaran terakhir. Rotasi penyegar **tidak boleh memperpanjang** batas absolut itu; sesi yang telah melewati 30 hari ditolak dan menuntut **Google Sign-In ulang** yang sah sebagai satu-satunya cara memperpanjang. Batas ini berlaku sebagai kebijakan yang disetujui (**D-033**); belum ada implementasi maupun pengujiannya.
+- **Rotasi:** setiap penyegaran menerbitkan pasangan token baru; hash penyegar sebelumnya disimpan satu langkah (`prev_refresh_hash`) dan **setiap hash yang digantikan dicatat pada `session_token_history`** (migrasi 00003) agar pemakaian ulang masih dapat dikenali setelah beberapa generasi rotasi.
+- **Deteksi penyalahgunaan:** penyegar yang sudah dirotasi dipakai ulang → **seluruh sesi pengguna itu dicabut** (`revoked_reason='refresh_reuse'`) dan audit `auth.session.reuse_detected` ditulis. Cakupan "seluruh sesi" ditegakkan kode: token penyegar yang dipakai ulang menandakan salinan bocor, sehingga sesi lain milik pengguna yang sama ikut dicabut, bukan hanya sesi yang tokennya diputar.
+- **Batas absolut 30 hari sejak sesi awal dibuat (FL-010V, 16 Oktober 2026):** batas absolut dihitung dari **waktu sesi awal dibuat**, bukan dari penyegaran terakhir. Rotasi penyegar **tidak boleh memperpanjang** batas absolut itu; sesi yang telah melewati 30 hari ditolak dan menuntut **Google Sign-In ulang** yang sah sebagai satu-satunya cara memperpanjang. Batas ini berlaku sebagai kebijakan yang disetujui (**D-033**) dan **sudah diimplementasikan pada FL-011** (kolom `session_tokens.absolute_expires_at` dengan `CHECK` yang menjaga `refresh_expires_at`/`access_expires_at` tidak melampauinya); hasil pengujiannya dicatat oleh agen induk pada `PROJECT_STATE.md`, bukan di dokumen ini.
 - **Efek database:** `UPDATE session_tokens`; audit `auth.session.refreshed`.
 - **Idempotensi:** token penyegar lama tidak dapat dipakai dua kali.
 
 #### `POST /api/v1/auth/logout`
 
+- **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.**
 - **Peran:** admin, dosen, mahasiswa.
 - **Tubuh permintaan:** kosong.
 - **Respons:** `204` tanpa isi.
@@ -345,6 +395,7 @@ Bentuk sesi (`docs/AUTHORIZATION.md` §3.1 dan `docs/DECISIONS.md` **D-033, DISE
 
 #### `GET /api/v1/me`
 
+- **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.**
 - **Peran:** admin, dosen, mahasiswa.
 - **Query:** —
 - **Respons `200`:**
@@ -371,23 +422,29 @@ Bentuk sesi (`docs/AUTHORIZATION.md` §3.1 dan `docs/DECISIONS.md` **D-033, DISE
 
 #### `GET /api/v1/auth/sessions`
 
+- **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.**
 - **Peran:** admin.
+- **Query:** `user_id` (**wajib sejak FL-011, 16 Oktober 2026**). Tanpa `user_id`, backend menjawab `400 MISSING_FIELD`; `user_id` yang tidak menunjuk akun dikenal dijawab `404 NOT_FOUND`. **Kesenjangan yang dicatat apa adanya:** implementasi yang berlaku **hanya** dapat mendaftar sesi **satu akun pada satu waktu**, sehingga **belum ada** daftar sesi lintas akun. Kontrak sebelumnya tidak menyebut parameter ini karena mengasumsikan daftar lintas akun; kemampuan itu belum ada dan tidak boleh diasumsikan. Parameter `user_id` tidak memperluas izin: endpoint ini tetap **hanya `admin`**, dan admin yang membaca sesi akun lain tidak memperoleh hak lain atas akun itu.
 - **Catatan penamaan:** endpoint ini **menggantikan** `GET /operator-sessions` (nama lama salah karena kini menampung tiga role manusia). Nama lama tidak dipakai lagi; belum ada klien yang memakainya, sehingga tidak ada klien yang rusak.
-- **Respons `200`:** daftar sesi aktif dengan `id`, `user_id`, `role`, `created_at`, `last_seen_at`, `user_agent_ringkas`.
-- **Kode status:** `200`, `403`.
+- **Respons `200`:** daftar sesi aktif **milik akun pada `user_id`** dengan `id`, `user_id`, `role`, `created_at`, `last_seen_at`, `absolute_expires_at`, `user_agent_ringkas`. Sesi yang sudah dicabut **tidak** disertakan: daftar ini menyajikan sesi yang masih dapat dipakai, bukan riwayat.
+- **Kode status:** `200`, `400`, `403`, `404`.
+- **Kesalahan:** `MISSING_FIELD` (400, `user_id` tidak diisi), `FORBIDDEN_ROLE` (403), `NOT_FOUND` (404).
 - **Efek database:** —
 - **Idempotensi:** aman diulang.
 
 #### `DELETE /api/v1/auth/sessions/{session_id}`
 
+- **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.**
 - **Peran:** admin.
 - **Catatan penamaan:** **menggantikan** `DELETE /operator-sessions/{session_id}`.
 - **Respons:** `204`.
 - **Kode status:** `204`, `403`, `404`.
 - **Efek database:** token sesi dicabut (`revoked_at`, `revoked_reason`); audit `auth.session.revoked`. Penonaktifan akun mencabut seluruh sesi akun itu.
-- **Idempotensi:** mencabut sesi yang sudah tercabut mengembalikan `404`.
+- **Idempotensi:** mencabut sesi yang sudah tercabut mengembalikan `404`. Sesi yang sudah melewati batas waktunya juga `404`: tidak ada yang dapat dicabut, dan keadaan itu dibedakan dari pencabutan yang benar-benar terjadi.
 
 ### 5.2 Modul 2 — Akun pengguna, peserta, dan penautan peserta
+
+**Status implementasi (FL-011, 16 Oktober 2026).** **TERIMPLEMENTASI:** `GET /users`, `POST /users`, `PATCH /users/{user_id}`, `PUT /people/{person_id}/account-link`, dan `DELETE /people/{person_id}/account-link`. **BELUM DIIMPLEMENTASIKAN (kontrak saja):** seluruh endpoint `/people` pada modul ini (`GET`, `POST`, `GET /{person_id}`, `PATCH`, `DELETE`) — pencatatan peserta dan pengelolaannya belum ada. Akibatnya penautan akun dapat dipanggil, tetapi baris peserta yang menjadi sasarannya harus sudah ada di database dari jalur lain; tidak ada endpoint produk yang membuatnya.
 
 #### Lifecycle akun (FL-010V, 16 Oktober 2026)
 
@@ -402,10 +459,11 @@ Aturan berikut menetapkan **lifecycle akun** dan berlaku sebagai kebijakan yang 
 7. **Satu role utama per akun (D-037).** Satu akun internal memiliki **tepat satu role utama aktif**; tidak ada multi-role switching pada MVP. Hak istimewa `admin` untuk mengelola kelas sesuai matriks **tidak** menjadikannya role `dosen` kedua.
 8. **Bootstrap admin lokal.** Proses **lokal, eksplisit, sekali, dan dapat diaudit**: tanpa hardcoded password/token/kredensial, menolak berjalan bila sudah ada akun `admin` berstatus `active` atau `invited`, dan menulis **satu** baris `users` (`role='admin'`, `status='invited'`) yang ditautkan pada login Google pertama. Perintahnya `-bootstrap-admin` pada `cmd/server` (diimplementasikan pada FL-011) dengan audit `user.bootstrapped`; lihat `docs/AUTHORIZATION.md` §3.1.
 9. **Tahan request bersamaan.** Pendaftaran dan penautan harus tahan permintaan bersamaan: transaksi atomik ditambah batasan unik sebagai penjaga, dan **hanya satu** permintaan yang boleh menautkan. Bila batasan unik menolak, transaksi di-rollback dan permintaan kalah tidak boleh menulis penautan kedua.
-10. **Status verifikasi:** seluruh butir di atas adalah kebijakan dan perilaku rancangan yang **BELUM TERVERIFIKASI** — tidak ada kode, migrasi, maupun pengujian pada FL-010V.
+10. **Status verifikasi (diperbarui FL-011, 16 Oktober 2026):** butir 1–9 kini **diimplementasikan** sebagai kode pada cabang `feat/fl-011-google-auth-backend` — bootstrap admin lokal (butir 8), penautan atomik berbasis batasan unik `(provider, subject)` dan `(user_id, provider)` (butir 2, 9), penolakan auto-registration/auto-admin (butir 3, 5), role hanya dari database (butir 4, 7), dan pencocokan email hanya pada penautan pertama (butir 6). Yang **belum** ada adalah **hasil pengujian yang dinyatakan di dokumen ini**: angka dan status kelulusan dicatat oleh agen induk pada `PROJECT_STATE.md`, bukan di sini. Skenario GA-06, GA-13, GA-14, dan GA-15 pada `docs/TEST_PLAN.md` §8.1/§8.3 tetap berstatus **BELUM TERVERIFIKASI** sampai hasil nyata dicatat. Implementasi ini **tidak** mengubah keputusan D-032 dan tidak menambah endpoint.
 
 #### `GET /api/v1/people`
 
+- **Status (FL-011, 16 Oktober 2026): BELUM DIIMPLEMENTASIKAN (kontrak saja).**
 - **Peran:** admin, dosen. Untuk `dosen`, hasil dibatasi pada peserta kelas yang ditugaskan kepadanya.
 - **Query:** `status` (opsional: `active`, `inactive`), `class_id` (opsional), `cursor`, `limit`.
 - **Respons `200`:** daftar `{ id, external_code, display_name, status, consent_state, enrollment_state }`.
@@ -418,6 +476,7 @@ Aturan berikut menetapkan **lifecycle akun** dan berlaku sebagai kebijakan yang 
 
 #### `POST /api/v1/people`
 
+- **Status (FL-011, 16 Oktober 2026): BELUM DIIMPLEMENTASIKAN (kontrak saja).**
 - **Peran:** admin.
 - **Tubuh permintaan:** `external_code` (wajib, unik), `display_name` (wajib), `note` (opsional, ≤200 karakter).
 - **Respons `201`:** objek `people` yang dibuat.
@@ -429,6 +488,7 @@ Aturan berikut menetapkan **lifecycle akun** dan berlaku sebagai kebijakan yang 
 
 #### `GET /api/v1/people/{person_id}`
 
+- **Status (FL-011, 16 Oktober 2026): BELUM DIIMPLEMENTASIKAN (kontrak saja).**
 - **Peran:** admin, dosen. Untuk `dosen`, hanya peserta yang menjadi anggota kelas yang ditugaskan kepadanya; peserta di luar cakupan → `404 NOT_FOUND`.
 - **Respons `200`:** detail peserta termasuk `consent_state` dan `enrollment_state`.
 - **Kode status:** `200`, `404`.
@@ -437,6 +497,7 @@ Aturan berikut menetapkan **lifecycle akun** dan berlaku sebagai kebijakan yang 
 
 #### `PATCH /api/v1/people/{person_id}`
 
+- **Status (FL-011, 16 Oktober 2026): BELUM DIIMPLEMENTASIKAN (kontrak saja).**
 - **Peran:** admin.
 - **Tubuh permintaan:** `display_name`, `status`, `note` (semua opsional; minimal satu).
 - **Respons `200`:** objek setelah perubahan.
@@ -446,6 +507,7 @@ Aturan berikut menetapkan **lifecycle akun** dan berlaku sebagai kebijakan yang 
 
 #### `DELETE /api/v1/people/{person_id}`
 
+- **Status (FL-011, 16 Oktober 2026): BELUM DIIMPLEMENTASIKAN (kontrak saja).**
 - **Peran:** admin.
 - **Respons:** `204`.
 - **Kode status:** `204`, `403`, `404`, `409`.
@@ -455,6 +517,7 @@ Aturan berikut menetapkan **lifecycle akun** dan berlaku sebagai kebijakan yang 
 
 #### `GET /api/v1/users`
 
+- **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.**
 - **Peran:** admin.
 - **Query:** `role` (opsional: `admin`/`dosen`/`mahasiswa`), `status` (opsional: `invited`/`active`/`suspended`), `cursor`, `limit`.
 - **Respons `200`:** daftar `{ id, email, display_name, role, status, created_by, created_at, last_login_at }`. Tidak ada field kata sandi atau hash kata sandi.
@@ -464,6 +527,7 @@ Aturan berikut menetapkan **lifecycle akun** dan berlaku sebagai kebijakan yang 
 
 #### `POST /api/v1/users`
 
+- **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.** Akun yang dibuat berstatus `invited` dan baru menjadi `active` pada login Google pertama (lihat §5.2 pembuka dan `README.md`).
 - **Peran:** admin.
 - **Tubuh permintaan:** `email` (wajib, email Google; dinormalisasi huruf kecil tanpa spasi tepi), `display_name` (wajib), `role` (wajib: `admin`/`dosen`/`mahasiswa`). **Tidak ada kata sandi** — akun dibuat berstatus `invited` dan diaktifkan pada Google Sign-In pertama.
 - **Respons `201`:** objek `users` yang dibuat, berstatus `invited`.
@@ -475,6 +539,7 @@ Aturan berikut menetapkan **lifecycle akun** dan berlaku sebagai kebijakan yang 
 
 #### `PATCH /api/v1/users/{user_id}`
 
+- **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.** Aturan `LAST_ADMIN_PROTECTED` dan `SELF_ACCOUNT_PROTECTED` ditegakkan kode.
 - **Peran:** admin.
 - **Tubuh permintaan:** `role`, `status`, `display_name` (semua opsional; minimal satu).
 - **Respons `200`:** objek akun setelah perubahan.
@@ -486,6 +551,7 @@ Aturan berikut menetapkan **lifecycle akun** dan berlaku sebagai kebijakan yang 
 
 #### `PUT /api/v1/people/{person_id}/account-link`
 
+- **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.**
 - **Peran:** admin.
 - **Tubuh permintaan:** `user_id` (wajib; akun ber-role `mahasiswa`).
 - **Respons `200`:** objek peserta dengan `account_user_id` terisi.
@@ -497,6 +563,7 @@ Aturan berikut menetapkan **lifecycle akun** dan berlaku sebagai kebijakan yang 
 
 #### `DELETE /api/v1/people/{person_id}/account-link`
 
+- **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.**
 - **Peran:** admin.
 - **Respons:** `204`.
 - **Kode status:** `204`, `403`, `404`, `409`.
@@ -505,6 +572,8 @@ Aturan berikut menetapkan **lifecycle akun** dan berlaku sebagai kebijakan yang 
 - **Idempotensi:** penghapusan kedua mengembalikan `404`/`409`.
 
 ### 5.3 Modul 3 — Persetujuan biometrik
+
+**Status implementasi (FL-011, 16 Oktober 2026): SELURUH modul ini BELUM DIIMPLEMENTASIKAN (kontrak saja)** — `GET`, `POST`, dan `POST .../withdraw` belum ada di kode. Pencatatan konsen biometrik belum berjalan; tabel `consent_records` dan `face_templates` masih tidak ditulis oleh endpoint produk mana pun.
 
 Seluruh endpoint pada modul ini **hanya `admin`**; `dosen` tidak mencatat atau mencabut konsen (lihat `docs/AUTHORIZATION.md` §9 butir 1).
 
@@ -537,6 +606,8 @@ Seluruh endpoint pada modul ini **hanya `admin`**; `dosen` tidak mencatat atau m
 - **Catatan:** setelah pencabutan, upaya pengenalan tidak boleh menampilkan peserta sebagai kandidat, karena template sudah tidak ada. Ini **wajib diuji** sebagai skenario kontrak (§8).
 
 ### 5.4 Modul 4 — Enrollment wajah
+
+**Status implementasi (FL-011, 16 Oktober 2026): SELURUH modul ini BELUM DIIMPLEMENTASIKAN (kontrak saja).** Tidak ada endpoint enrollment pada kode, dan tidak ada penulisan `face_templates`/`face_enrollment_samples` (D-030 masih berlaku apa adanya).
 
 Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas yang memungkinkan seseorang mendaftarkan wajah ke identitas orang lain. Seluruh endpoint pada modul ini **hanya `admin`**; `dosen` tidak melakukan enrollment biometrik (lihat `docs/AUTHORIZATION.md` §9 butir 1).
 
@@ -592,10 +663,13 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 ### 5.5 Modul 5 — Kelas, keanggotaan, dan penugasan dosen
 
+**Status implementasi (FL-011, 16 Oktober 2026).** **TERIMPLEMENTASI:** `GET /classes/{class_id}/dosen`, `PUT /classes/{class_id}/dosen/{user_id}`, dan `DELETE /classes/{class_id}/dosen/{user_id}` (penugasan dosen). **BELUM DIIMPLEMENTASIKAN (kontrak saja):** `GET /classes`, `POST /classes`, `GET /classes/{class_id}/members`, `PUT /classes/{class_id}/members/{person_id}`, dan `DELETE /classes/{class_id}/members/{person_id}`. Akibatnya kelas dan keanggotaan peserta **belum** dapat dibuat atau diubah lewat API; barisnya harus sudah ada di database. Perhatikan bahwa `GET /me/classes` (§5.14) **sudah** berjalan dan membaca penugasan/keanggotaan, sehingga isinya bergantung pada data yang belum ada jalur produknya.
+
 **Catatan cakupan `dosen`:** `dosen` hanya melihat dan mengelola kelas yang **ditugaskan** kepadanya lewat `class_lecturers`. Objek kelas di luar penugasan → **`404 NOT_FOUND`** (bukan `403`), agar keberadaan kelas lain tidak dapat ditebak.
 
 #### `GET /api/v1/classes`
 
+- **Status (FL-011, 16 Oktober 2026): BELUM DIIMPLEMENTASIKAN (kontrak saja).**
 - **Peran:** admin, dosen. Untuk `dosen`, respons hanya memuat kelas yang ditugaskan kepadanya.
 - **Query:** `cursor`, `limit`.
 - **Respons `200`:** daftar `{ id, code, title, member_count, active_session_id }`.
@@ -605,6 +679,7 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `POST /api/v1/classes`
 
+- **Status (FL-011, 16 Oktober 2026): BELUM DIIMPLEMENTASIKAN (kontrak saja).**
 - **Peran:** admin.
 - **Tubuh permintaan:** `code` (wajib, unik), `title` (wajib).
 - **Respons `201`:** objek kelas.
@@ -614,6 +689,7 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `GET /api/v1/classes/{class_id}/members`
 
+- **Status (FL-011, 16 Oktober 2026): BELUM DIIMPLEMENTASIKAN (kontrak saja).**
 - **Peran:** admin, dosen. Untuk `dosen`, hanya kelas yang ditugaskan kepadanya.
 - **Respons `200`:** daftar peserta aktif kelas dengan `person_id`, `external_code`, `display_name`.
 - **Kode status:** `200`, `404`.
@@ -622,6 +698,7 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `PUT /api/v1/classes/{class_id}/members/{person_id}`
 
+- **Status (FL-011, 16 Oktober 2026): BELUM DIIMPLEMENTASIKAN (kontrak saja).**
 - **Peran:** admin.
 - **Tubuh permintaan:** kosong.
 - **Respons `201`** bila baru dibuat, `200` bila sudah menjadi anggota.
@@ -631,6 +708,7 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `DELETE /api/v1/classes/{class_id}/members/{person_id}`
 
+- **Status (FL-011, 16 Oktober 2026): BELUM DIIMPLEMENTASIKAN (kontrak saja).**
 - **Peran:** admin.
 - **Respons:** `204`.
 - **Kode status:** `204`, `404`, `409`.
@@ -640,6 +718,7 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `GET /api/v1/classes/{class_id}/dosen`
 
+- **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.** Cakupan `dosen` (hanya kelas yang ditugaskan) diperiksa di handler; kelas di luar cakupan → `404`.
 - **Peran:** admin, dosen. Untuk `dosen`, hanya kelas yang ditugaskan kepadanya.
 - **Respons `200`:** daftar `{ user_id, display_name, email, assigned_at }` untuk akun ber-role `dosen` yang ditugaskan pada kelas itu.
 - **Kode status:** `200`, `403`, `404`.
@@ -648,6 +727,7 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `PUT /api/v1/classes/{class_id}/dosen/{user_id}`
 
+- **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.** Hanya akun ber-role `dosen` yang dapat ditugaskan.
 - **Peran:** admin.
 - **Tubuh permintaan:** kosong.
 - **Respons `201`** bila penugasan baru dibuat, `200` bila penugasan sudah ada.
@@ -659,6 +739,7 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 #### `DELETE /api/v1/classes/{class_id}/dosen/{user_id}`
 
+- **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.**
 - **Peran:** admin.
 - **Respons:** `204`.
 - **Kode status:** `204`, `404`, `409`.
@@ -666,6 +747,8 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 - **Idempotensi:** penghapusan kedua `404`.
 
 ### 5.6 Modul 6 — Sesi absensi
+
+**Status implementasi (FL-011, 16 Oktober 2026): SELURUH modul ini BELUM DIIMPLEMENTASIKAN (kontrak saja)** — `GET /sessions`, `POST /sessions`, `GET /sessions/{session_id}`, `POST /sessions/{session_id}/open`, dan `POST /sessions/{session_id}/close` belum ada di kode. Tidak ada sesi absensi yang dapat dibuat, dibuka, atau ditutup lewat API.
 
 **Catatan cakupan `dosen`:** `dosen` hanya boleh membuat, membuka, dan menutup sesi pada kelas yang ditugaskan kepadanya. Di luar itu → `404 NOT_FOUND`.
 
@@ -718,9 +801,13 @@ Enrollment adalah operasi **berjangka waktu**. Tidak ada endpoint unggah bebas y
 
 ### 5.7 Modul 7 dan 8 — Hasil verifikasi dan pencatatan kehadiran
 
+**Status implementasi (FL-011, 16 Oktober 2026): BELUM DIIMPLEMENTASIKAN (kontrak saja)** — bergantung penuh pada §5.10 yang belum ada. Tidak ada verifikasi wajah maupun pencatatan kehadiran yang berjalan.
+
 Tidak ada endpoint publik terpisah. Keduanya dijalankan di dalam §5.10. Tabel keputusan domain dan statusnya ada di §7. Pada revisi FL-010U tidak ada perubahan pada kedua modul ini.
 
 ### 5.8 Modul 9 — Koreksi manual dan jalur alternatif absensi
+
+**Status implementasi (FL-011, 16 Oktober 2026): SELURUH modul ini BELUM DIIMPLEMENTASIKAN (kontrak saja)** — `POST` dan `GET /sessions/{session_id}/manual-checkins` belum ada di kode. Jalur absensi manual — yang di seluruh dokumen dinyatakan wajib tersedia sebagai alternatif — **belum berjalan**.
 
 **Catatan cakupan `dosen`:** koreksi manual hanya untuk sesi kelas yang ditugaskan kepadanya. Di luar itu → `404 NOT_FOUND`.
 
@@ -745,6 +832,8 @@ Tidak ada endpoint publik terpisah. Keduanya dijalankan di dalam §5.10. Tabel k
 - **Idempotensi:** aman diulang.
 
 ### 5.9 Modul 10 — Pendaftaran dan autentikasi perangkat
+
+**Status implementasi (FL-011, 16 Oktober 2026): SELURUH modul ini BELUM DIIMPLEMENTASIKAN (kontrak saja)** — `POST /devices`, `GET /devices`, `POST /devices/{device_id}/rotate-token`, dan `DELETE /devices/{device_id}` belum ada di kode. Tidak ada token perangkat yang dapat dibuat lewat API.
 
 **Seluruh operasi perangkat hanya `admin`** (FL-010U). `dosen` tidak dapat memanggil `GET /devices` maupun endpoint perangkat lainnya.
 
@@ -784,6 +873,8 @@ Tidak ada endpoint publik terpisah. Keduanya dijalankan di dalam §5.10. Tabel k
 - **Idempotensi:** pencabutan kedua `404`.
 
 ### 5.10 Endpoint terminal kamera — pengenalan dan pencatatan
+
+**Status implementasi (FL-011, 16 Oktober 2026): BELUM DIIMPLEMENTASIKAN (kontrak saja)** — `POST /devices/{device_id}/recognition-attempts` belum ada di kode, dan mesin AI Python belum dimulai. Seluruh tabel keputusan pada §7 belum berlaku pada runtime.
 
 #### `POST /api/v1/devices/{device_id}/recognition-attempts`
 
@@ -860,6 +951,8 @@ Tidak ada endpoint publik terpisah. Keduanya dijalankan di dalam §5.10. Tabel k
 
 ### 5.11 Modul 11 — Rekap dan ekspor laporan
 
+**Status implementasi (FL-011, 16 Oktober 2026): SELURUH modul ini BELUM DIIMPLEMENTASIKAN (kontrak saja)** — `GET /sessions/{session_id}/attendance` dan `GET /sessions/{session_id}/export.csv` belum ada di kode.
+
 #### `GET /api/v1/sessions/{session_id}/attendance`
 
 - **Peran:** admin, dosen (untuk `dosen`, hanya kelas yang ditugaskan; di luar itu `404`).
@@ -903,10 +996,13 @@ Tidak ada endpoint publik terpisah. Keduanya dijalankan di dalam §5.10. Tabel k
 
 ### 5.12 Modul 12 — Kesehatan dan kesiapan
 
+**Status implementasi (FL-011, 16 Oktober 2026): KEDUA endpoint TERIMPLEMENTASI** — `GET /api/v1/healthz` (liveness) dan `GET /api/v1/readyz` (kesiapan). **Catatan apa adanya mengenai jalur:** kode yang berlaku memasang keduanya **di dalam** awalan versi, yaitu `/api/v1/healthz` dan `/api/v1/readyz`, sedangkan baris matriks §4 menyebut `GET /healthz` tanpa awalan. Matriks **tidak diubah** oleh FL-011; selisih penamaan jalur ini dicatat di sini dan di §10 agar tidak ada pembaca yang menganggap `/healthz` tanpa awalan sudah tersedia. Endpoint ini juga **tidak** memakai bentuk galat amplop kontrak (lihat §1.4).
+
 `GET /healthz` adalah **satu-satunya** endpoint pada §5 yang dipanggil tanpa awalan `/api/v1` (lihat §1.1 butir 1 dan §4).
 
 #### `GET /healthz` (tanpa awalan `/api/v1`)
 
+- **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI pada jalur `/api/v1/healthz`** (lihat catatan jalur di atas).
 - **Peran:** publik (dibatasi jaringan lokal).
 - **Respons `200`:** `{ "status": "ok", "version": "<versi build>", "time": "2026-10-15T08:00:00Z" }`.
 - **Kode status:** `200`.
@@ -914,6 +1010,7 @@ Tidak ada endpoint publik terpisah. Keduanya dijalankan di dalam §5.10. Tabel k
 
 #### `GET /api/v1/readyz`
 
+- **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.** Badan respons yang dihasilkan kode memuat `status` tambahan di samping `database`, `ai_engine`, `migrations`, dan `wal`. **Deviasi yang dicatat apa adanya:** pada kode yang berlaku endpoint ini terpasang **tanpa middleware autentikasi**, sehingga dapat dipanggil tanpa token meskipun matriks §4 menyebut peran `admin` dan `dosen`. Matriks tidak diubah oleh FL-011; perlindungan peran untuk jalur ini **belum sesuai matriks** dan dicatat pada §10.1.
 - **Peran:** admin, dosen.
 - **Respons `200`:** `{ "database": "ok", "ai_engine": "ok", "migrations": "applied", "wal": { "journal_mode": "wal" } }`.
 - **Respons `503`:** salah satu komponen `unavailable` dengan `code` `AI_ENGINE_UNAVAILABLE` atau `DATABASE_BUSY`.
@@ -923,8 +1020,11 @@ Tidak ada endpoint publik terpisah. Keduanya dijalankan di dalam §5.10. Tabel k
 
 ### 5.13 Modul 13 — Audit aktivitas penting
 
+**Status implementasi (FL-011, 16 Oktober 2026): endpoint `GET /api/v1/audit-events` BELUM DIIMPLEMENTASIKAN (kontrak saja).** Penulis audit dengan daftar kunci metadata tertutup **sudah ada** dan dipakai endpoint autentikasi/administrasi FL-011, tetapi **belum ada endpoint untuk membaca** `audit_events`. Karena itu baris audit yang ditulis FL-011 hanya dapat diperiksa langsung di database, bukan lewat API.
+
 #### `GET /api/v1/audit-events`
 
+- **Status (FL-011, 16 Oktober 2026): BELUM DIIMPLEMENTASIKAN (kontrak saja).**
 - **Peran:** **admin saja.** `dosen` tidak dapat membaca audit pada FL-010U.
 - **Query:** `actor_id`, `action`, `entity_type`, `entity_id`, `from`, `to`, `cursor`, `limit`.
 - **Respons `200`:** daftar `{ id, actor_type, actor_id, action, entity_type, entity_id, time, reason, safe_metadata }`.
@@ -938,14 +1038,17 @@ Tidak ada endpoint publik terpisah. Keduanya dijalankan di dalam §5.10. Tabel k
 
 **Larangan isi audit (tetap, ditegaskan FL-010V):** `safe_metadata` dan isi audit **tidak boleh** memuat password, access token, refresh token, Google ID token, **kredensial perangkat**, embedding wajah, maupun foto wajah; gunakan identifier internal dan metadata seminimal mungkin.
 
-**Status implementasi:** daftar di atas adalah **kebijakan yang berlaku**, tetapi **belum ada** implementasi maupun pengujiannya pada FL-010V — seluruh event berstatus **BELUM TERVERIFIKASI**. Pencatatan audit keamanan baru boleh dianggap andal setelah tugas **FL-005S** (penguatan log respons & pemulihan panic) selesai — **FL-005S SELESAI secara implementasi pada 16 Oktober 2026** (cabang `fix/fl-005s-http-access-logging`), tetapi **belum di-merge** sampai PR ditinjau; lihat §10 dan `docs/TEST_PLAN.md` §4.
+**Status implementasi (FL-011, 16 Oktober 2026):** daftar di atas adalah **kebijakan yang berlaku**, dan **sebagian sudah ditegakkan kode**: penulis audit pada `internal/audit` memakai **daftar kunci metadata tertutup** (kunci di luar daftar ditolak sebelum ditulis), sehingga jaminan "tanpa email/token/embedding" tidak lagi hanya niat. Event yang benar-benar ditulis oleh jalur FL-011 adalah peristiwa autentikasi, akun, penautan peserta, dan penugasan dosen (mis. `auth.google.succeeded`, `auth.google.linked`, `auth.login.denied`, `auth.session.*`, `user.invited`, `user.role_changed`, `user.status_changed`, `user.bootstrapped`, `person.account_linked`, `person.account_unlinked`, `class.dosen_assigned`, `class.dosen_removed`) beserta `auth.session.reset_legacy` yang ditulis migrasi 00002. **Event yang bergantung pada endpoint produk yang belum ada** (mis. `consent.granted`, `enrollment.*`, `session.*`, `attendance.*`, `device.*`, `class.created`, `class.member.*`, `person.created/updated/deleted`, `session.exported`) **belum pernah ditulis**. Pencatatan audit keamanan baru boleh dianggap andal setelah tugas **FL-005S** (penguatan log respons & pemulihan panic) selesai — **FL-005S SELESAI secara implementasi pada 16 Oktober 2026** (cabang `fix/fl-005s-http-access-logging`), tetapi **belum di-merge** sampai PR ditinjau; lihat §10 dan `docs/TEST_PLAN.md` §4. Hasil pengujian nyata dicatat agen induk pada `PROJECT_STATE.md`; dokumen ini tidak menuliskan angka kelulusan.
 
 ### 5.14 Modul 14 — Portal self-service dosen dan mahasiswa
+
+**Status implementasi (FL-011, 16 Oktober 2026).** **TERIMPLEMENTASI:** `GET /me/classes` (kelas yang ditugaskan untuk `dosen`, kelas yang diikuti untuk `mahasiswa`; akun `mahasiswa` tanpa penautan `people.account_user_id` dijawab `409 ACCOUNT_NOT_LINKED`). **BELUM DIIMPLEMENTASIKAN (kontrak saja):** `GET /me/schedule`, `GET /me/attendance`, dan `GET /me/consent` — ketiganya bergantung pada sesi absensi, kehadiran, dan konsen yang belum ada. Jadi dari empat endpoint portal, **hanya satu** yang berjalan, dan isinya masih bergantung pada data kelas/keanggotaan yang belum punya jalur API (§5.5).
 
 Modul **baru** pada FL-010U. Portal self-service hanya membaca data milik sendiri; **tidak ada** endpoint `/me/*` yang mengubah data. Untuk akun `mahasiswa` yang belum tertaut baris `people` (`people.account_user_id` kosong), **keempat** endpoint pada modul ini mengembalikan **`409 ACCOUNT_NOT_LINKED`**, karena daftar kelas, jadwal, riwayat, maupun status konsen tidak dapat ditentukan tanpa penautan. Aturan ini ditetapkan pada FL-010U (bukan hasil uji) dan berstatus **BELUM TERVERIFIKASI**; lihat §10 butir 15. Penautan akun dilakukan `admin` lewat §5.2.
 
 #### `GET /api/v1/me/classes`
 
+- **Status (FL-011, 16 Oktober 2026): TERIMPLEMENTASI.**
 - **Peran:** dosen, mahasiswa.
 - **Cakupan:** `dosen` → kelas yang ditugaskan kepadanya; `mahasiswa` → kelas yang diikuti (keanggotaan aktif).
 - **Query:** `cursor`, `limit`.
@@ -957,6 +1060,7 @@ Modul **baru** pada FL-010U. Portal self-service hanya membaca data milik sendir
 
 #### `GET /api/v1/me/schedule`
 
+- **Status (FL-011, 16 Oktober 2026): BELUM DIIMPLEMENTASIKAN (kontrak saja).**
 - **Peran:** mahasiswa.
 - **Cakupan:** sesi absensi kelas yang diikuti (`closes_at` belum lewat, atau sesi `closed` di dalam rentang kueri).
 - **Query:** `from`, `to` (opsional), `cursor`, `limit`.
@@ -969,6 +1073,7 @@ Modul **baru** pada FL-010U. Portal self-service hanya membaca data milik sendir
 
 #### `GET /api/v1/me/attendance`
 
+- **Status (FL-011, 16 Oktober 2026): BELUM DIIMPLEMENTASIKAN (kontrak saja).**
 - **Peran:** mahasiswa.
 - **Cakupan:** riwayat kehadiran milik sendiri — `status`, `source`, `checked_in_at`, `reason` — **tanpa** data biometrik dan **tanpa** data peserta lain.
 - **Query:** `class_id` (opsional), `from`, `to` (opsional), `cursor`, `limit`.
@@ -981,6 +1086,7 @@ Modul **baru** pada FL-010U. Portal self-service hanya membaca data milik sendir
 
 #### `GET /api/v1/me/consent`
 
+- **Status (FL-011, 16 Oktober 2026): BELUM DIIMPLEMENTASIKAN (kontrak saja).**
 - **Peran:** mahasiswa.
 - **Cakupan:** status persetujuan biometrik milik sendiri — **baca saja**.
 - **Respons `200`:** `{ "data": { "person_id", "consent_state", "records": [ { "purpose", "version", "capture_method", "granted_at", "withdrawn_at" } ] } }`. `consent_state` bernilai `active`, `none`, atau `withdrawn`.
@@ -1131,6 +1237,8 @@ Catatan tambahan yang harus dibaca bersama tabel:
 
 Daftar berikut harus terwujud sebagai pengujian saat implementasi. **Belum ada pengujian yang dijalankan** karena belum ada kode aplikasi; seluruh harapan di bawah berstatus **BELUM TERVERIFIKASI**. Baris 1–2 diperbarui pada FL-010U untuk mengganti role `operator`; skenario tambahan untuk Google Sign-In, penautan akun, cakupan `dosen`, dan portal `/me/*` wajib disusun bersama `docs/AUTHORIZATION.md` pada tugas implementasi, bukan pada tahap dokumentasi ini.
 
+**Catatan FL-011 (16 Oktober 2026).** Sebagian skenario di atas kini **berkaitan dengan endpoint yang sudah ada**, tetapi **status barisnya tidak diubah**. Baris 2 (`dosen` memanggil `/users` → `403 FORBIDDEN_ROLE`) kini menunjuk endpoint yang **sudah berjalan** sehingga dapat dijalankan sebagai uji otomatis; sebaliknya baris 1, 17, 19, 20, 21, dan 24 masih menyebut endpoint yang **belum diimplementasikan** (`/people`, ekspor CSV, koreksi manual, `/sessions/*`) sehingga tetap tidak dapat dijalankan. Baris 3 dan 22–23 menuntut endpoint perangkat yang belum ada. Rincian berkas uji nyata ada di `docs/TEST_PLAN.md` (blok "Status implementasi uji FL-011"). **Angka kelulusan tidak ditulis di dokumen ini**; hasil nyata dicatat agen induk pada `PROJECT_STATE.md`.
+
 | # | Skenario | Harapan |
 |---|---|---|
 | 1 | Pengguna tanpa token memanggil `/people` | `401 UNAUTHENTICATED` |
@@ -1182,3 +1290,15 @@ Catatan riwayat yang dipertahankan: butir lama **"akun peserta" (D-013) yang aka
 15. **Perilaku `/me/*` pada akun `mahasiswa` yang belum tertaut — ditetapkan pada FL-010U.** Keempat endpoint Modul 14 memakai `409 ACCOUNT_NOT_LINKED` secara konsisten, karena daftar kelas, jadwal, riwayat, maupun status konsen tidak dapat ditentukan tanpa penautan `people.account_user_id`. Tetapan ini adalah perilaku rancangan yang **BELUM TERVERIFIKASI**, bukan hasil uji.
 
 **Ketergantungan Google dan offline.** Google Sign-In **tidak boleh** dijanjikan berjalan offline. Selama sesi aplikasi masih sah, seluruh operasi aplikasi lewat LAN ke backend tetap berjalan tanpa memanggil Google; yang berhenti hanya login baru/re-autentikasi (pesan: "Perlu internet untuk masuk dengan Google"). Bila LAN ke backend mati, seluruh aplikasi berhenti karena semua keputusan ada di backend — **tidak ada** catatan kehadiran lokal. Ketentuan lengkap dan tabel ketersediaan layanan ada di `docs/ARCHITECTURE.md` §7.1 dan `docs/AUTHORIZATION.md` §9 butir 5.
+
+### 10.1 Sisa pekerjaan setelah FL-011 (16 Oktober 2026)
+
+Bagian ini **menambah** daftar di atas, bukan menggantikannya, dan hanya memuat pekerjaan yang **belum dikerjakan** pada FL-011. Tidak satu pun butir di bawah boleh dibaca sebagai sudah berjalan.
+
+1. **Pembatasan laju (rate limit) BELUM diimplementasikan.** Endpoint `POST /auth/google` dan `POST /auth/refresh` **belum** memiliki pembatasan laju per alamat maupun per identitas; yang berlaku saat ini hanya **batas ukuran badan permintaan** (64 KiB untuk jalur autentikasi, 1 MiB dari middleware umum) dan batas waktu permintaan. Akibatnya kode kesalahan `429 RATE_LIMITED` **tidak pernah dihasilkan**, sementara matriks §1.5 dan `docs/AUTHORIZATION.md` §4.1 masih menyebutnya sebagai kewajiban tambahan endpoint tersebut. Kewajiban itu tetap berlaku sebagai sasaran dan **belum dipenuhi**.
+2. **Bentuk galat belum diseragamkan.** `GET /api/v1/healthz`, `404` rute tidak dikenal, dan `405` metode tidak diizinkan masih memakai bentuk datar lama, berbeda dari amplop `{"error": {...}}` yang dipakai seluruh endpoint FL-011 (lihat §1.4). Penyeragaman ini pekerjaan tersendiri karena menyentuh kontrak respons yang sudah diuji FL-005.
+3. **Selisih jalur `/healthz`.** Kode memasang liveness pada `/api/v1/healthz`, sedangkan matriks §4 menyebut `GET /healthz` tanpa awalan. Salah satu harus diselaraskan; sampai itu diputuskan, pembaca tidak boleh menganggap `/healthz` tanpa awalan tersedia (§5.12).
+4. **`GET /api/v1/readyz` belum terlindungi peran.** Endpoint terpasang tanpa middleware autentikasi, sehingga dapat dipanggil tanpa token meskipun matriks §4 menyebut `admin` dan `dosen`. Ini **belum** sesuai matriks dan harus diperbaiki atau diputuskan ulang secara eksplisit; jangan menganggap kesiapan backend sudah terlindungi (§5.12).
+5. **`GET /auth/sessions` belum mendaftar lintas akun.** Endpoint yang berjalan menuntut parameter `user_id` dan hanya mengembalikan sesi satu akun; belum ada tampilan sesi seluruh akun yang diasumsikan kontrak sebelumnya (§5.1).
+6. **Endpoint produk yang belum ada tetap belum ada.** Modul konsen biometrik (§5.3), enrollment (§5.4), sesi absensi (§5.6), koreksi manual (§5.8), perangkat dan terminal kamera (§5.9, §5.10), rekap/ekspor (§5.11), `audit-events` (§5.13), serta `/me/schedule` `/me/attendance` `/me/consent` (§5.14) **belum diimplementasikan**. Konsekuensi yang harus disebut apa adanya: absensi (otomatis maupun manual) belum berjalan, konsen biometrik belum dapat dicatat, kelas/keanggotaan peserta belum punya jalur API, dan audit baru dapat dibaca langsung dari database. **RBAC untuk endpoint yang belum ada** sudah dirancang dan diuji sebagai kebijakan pada harness `internal/authz`, tetapi **belum** diuji lewat HTTP karena handler-nya belum ada.
+7. **TLS LAN dan pengikatan non-loopback (Q-25) belum dikerjakan.** Kode masih menolak pengikatan ke alamat non-loopback, sehingga HP belum dapat menjangkau backend lewat Wi-Fi kelas; pengikatan LAN beserta TLS bersertifikat tepercaya **belum diimplementasikan maupun diuji** (D-035 tetap berlaku sebagai kebijakan, §1.6).

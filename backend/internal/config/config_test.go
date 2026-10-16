@@ -16,6 +16,73 @@ func envFrom(pairs map[string]string) EnvLookup {
 	}
 }
 
+// TestGoogleOAuthKonfigurasi memeriksa pembacaan audience Google, nilai bawaan
+// JWKS, dan penolakan alamat kunci yang tidak memakai HTTPS (FL-011).
+func TestGoogleOAuthKonfigurasi(t *testing.T) {
+	bawaan, err := LoadFrom(envFrom(nil))
+	if err != nil {
+		t.Fatalf("konfigurasi bawaan harus sah: %v", err)
+	}
+	if len(bawaan.GoogleClientIDs) != 0 {
+		t.Errorf("GoogleClientIDs bawaan harus kosong, dapat %v", bawaan.GoogleClientIDs)
+	}
+	if bawaan.GoogleJWKSURL != DefaultGoogleJWKSURL {
+		t.Errorf("GoogleJWKSURL bawaan = %q, ingin %q", bawaan.GoogleJWKSURL, DefaultGoogleJWKSURL)
+	}
+
+	cfg, err := LoadFrom(envFrom(map[string]string{
+		EnvGoogleClientIDs: " 123-abc.apps.googleusercontent.com , 456-def.apps.googleusercontent.com ,, ",
+	}))
+	if err != nil {
+		t.Fatalf("client ID sah harus diterima: %v", err)
+	}
+	if len(cfg.GoogleClientIDs) != 2 {
+		t.Fatalf("GoogleClientIDs = %v, ingin 2 entri tanpa entri kosong", cfg.GoogleClientIDs)
+	}
+	if cfg.GoogleClientIDs[1] != "456-def.apps.googleusercontent.com" {
+		t.Errorf("entri kedua = %q, ingin tanpa spasi tepi", cfg.GoogleClientIDs[1])
+	}
+
+	if _, err := LoadFrom(envFrom(map[string]string{
+		EnvGoogleClientIDs: "bukan-client-id",
+	})); err == nil {
+		t.Error("client ID yang bukan milik Google seharusnya ditolak")
+	}
+
+	if _, err := LoadFrom(envFrom(map[string]string{
+		EnvGoogleJWKSURL: "http://kunci.contoh.test/certs",
+	})); err == nil {
+		t.Error("JWKS lewat HTTP terbuka seharusnya ditolak")
+	}
+
+	if _, err := LoadFrom(envFrom(map[string]string{
+		EnvGoogleJWKSURL: "https://kunci.contoh.test/certs",
+	})); err != nil {
+		t.Errorf("JWKS HTTPS seharusnya diterima: %v", err)
+	}
+}
+
+// TestRedactedTidakMembocorkanClientID menegaskan log konfigurasi hanya
+// melaporkan bahwa OAuth terkonfigurasi, bukan nilainya.
+func TestRedactedTidakMembocorkanClientID(t *testing.T) {
+	cfg, err := LoadFrom(envFrom(map[string]string{
+		EnvGoogleClientIDs: "123-abc.apps.googleusercontent.com",
+	}))
+	if err != nil {
+		t.Fatalf("konfigurasi gagal: %v", err)
+	}
+	isi, err := json.Marshal(cfg.Redacted())
+	if err != nil {
+		t.Fatalf("marshal gagal: %v", err)
+	}
+	if strings.Contains(string(isi), "apps.googleusercontent.com") {
+		t.Errorf("Redacted memuat client ID: %s", isi)
+	}
+	if !strings.Contains(string(isi), "configured (1 client id)") {
+		t.Errorf("Redacted tidak melaporkan status OAuth: %s", isi)
+	}
+}
+
 func TestLoadDefaultsMemakaiNilaiAman(t *testing.T) {
 	cfg, err := LoadFrom(envFrom(nil))
 	if err != nil {

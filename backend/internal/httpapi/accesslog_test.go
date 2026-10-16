@@ -323,8 +323,9 @@ func TestAccessLogTidakMemuatRahasia(t *testing.T) {
 	}
 
 	// Pemeriksaan berikut hanya berlaku untuk baris access log: baris kesalahan
-	// recoverer memang memuat pesan panic (diagnostik internal), sedangkan access
-	// log tidak boleh memuat tajuk, cookie, parameter kueri, atau pesan internal.
+	// recoverer memuat pesan panic yang sudah disensor (lihat
+	// TestRecovererMenyensorIsiPanic), sedangkan access log tidak boleh memuat
+	// tajuk, cookie, parameter kueri, atau pesan internal.
 	var barisAkses []string
 	for _, m := range entriLog(t, buf) {
 		if m["msg"] != "permintaan http" {
@@ -424,5 +425,82 @@ func TestAccessLogPermintaanDibatalkanTetapSatuBaris(t *testing.T) {
 	status := periksaSatuBaris(t, buf, 1)
 	if status[0] != rec.Code {
 		t.Errorf("status access log = %d, status respons = %d", status[0], rec.Code)
+	}
+}
+
+// TestRecovererMenyensorIsiPanic membuktikan nilai panic yang memuat rahasia
+// tidak pernah mencapai log — termasuk ketika panic membawa nilai tajuk
+// otorisasi — sementara jenis nilai dan diagnostik non-sensitifnya tetap
+// tercatat (temuan FL-005S, D-036, FL-011 §9).
+func TestRecovererMenyensorIsiPanic(t *testing.T) {
+	s, buf := serverLog(t)
+
+	const (
+		jwtUji   = "eyJhbGciOiJSUzI1NiIsImtpZCI6ImsxIn0.eyJzdWIiOiJzdWItMTIzNDU2Nzg5MCJ9.dGFuZGEtdGFuZ2Fu"
+		tokenUji = "Qk9ndXNUb2tlbjEyMzQ1Njc4OTBhYmNkZWZnaGlqa2xtbm9wcXJz"
+		surelUji = "budi.santoso@kampus.example"
+	)
+
+	pesan := "penautan akun " + surelUji + " gagal: Authorization: Bearer " + tokenUji + " id token " + jwtUji
+	rec := httptest.NewRecorder()
+	chain(s, http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		panic(pesan)
+	})).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/panic-rahasia", nil))
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status respons = %d, ingin 500", rec.Code)
+	}
+	badan := rec.Body.String()
+	for nama, nilai := range map[string]string{
+		"id token":       jwtUji,
+		"token penyegar": tokenUji,
+		"surel":          surelUji,
+	} {
+		if strings.Contains(badan, nilai) {
+			t.Errorf("badan respons memuat %s", nama)
+		}
+	}
+
+	catatan := buf.String()
+	for nama, nilai := range map[string]string{
+		"id token":         jwtUji,
+		"token penyegar":   tokenUji,
+		"surel":            surelUji,
+		"tajuk Bearer":     "Bearer",
+		"tajuk Basic":      "Basic ",
+		"potongan payload": "eyJhbGciOiJSUzI1NiIsImtpZCI6ImsxIn0",
+	} {
+		if strings.Contains(catatan, nilai) {
+			t.Errorf("log memuat %s (%q)\nlog: %s", nama, nilai, catatan)
+		}
+	}
+
+	var barisPanik map[string]any
+	for _, m := range entriLog(t, buf) {
+		if m["msg"] == "panic pada handler" {
+			barisPanik = m
+		}
+	}
+	if barisPanik == nil {
+		t.Fatal("baris log panic tidak ditemukan")
+	}
+	pesanTercatat, _ := barisPanik["panic"].(string)
+	if !strings.Contains(pesanTercatat, "string:") {
+		t.Errorf("baris panic tidak memuat jenis nilai: %q", pesanTercatat)
+	}
+	if !strings.Contains(pesanTercatat, "penautan akun") {
+		t.Errorf("baris panic kehilangan diagnostik: %q", pesanTercatat)
+	}
+	for _, penanda := range []string{"<surel>", "<tajuk-otorisasi>", "<jwt>"} {
+		if !strings.Contains(pesanTercatat, penanda) {
+			t.Errorf("baris panic tidak memuat penanda sensor %q: %q", penanda, pesanTercatat)
+		}
+	}
+	if jejak, _ := barisPanik["stack"].(string); !strings.Contains(jejak, "httpapi") {
+		t.Errorf("jejak tumpukan tidak tercatat: %q", jejak)
+	}
+
+	if status := periksaSatuBaris(t, buf, 1); status[0] != http.StatusInternalServerError {
+		t.Errorf("status access log = %d, ingin 500", status[0])
 	}
 }

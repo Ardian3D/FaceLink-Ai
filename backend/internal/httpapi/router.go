@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Ardian3D/FaceLink-Ai/backend/internal/database"
+	"github.com/Ardian3D/FaceLink-Ai/backend/internal/logging"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 )
@@ -18,6 +19,48 @@ func NewRouter(s Server) http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/healthz", s.handleHealthz)
 		r.Get("/readyz", s.handleReadyz)
+
+		// --- Autentikasi (FL-011) ------------------------------------------
+		// Penerbitan nonce sekali pakai untuk satu percobaan Google Sign-In.
+		// Endpoint ini publik dan tidak menerima rahasia apa pun; yang dibatasi
+		// pada tahap berikutnya adalah laju permintaannya (§10 kontrak).
+		r.Post("/auth/nonce", s.handleAuthNonce)
+		// Pertukaran identitas Google bersifat publik dengan batas laju pada
+		// tahap berikutnya; bukti identitasnya adalah ID token Google.
+		r.Post("/auth/google", s.handleAuthGoogle)
+		// Penyegaran diautentikasi oleh token penyegar itu sendiri.
+		r.Post("/auth/refresh", s.handleAuthRefresh)
+
+		// Logout idempoten: panggilan kedua dengan sesi yang sudah dicabut
+		// tetap menjawab 204 (docs/API_CONTRACT.md §5.1).
+		r.Group(func(r chi.Router) {
+			r.Use(requireAuthIdempoten(s))
+			r.Post("/auth/logout", s.handleAuthLogout)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(requireAuth(s))
+			r.Get("/me", s.handleMe)
+			r.Get("/me/classes", s.handleMeClasses)
+
+			// Penugasan dosen dapat dibaca admin dan dosen yang ditugaskan;
+			// kebijakan cakupan diperiksa di handler.
+			r.Get("/classes/{class_id}/dosen", s.handleListClassLecturers)
+
+			// --- Administrasi akun, sesi, dan peserta: khusus admin --------
+			r.Group(func(r chi.Router) {
+				r.Use(DenganPeranAdmin(s))
+				r.Get("/users", s.handleListUsers)
+				r.Post("/users", s.handleInviteUser)
+				r.Patch("/users/{user_id}", s.handlePatchUser)
+				r.Get("/auth/sessions", s.handleListSessions)
+				r.Delete("/auth/sessions/{session_id}", s.handleRevokeSession)
+				r.Put("/people/{person_id}/account-link", s.handleLinkPersonAccount)
+				r.Delete("/people/{person_id}/account-link", s.handleUnlinkPersonAccount)
+				r.Put("/classes/{class_id}/dosen/{user_id}", s.handleAssignLecturer)
+				r.Delete("/classes/{class_id}/dosen/{user_id}", s.handleRemoveLecturer)
+			})
+		})
 
 		r.NotFound(notFoundJSON)
 		r.MethodNotAllowed(methodNotAllowedJSON)
@@ -75,6 +118,12 @@ func echoRequestID(next http.Handler) http.Handler {
 // yang dihasilkannya tetap tercatat dengan status yang benar, dan dipasang lagi
 // di dalam goroutine timeout (lihat timeout) karena panic pada handler terjadi
 // di goroutine yang berbeda dari pemanggil middleware.
+//
+// Isi panic tidak pernah masuk log apa adanya: nilai mentahnya dapat memuat
+// token, surel, atau potongan badan permintaan (temuan FL-005S, D-036). Yang
+// dicatat adalah jenis nilai, pesannya setelah disensor logging.PanicSummary,
+// dan jejak tumpukan yang dipotong — cukup untuk diagnosis tanpa membocorkan
+// rahasia.
 func recoverer(s Server) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -84,7 +133,8 @@ func recoverer(s Server) func(http.Handler) http.Handler {
 						"request_id", middleware.GetReqID(r.Context()),
 						"method", r.Method,
 						"path", normalizePath(r.URL.Path),
-						"error", fmt.Sprint(rec),
+						"panic", logging.PanicSummary(rec),
+						"stack", logging.StackTrace(),
 					)
 					writeJSON(w, http.StatusInternalServerError, errorPayload{
 						Code:      "INTERNAL_ERROR",

@@ -1,14 +1,14 @@
 # Matriks Peran dan Otorisasi FaceLink AI (MVP)
 
-**Versi:** 2.1 · **Status:** **DISETUJUI PEMILIK PROJECT (FL-010V, 16 Oktober 2026); BELUM DIIMPLEMENTASIKAN.** Seluruh keputusan yang sebelumnya menunggu (cakupan `dosen`, audit minimum, pengikatan jaringan, lifecycle akun, dan session management) **sudah disetujui**; rinciannya di `docs/DECISIONS.md` D-032–D-037. Butir yang **masih terbuka** ada di §9.
+**Versi:** 2.2 · **Status:** **DISETUJUI PEMILIK PROJECT (FL-010V, 16 Oktober 2026); SEBAGIAN SUDAH DIIMPLEMENTASIKAN PADA FL-011 (16 Oktober 2026).** Seluruh keputusan yang sebelumnya menunggu (cakupan `dosen`, audit minimum, pengikatan jaringan, lifecycle akun, dan session management) **sudah disetujui**; rinciannya di `docs/DECISIONS.md` D-032–D-037. Implementasi FL-011 mewujudkan sebagian matriks §4 sebagai kode: **18 dari 54 endpoint berjalan**, sisanya masih kontrak — pemetaannya ada di §4.15. Butir yang **masih terbuka** ada di §9.
 
 **Lingkup:** demo **satu kelas, satu terminal** (`docs/PRD.md` §4). Tidak ada multi-tenant, multi-organisasi, SSO perusahaan, billing, atau HRIS. Semua isi dokumen ini berlaku untuk MVP lokal dan **tidak** boleh diperluas diam-diam.
 
-**Tanggal:** 16 Oktober 2026 · **Tugas:** FL-010U · **Cabang:** `docs/fl-010u-google-three-roles` (dari `origin/main` = `804c2f7`)
+**Tanggal:** 16 Oktober 2026 · **Tugas:** FL-010U, FL-010V, FL-011 · **Cabang:** `docs/fl-010u-google-three-roles` (dari `origin/main` = `804c2f7`), lalu `feat/fl-011-google-auth-backend`
 
 **Rujukan yang mengikat:** `docs/PRD.md` §3 dan §7–§8 · `docs/API_CONTRACT.md` §1–§5 · `docs/DATA_MODEL.md` §4 · `docs/SECURITY_PRIVACY.md` §6 dan §5e · `docs/DECISIONS.md` D-031–D-034 · `docs/TEST_PLAN.md` §2 dan §7–§8 · `docs/UX_FLOWS.md` §2.
 
-> **Kode autentikasi dan otorisasi belum ditulis.** Dokumen ini adalah rancangan yang dapat diuji, bukan laporan implementasi. Seluruh skenario pada §8 berstatus **BELUM TERVERIFIKASI**.
+> **Status kode.** Sejak **FL-011 (16 Oktober 2026)**, autentikasi Google, sesi, pengelolaan akun, penautan peserta, penugasan dosen, dan portal `/me/classes` **sudah ditulis sebagai kode**. Sebagian besar **endpoint produk** (konsen, enrollment, absensi, perangkat, rekap, audit-events) **belum ada**, sehingga skenario pada §8 yang menuntut endpoint itu **BELUM TERVERIFIKASI**. Kebijakan peran/cakupan pada §4–§5 sudah diuji lewat uji otomatis pada harness `internal/authz` dan alur HTTP FL-011; rinciannya di §4.15 dan `docs/TEST_PLAN.md`.
 
 ---
 
@@ -56,7 +56,7 @@ Ketiganya masuk melalui **Google Sign-In** dan memakai **satu aplikasi React Nat
 | Mahasiswa | Tidak punya akun; hanya baris data `people` | **Punya akun, dapat masuk aplikasi, hanya melihat data sendiri** |
 | Metode login | Email + kata sandi internal | **Google Sign-In (OpenID Connect)** |
 | Perangkat | Diperlakukan sebagai salah satu "tiga peran" | **Dipisahkan tegas** dari role manusia; identitas mesin tersendiri |
-| Jumlah endpoint pada matriks | 43 | **53** |
+| Jumlah endpoint pada matriks | 43 | **54** |
 | Cakupan baca peserta | `operator` dan `admin` (satu kelas) | `admin` (semua) dan `dosen` (hanya kelas yang ditugaskan) |
 | Konsen, enrollment, peserta, perangkat | `operator`/`admin` | **`admin` saja** |
 | Audit, ekspor, akun, role | `operator` dapat membaca audit | **`admin` saja** |
@@ -67,7 +67,7 @@ Ketiganya masuk melalui **Google Sign-In** dan memakai **satu aplikasi React Nat
 
 - Keputusan **D-013** ("operator/admin sebagai satu-satunya pengguna aplikasi wajib di MVP; akun peserta opsional") **DIGANTIKAN** oleh keputusan pemilik pada FL-010U. Riwayatnya dipertahankan di `docs/DECISIONS.md`.
 - Keputusan lama **"tidak ada akun mahasiswa dan tidak ada peran `participant` pada MVP"** **DIGANTIKAN**: mahasiswa kini memiliki akun dengan akses baca-sendiri. Statusnya di `docs/DECISIONS.md` D-031.
-- Rancangan matriks 43 endpoint FL-010/FL-010R **digantikan** matriks 53 endpoint pada §4.
+- Rancangan matriks 43 endpoint FL-010/FL-010R **digantikan** matriks pada §4: 53 endpoint sejak FL-010U, menjadi **54 endpoint** pada FL-011 setelah `POST /auth/nonce` ditambahkan sebagai penerbit nonce.
 
 ---
 
@@ -120,11 +120,11 @@ Bukan peran API publik. Hanya loopback `127.0.0.1`/IPC dengan token internal (`d
 
 ## 4. Matriks otorisasi `endpoint × peran`
 
-Diturunkan langsung dari `docs/API_CONTRACT.md` §4. **Total 53 baris endpoint.** Kolom "Peran yang diizinkan" adalah **satu-satunya** sumber kebenaran otorisasi; endpoint yang tidak tercantum **tidak boleh** dibuat.
+Diturunkan langsung dari `docs/API_CONTRACT.md` §4. **Total 54 baris endpoint.** Kolom "Peran yang diizinkan" adalah **satu-satunya** sumber kebenaran otorisasi; endpoint yang tidak tercantum **tidak boleh** dibuat.
 
 > **FL-010V (16 Oktober 2026):** persetujuan D-034 **tidak mengubah** satu pun baris pada §4.1–§4.13. Tidak ada endpoint baru, tidak ada peran yang ditambah atau dikurangi, dan tidak ada perubahan izin. Bila suatu saat izin berubah, perubahan itu wajib punya alasan terdokumentasi dan tabel rekap §4.14 harus dihitung ulang secara programatis.
 
-Dari 53 endpoint, **2** dapat dipanggil tanpa token (`POST /auth/google`, `GET /healthz`) dan **51** menuntut kredensial yang sah; jumlah 51 adalah soal autentikasi, bukan soal peran.
+Dari 54 endpoint, **3** dapat dipanggil tanpa token (`POST /auth/nonce`, `POST /auth/google`, `GET /healthz`) dan **51** menuntut kredensial yang sah; jumlah 51 adalah soal autentikasi, bukan soal peran.
 
 Istilah: `publik` = boleh tanpa token · `device` = token perangkat, bukan role manusia · `admin`, `dosen`, `mahasiswa` = tiga role pengguna manusia.
 
@@ -132,6 +132,7 @@ Istilah: `publik` = boleh tanpa token · `device` = token perangkat, bukan role 
 
 | Metode | Jalur | Peran | Kewajiban tambahan |
 |---|---|---|---|
+| `POST` | `/auth/nonce` | publik | Menerbitkan nonce sekali pakai (TTL 5 menit, disimpan sebagai hash) yang wajib dikirim ke Google dan kembali bersama ID token; batas laju menyusul bersama `/auth/google` |
 | `POST` | `/auth/google` | publik | Batas laju ketat per alamat dan per identitas; audit tiap percobaan berhasil/gagal |
 | `POST` | `/auth/refresh` | admin, dosen, mahasiswa | Token penyegar lama tidak dapat dipakai dua kali; rotasi + deteksi pemakaian ulang |
 | `POST` | `/auth/logout` | admin, dosen, mahasiswa | Mencabut sesi sendiri; panggilan kedua tetap `204` |
@@ -256,12 +257,44 @@ Istilah: `publik` = boleh tanpa token · `device` = token perangkat, bukan role 
 | `dosen` + `mahasiswa` | 1 | `GET /me/classes` |
 | Hanya `mahasiswa` | 3 | Jadwal, riwayat kehadiran sendiri, status konsen sendiri |
 | Hanya `device` | 1 | Terminal kamera |
-| Publik tanpa token | 2 | `POST /auth/google`, `GET /healthz` |
-| **Total** | **53** | 29 + 14 + 3 + 1 + 3 + 1 + 2 |
+| Publik tanpa token | 3 | `POST /auth/nonce`, `POST /auth/google`, `GET /healthz` |
+| **Total** | **54** | 29 + 14 + 3 + 1 + 3 + 1 + 3 |
 
-Jumlah endpoint yang boleh dipanggil tiap peran: `admin` **46** · `dosen` **18** · `mahasiswa` **7** · `device` **1** · publik **2**.
+Jumlah endpoint yang boleh dipanggil tiap peran: `admin` **46** · `dosen` **18** · `mahasiswa` **7** · `device` **1** · publik **3**.
 
 **Jumlah lintas peran tidak dijumlahkan menjadi 53.** Satu endpoint dapat diakses beberapa peran; karena itu kolom "Kelompok akses" di atas memakai pengelompokan yang **saling lepas** (setiap endpoint tepat satu kelompok), sedangkan baris "jumlah per peran" boleh tumpang tindih. Angka pada tabel ini **wajib diverifikasi programatis** terhadap tabel §4.1–§4.13 sebelum dipakai sebagai acuan implementasi. Panjang baris 53 dan rekap ini menggantikan rekap 43 endpoint FL-010/FL-010R.
+
+### 4.15 Status implementasi FL-011 (16 Oktober 2026)
+
+Bagian ini **tidak mengubah satu pun baris matriks §4.1–§4.13**. Ia hanya mencatat endpoint mana yang benar-benar berjalan, agar tidak ada pembaca yang menganggap seluruh matriks sudah bekerja. Sumbernya adalah rute yang terpasang pada `backend/internal/httpapi/router.go` dan migrasi `backend/migrations/00002_auth_identity.sql`.
+
+**Ringkasan angka:** **18 dari 54 endpoint TERIMPLEMENTASI**, **36 BELUM DIIMPLEMENTASIKAN (kontrak saja)**.
+
+| Peran | Endpoint yang **sudah berjalan** | Endpoint yang **masih kontrak** |
+|---|---|---|
+| `admin` | `POST /auth/google`, `POST /auth/refresh`, `POST /auth/logout`, `GET /me`, `GET /auth/sessions` (wajib `user_id`), `DELETE /auth/sessions/{session_id}`, `GET /users`, `POST /users`, `PATCH /users/{user_id}`, `PUT|DELETE /people/{person_id}/account-link`, `GET|PUT|DELETE /classes/{class_id}/dosen[/{user_id}]`, `GET /me/classes` | `/people*` (5), `/people/{id}/consent*` (3), `/face-enrollments*` (5), `/classes` dan anggota kelas (4), `/sessions*` (5), `/manual-checkins` (2), `/devices*` (4), `/sessions/{id}/attendance` dan `/export.csv` (2), `/audit-events` (1), `/me/schedule`, `/me/attendance`, `/me/consent` (3) |
+| `dosen` | `POST /auth/refresh`, `POST /auth/logout`, `GET /me`, `GET /me/classes`, `GET /classes/{class_id}/dosen` | Baca peserta (`/people*`), baca kelas dan anggota (`GET /classes`, `GET /classes/{id}/members`), seluruh `/sessions*` dan `/manual-checkins`, `GET /sessions/{id}/attendance` (isinya belum dapat terisi tanpa endpoint kelas yang ada) |
+| `mahasiswa` | `POST /auth/refresh`, `POST /auth/logout`, `GET /me`, `GET /me/classes` | `GET /me/schedule`, `GET /me/attendance`, `GET /me/consent` |
+| `device` | — (**belum ada satu pun**) | `POST /devices/{device_id}/recognition-attempts` |
+| publik | `POST /auth/nonce`, `POST /auth/google`, `GET /api/v1/healthz`, `GET /api/v1/readyz` | — |
+
+**Deviasi tambahan yang harus dibaca bersama tabel di atas:** pada kode yang berlaku, `GET /api/v1/readyz` terpasang **tanpa** middleware autentikasi, sehingga **dapat dipanggil tanpa token** — berbeda dari matriks §4.11 yang menyebut `admin` dan `dosen`. Matriks **tidak diubah** oleh FL-011; selisih ini dicatat agar tidak ada pembaca yang menganggap kesiapan backend sudah terlindungi. Isi respons kesiapan tetap dibatasi agar tidak membocorkan rahasia (tidak memuat jalur berkas, nama basis data, atau kredensial), tetapi perlindungan perannya belum sesuai matriks.
+
+**Yang benar-benar ditegakkan kode pada jalur yang sudah ada:**
+
+1. **Peran dan cakupan diperiksa di backend.** Middleware `requireAuth`/`DenganPeranAdmin` menolak tanpa token (`401`) dan peran yang salah (`403 FORBIDDEN_ROLE`); cakupan `dosen` (kelas di luar penugasan → `404`) diperiksa di handler; akun `mahasiswa` tanpa penautan `people.account_user_id` menerima `409 ACCOUNT_NOT_LINKED` pada `/me/classes`.
+2. **Role tidak pernah dari klien atau Google.** Role dibaca ulang dari tabel `users` pada setiap permintaan; tidak ada endpoint yang mengubah role akun sendiri, dan `LAST_ADMIN_PROTECTED`/`SELF_ACCOUNT_PROTECTED` ditegakkan kode.
+3. **Kebijakan peran/cakupan diuji otomatis.** Paket `internal/authz` memiliki uji kebijakan untuk seluruh peran dan cakupan (termasuk endpoint yang **belum** memiliki handler), sehingga keputusannya sudah diuji sebagai **kebijakan**, bukan sebagai endpoint HTTP. Alur HTTP end-to-end FL-011 diuji pada `internal/httpapi` (`authflow_test.go`). **Angka kelulusan tidak ditulis di dokumen ini**; hasil nyata dicatat agen induk pada `PROJECT_STATE.md`.
+
+**Yang belum terpenuhi dan wajib disebut apa adanya:**
+
+1. **Sebagian besar matriks belum dapat diuji lewat HTTP** karena handler-nya belum ada. Uji kebijakan pada `internal/authz` **tidak** sama dengan uji endpoint; untuk endpoint yang belum ada, tidak ada bukti runtime sama sekali.
+2. **`GET /auth/sessions` menuntut `user_id`** dan belum mendaftar lintas akun — deviasi dari asumsi matriks §4.1 (`docs/API_CONTRACT.md` §5.1, §10.1 butir 4).
+3. **Pembatasan laju belum ada**, sehingga kewajiban tambahan "batas laju ketat per alamat dan per identitas" pada `POST /auth/google` (§4.1) **belum dipenuhi** dan `429 RATE_LIMITED` belum pernah dihasilkan (`docs/API_CONTRACT.md` §10.1 butir 1).
+4. **Bentuk galat belum seragam:** `/api/v1/healthz`, `404`, dan `405` memakai bentuk datar lama (`docs/API_CONTRACT.md` §1.4, §10.1 butir 2).
+5. **`/healthz` terpasang pada `/api/v1/healthz`**, sedangkan matriks §4.11 menulis `GET /healthz` tanpa awalan (`docs/API_CONTRACT.md` §10.1 butir 3).
+6. **TLS LAN dan pengikatan non-loopback belum dikerjakan**, sehingga aturan `dosen`/`mahasiswa` dari HP lewat LAN (§10 dan D-035) belum dapat diuji pada perangkat nyata.
+7. **Nonce kini wajib** pada `POST /auth/google` (penguatan FL-011 untuk D-033); aplikasi klien wajib mengirim nonce yang sama ke Google dan ke backend (`docs/API_CONTRACT.md` §5.1).
 
 ---
 
