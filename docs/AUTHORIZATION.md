@@ -51,6 +51,8 @@ Hanya tiga peran yang ada. Ini **sama** dengan `docs/API_CONTRACT.md` §1.2 dan 
 D-013 menyatakan "Operator/admin sebagai satu-satunya pengguna aplikasi wajib di MVP; akun peserta opsional. Perangkat kamera memakai identitas terpisah." FL-010 **memvalidasi ini terhadap kontrak yang ada dan menyimpulkan** bahwa D-013 sudah sesuai dengan `docs/API_CONTRACT.md` §1.2 dan `docs/DATA_MODEL.md`. Karena itu, usulan FL-010 adalah **menaikkan D-013 dari `USULAN` menjadi `DISETUJUI`** pada `docs/DECISIONS.md`, dengan tambahan penegasan:
 
 - Tidak ada peran `dosen` atau `mahasiswa` pada MVP; "dosen" diserap oleh `operator`, "mahasiswa" tidak memiliki akun.
+- **`admin` adalah `operator` dengan hak tambahan, dan bukan peran yang terpisah jalurnya.** Setiap endpoint yang boleh dipanggil `operator` juga boleh dipanggil `admin` (`admin` ⊇ `operator`, terbukti pada §4.12: 32 jalur bersama). Yang membedakan hanyalah **delapan jalur khusus `admin`** (§4.12). Karena itu tidak ada endpoint yang menjadi milik `operator` dan tertutup bagi `admin`. Pengecualian tunggal berlaku untuk `recognition-attempts`: jalur itu bukan milik peran operator maupun admin, melainkan `device` saja (§4.9).
+- **Tidak ada akun mahasiswa dan tidak ada peran `participant` pada MVP.** Hanya `admin` dan `operator` yang memiliki akun di tabel `users`; peran `device` bukan akun pengguna melainkan identitas perangkat (§3.2).
 - Bila akun peserta kelak ditambahkan (pasca-MVP), ia **bukan** varian dari `operator`/`admin`, melainkan peran keempat (`participant`) dengan hak **baca-sendiri saja** (`docs/UX_FLOWS.md` §2), dan penambahannya menuntut migrasi `CHECK` peran di `users` serta kenaikan versi API (§9 butir 1).
 - **Status D-013 tetap `USULAN` sampai pemilik menyetujui.** Agent tidak boleh mengubahnya sendiri (`docs/DECISIONS.md` baris 3).
 
@@ -107,7 +109,9 @@ Ketiganya berbeda dalam kredensial, media penyimpanan hash, masa berlaku, cakupa
 
 ## 4. Matriks otorisasi `endpoint × peran`
 
-Diturunkan langsung dari `docs/API_CONTRACT.md` §4. **Total 43 endpoint**: 41 publik ber-versi + `/healthz` dan `/readyz` (Modul 12). Kolom "Peran yang diizinkan" adalah **satu-satunya** sumber kebenaran otorisasi; endpoint yang tidak tercantum **tidak boleh** dibuat.
+Diturunkan langsung dari `docs/API_CONTRACT.md` §4. **Total 43 baris endpoint**: 41 endpoint ber-versi (`/api/v1/...`) pada Modul 1–11 dan 13, **ditambah** `/healthz` dan `/readyz` dari Modul 12. Kolom "Peran yang diizinkan" adalah **satu-satunya** sumber kebenaran otorisasi; endpoint yang tidak tercantum **tidak boleh** dibuat.
+
+Istilah pada bagian ini **tidak boleh** dicampur: "ber-versi" berarti endpoint berada di bawah prefiks `/api/v1/` dan **tetap menuntut token** kecuali dinyatakan lain; sedangkan **publik tanpa token** berarti endpoint yang boleh dipanggil tanpa autentikasi sama sekali — hanya `/auth/login` dan `/healthz`. Dari 43 endpoint, **2** dapat dipanggil tanpa token dan **41** menuntut token peran yang sah; jumlah 41 ini adalah soal autentikasi, bukan soal peran.
 
 Keterangan: **A** = `admin`, **O** = `operator`, **D** = `device`, **P** = publik, **—** = tidak ada peran yang diizinkan (endpoint tidak ada).
 
@@ -213,12 +217,14 @@ Keterangan: **A** = `admin`, **O** = `operator`, **D** = `device`, **P** = publi
 
 | Peran | Jumlah endpoint yang diizinkan (dari 43) | Cakupan |
 |---|---|---|
-| `admin` | 43 | Seluruh endpoint, termasuk 8 jalur khusus admin |
-| `operator` | 40 | Seluruh endpoint operasional kelas (32 jalur bersama `admin` + 8 jalur khusus admin yang **ditolak**) |
-| `device` | 1 | Hanya `recognition-attempts` |
+| `admin` | 40 | 32 jalur bersama `operator` + 8 jalur khusus `admin`. **Tidak** termasuk `recognition-attempts` (`D` saja) maupun `healthz` (publik) |
+| `operator` | 32 | Seluruh jalur operasional kelas; 8 jalur khusus `admin` **ditolak** (`403`), dan `recognition-attempts` juga **ditolak** |
+| `device` | 1 | Hanya `recognition-attempts` (`D` saja) |
 | publik (tanpa token) | 2 | `login`, `healthz` |
 
 Angka-angka ini dihitung dari tabel §4.1–§4.11 di atas (43 baris endpoint) dan **bukan** salinan dari `docs/API_CONTRACT.md`, yang tidak pernah menghitungnya secara eksplisit.
+
+**Jumlah baris tabel di atas tidak boleh dibaca sebagai penjumlahan lintas peran.** Setiap endpoint dihitung tepat satu kali menurut cara aksesnya yang sah: 40 (token `admin`) + 1 (token `device`) + 2 (tanpa token) = 43. Karena itu `admin` **tidak** mengakses seluruh 43 endpoint: token `admin` **ditolak** pada `recognition-attempts` (`403 FORBIDDEN_ROLE`, §4.9 dan §5 butir 4) karena jalur itu milik domain perangkat/mesin AI, bukan jalur administratif. `admin` tetap **peran yang paling luas** — setiap endpoint yang boleh dipanggil `operator` juga boleh dipanggil `admin` (`admin` ⊇ `operator`), dan hanya `admin` yang boleh memanggil delapan jalur khusus di bawah ini.
 
 **Delapan jalur khusus `admin`** (operator mendapat `403 FORBIDDEN_ROLE`): `GET /operator-sessions`, `DELETE /operator-sessions/{session_id}`, `DELETE /people/{person_id}`, `GET /users`, `POST /users`, `POST /devices`, `POST /devices/{device_id}/rotate-token`, `DELETE /devices/{device_id}`. Bila kontrak kelak menggabungkan `GET`/`POST /users` menjadi satu baris, angka 8 menjadi 7 **tanpa** mengubah izin apa pun; lihat §9 butir 3.
 
@@ -357,6 +363,26 @@ Bagian ini dicatat apa adanya. FL-010 **tidak** mengubah kontrak yang sudah dise
 5. **Usulan larangan operator menonaktifkan akunnya sendiri.** Belum diatur di `docs/API_CONTRACT.md`. Diusulkan agar operator tidak bisa mengunci dirinya keluar dari sistem demo satu akun.
 6. **FR-16 (halaman peserta) tetap P1 dan tidak diimplementasikan.** Bila kelak dikerjakan, ia menuntut peran keempat (`participant`), migrasi `CHECK` peran di `users`, dan revisi dokumen ini.
 7. **D-014 dan D-015 juga masih `USULAN`.** Keduanya relevan (kios satu orang per pemindaian; penyimpanan template terenkripsi), tetapi FL-010 tidak mengusulkan perubahan statusnya karena bukan lingkup peran/otorisasi. Disebut agar tidak dianggap sudah final.
+
+### 9.1 Koreksi FL-010R (16 Oktober 2026)
+
+FL-010R memeriksa ulang seluruh 43 endpoint dengan pemeriksaan programatis terhadap `docs/API_CONTRACT.md` §4 dan menemukan **kesalahan hitung pada rekap §4.12**, bukan kesalahan izin. Ringkasannya:
+
+| Klaim | Sebelum FL-010R | Sesudah FL-010R | Sebab |
+|---|---|---|---|
+| `admin` | 43 | **40** | `recognition-attempts` bersifat `D` saja dan `healthz` publik; keduanya tidak dapat dipanggil token `admin` |
+| `operator` | 40 | **32** | Tertukar dengan jumlah `admin`; `operator` hanya memegang 32 jalur bersama |
+| `device` | 1 | 1 | Sudah benar |
+| publik (tanpa token) | 2 | 2 | Sudah benar |
+| Total endpoint | 43 | 43 | Sudah benar |
+
+**Hak akses endpoint tidak diubah sama sekali oleh koreksi ini.** Yang berubah hanya angka rekap dan penjelasannya. Pemeriksaan programatis membuktikan tabel §4.1–§4.11 sama persis dengan `docs/API_CONTRACT.md` §4: 43 baris, tanpa endpoint hilang atau endpoint tambahan, dengan peran yang identik. Aturan tunggal yang dipakai: setiap endpoint dihitung tepat satu kali menurut pemanggil sahnya → 40 (`admin`) + 1 (`device`) + 2 (publik tanpa token) = 43.
+
+**Rekomendasi yang tetap menunggu persetujuan pemilik** (tidak satu pun status keputusan diubah oleh FL-010R):
+
+- **a.** Penegasan **D-013** — `admin`/`operator`/`device` sebagai peran final MVP, tanpa `dosen`/`mahasiswa`/`participant` — diusulkan naik dari `USULAN` menjadi `DISETUJUI` (§2.3, butir 1 di atas).
+- **b.** Dua aksi audit tambahan, `authz.denied` dan `auth.device.mismatch`, untuk masuk daftar audit minimum `docs/API_CONTRACT.md` §5.13 (butir 4 di atas).
+- **c.** Pencegahan **penonaktifan akun sendiri** dan **admin terakhir**, tanpa menghalangi logout normal. Diusulkan agar: (i) `operator`/`admin` **tidak** dapat menonaktifkan akunnya sendiri; (ii) `admin` **tidak** dapat menonaktifkan admin aktif terakhir; sedangkan `POST /auth/logout` **selalu** diizinkan bagi pemilik sesi dan **tidak** terkena larangan ini — logout mencabut sesi, bukan menonaktifkan akun. Butir ini memperluas butir 5 di atas dan belum diatur di `docs/API_CONTRACT.md`.
 
 ---
 

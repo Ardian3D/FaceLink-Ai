@@ -142,3 +142,5 @@ FL-010 menetapkan matriks peran dan izin di `docs/AUTHORIZATION.md`. Skenario ne
 3. `401` dan `403` harus dibedakan sesuai `docs/AUTHORIZATION.md` §6.1; jawaban tidak boleh membocorkan keberadaan sumber daya lain.
 4. Setiap skenario audit (TA-05, TA-06, TA-14) harus memeriksa isi `safe_metadata`, bukan hanya keberadaan barisnya.
 5. TA-15 menguji `docs/SECURITY_PRIVACY.md` §5e butir 4: layanan boleh turun, pemeriksaan keamanan **tidak** boleh dilonggarkan agar layanan tampak hidup.
+
+**Catatan FL-010R (16 Oktober 2026):** TA-04 menguji penolakan token operator **dan** token admin pada `recognition-attempts` — jalur itu bersifat `device` saja, sehingga rekap `docs/AUTHORIZATION.md` §4.12 menyatakan `admin` mengakses 40 endpoint (bukan 43). Bila implementasi kelak menerima token admin pada jalur itu, bukan hanya TA-04 yang gagal, tetapi juga angka rekap §4.12 menjadi keliru.
