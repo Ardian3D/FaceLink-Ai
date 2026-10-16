@@ -540,6 +540,21 @@ func TestDaftarAkunBerhalaman(t *testing.T) {
 	if len(larikPertama) != 2 {
 		t.Fatalf("halaman pertama = %d akun, ingin 2", len(larikPertama))
 	}
+	// `created_by` termasuk bidang yang dijanjikan kontrak §5.2; akun undangan
+	// harus menunjuk admin pembuatnya, bukan kosong.
+	adaCreatedBy := false
+	for _, entri := range larikPertama {
+		objek, _ := entri.(map[string]any)
+		if dibuatOleh, _ := objek["created_by"].(string); dibuatOleh != "" {
+			adaCreatedBy = true
+			if dibuatOleh != sesiAdmin.UserID {
+				t.Errorf("created_by = %q, ingin id admin %s", dibuatOleh, sesiAdmin.UserID)
+			}
+		}
+	}
+	if !adaCreatedBy {
+		t.Fatalf("tidak ada entri dengan created_by terisi: %s", pertama.Rec.Body.String())
+	}
 
 	// Halaman kedua tidak boleh mengulang akun halaman pertama.
 	kedua := h.kirim(http.MethodGet, "/api/v1/users?limit=2&cursor="+kursor, nil, sesiAdmin.Access)
