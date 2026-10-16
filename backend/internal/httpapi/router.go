@@ -16,6 +16,12 @@ import (
 // Urutan middleware mengikuti docs/API_CONTRACT.md §1.4: RequestID lebih dahulu
 // agar setiap catatan log dan audit memiliki penautan, lalu Recoverer, lalu
 // batas waktu, lalu body limit, lalu logging akses.
+//
+// Recoverer muncul dua kali dengan sengaja: sekali pada rantai ini untuk
+// melindungi middleware berikutnya, dan sekali lagi di dalam goroutine timeout
+// (lihat timeout) karena panic pada handler terjadi di goroutine yang berbeda
+// dari pemanggil middleware sehingga tidak terjangkau recoverer di lapisan luar
+// (FL-005R-FIX).
 func NewRouter(s Server) http.Handler {
 	r := chi.NewRouter()
 
@@ -79,35 +85,52 @@ func recoverer(s Server) func(http.Handler) http.Handler {
 
 // timeout membatasi durasi satu permintaan. Bila batas tercapai, klien menerima
 // 503 PROCESSING_TIMEOUT alih-alih menunggu tanpa batas.
+//
+// Handler berjalan pada goroutine tersendiri supaya middleware dapat menjawab
+// batas waktu tanpa menunggu pekerjaan handler selesai. Konsekuensinya dua hal
+// yang harus dijaga di sini:
+//
+//  1. Penulisan respons dari kedua goroutine diserialisasi oleh timeoutWriter
+//     (lihat payload.go); middleware tidak pernah menulis langsung ke
+//     ResponseWriter mentah.
+//  2. Recoverer dipasang pada rantai di dalam goroutine, karena panic handler
+//     tidak berada pada tumpukan pemanggil middleware sehingga recoverer di
+//     lapisan luar tidak dapat menangkapnya (proses backend akan berhenti).
 func timeout(s Server) func(http.Handler) http.Handler {
 	d := s.Config.RequestTimeout
 	if d <= 0 {
 		d = DefaultRequestTimeout
 	}
 	return func(next http.Handler) http.Handler {
+		guarded := recoverer(s)(next)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			ctx, cancel := context.WithTimeout(r.Context(), d)
 			defer cancel()
 
 			done := make(chan struct{})
-			tw := &timeoutWriter{ResponseWriter: w, status: http.StatusOK}
+			tw := &timeoutWriter{ResponseWriter: w, header: http.Header{}}
 
 			go func() {
 				defer close(done)
-				next.ServeHTTP(tw, r.WithContext(ctx))
+				guarded.ServeHTTP(tw, r.WithContext(ctx))
 			}()
 
 			select {
 			case <-done:
 			case <-ctx.Done():
-				// Batas waktu hanya menjawab bila handler belum mengirim respons
-				// apa pun; respons yang sudah dimulai tidak boleh ditimpa.
-				if ctx.Err() == context.DeadlineExceeded && !tw.committed() {
-					writeJSON(w, http.StatusServiceUnavailable, errorPayload{
+				if ctx.Err() == context.DeadlineExceeded {
+					// Batas waktu hanya menjawab bila handler belum mengirim
+					// respons apa pun; respons yang sudah dimulai tidak ditimpa.
+					tw.timeoutResponse(http.StatusServiceUnavailable, errorPayload{
 						Code:      "PROCESSING_TIMEOUT",
 						Message:   "Permintaan melebihi batas waktu proses.",
 						RequestID: middleware.GetReqID(r.Context()),
 					})
+				} else {
+					// Klien membatalkan permintaan: tutup writer supaya handler
+					// yang masih berjalan tidak menulis setelah middleware ini
+					// selesai.
+					tw.seal()
 				}
 			}
 		})
