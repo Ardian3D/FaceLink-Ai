@@ -28,7 +28,7 @@ export function ScanBackdrop() {
   useEffect(() => {
     // Web tidak memiliki modul animasi native; memaksakan driver native di sana
     // membuat `Animated.loop` berhenti setelah satu putaran. Pola ini sama
-    // dengan `ScanIndicator`: driver native hanya di Android/iOS.
+    // dengan `LoadingHud`: driver native hanya di Android/iOS.
     const animasi = Animated.loop(
       Animated.timing(sapuan, {
         toValue: 1,

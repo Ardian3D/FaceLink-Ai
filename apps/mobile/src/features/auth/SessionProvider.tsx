@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
 
 import type { Role, Session, SessionError } from "@/types";
-import { akunDemo } from "./demoAccounts";
+import { ROLE_DEMO, akunDemo } from "./demoAccounts";
 import { DEMO_MODE } from "./demoMode";
 
 /**
@@ -50,7 +50,15 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       setState({ status: "failed", session: null, error: { kind: "unknown", message: "notImplemented" } });
       return;
     }
-    setState({ status: "checking", session: null, error: null });
+    // Mode demo: sesi langsung diisi role contoh, meniru jawaban backend yang
+    // menetapkan role. Layar pemeriksaan peran hanya menampilkan prosesnya;
+    // ia tidak pernah menaikkan hak akses, dan pada build produksi blok ini
+    // tidak dijalankan sama sekali.
+    setState({
+      status: "checking",
+      session: { user: akunDemo[ROLE_DEMO], demo: true },
+      error: null,
+    });
   }, []);
 
   const previewAs = useCallback((role: Role) => {

@@ -38,3 +38,18 @@ export const akunDemo: Record<Role, CurrentUser> = {
     classIds: ["demo-class-if101"],
   },
 };
+
+/**
+ * Role yang dipakai jalur demo saat "masuk" tanpa backend.
+ *
+ * Pada integrasi nanti nilai ini **tidak dipakai**: role datang dari respons
+ * `POST /auth/google` dan hanya backend yang menetapkannya
+ * (docs/AUTHORIZATION.md §5). Di sini ia hanya menggantikan jawaban backend
+ * supaya alur masuk → loading → beranda role dapat dipreview apa adanya,
+ * tanpa layar pemilih role di tengah jalan.
+ *
+ * Mengubah nilai ini mengubah beranda mana yang muncul setelah loading.
+ * Pemilik project tetap dapat berpindah role lewat tombol "Ganti role (dev)"
+ * di beranda.
+ */
+export const ROLE_DEMO: Role = "admin";

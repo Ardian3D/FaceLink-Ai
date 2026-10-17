@@ -11,6 +11,11 @@ import { colors } from "@/theme";
  * dikembalikan ke layar masuk. Ini penjagaan **navigasi**, bukan pengendalian
  * akses — otorisasi sebenarnya tetap milik Go Backend pada setiap permintaan
  * (docs/AUTHORIZATION.md §5), dan role frontend tidak pernah dipercaya.
+ *
+ * Status `checking` **tidak** dianggap tanpa sesi: pada keadaan itulah layar
+ * pemeriksaan peran sedang berjalan. Kalau penjaga ini mengalihkan pada
+ * `checking`, alur masuk → loading → beranda akan terlempar kembali ke layar
+ * masuk sebelum role sempat ditetapkan.
  */
 export default function AppLayout() {
   const { status, session } = useSession();
@@ -20,7 +25,9 @@ export default function AppLayout() {
     if (status === "signedOut") router.replace("/");
   }, [router, status]);
 
-  if (status !== "signedIn" || !session) return <Redirect href="/" />;
+  // Hanya keadaan yang benar-benar berakhir tanpa sesi yang dialihkan.
+  if (status === "signedOut" || status === "failed") return <Redirect href="/" />;
+  if (!session) return <Redirect href="/" />;
 
   return (
     <Stack

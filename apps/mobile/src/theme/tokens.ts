@@ -59,6 +59,15 @@ export const colors = {
   glowSoft: "rgba(255, 23, 27, 0.12)",
   glowFade: "rgba(255, 23, 27, 0)",
 
+  /** Cincin HUD pada layar pemeriksaan peran. */
+  hudLine: "#3A3A40",
+  hudBracket: "#E8E8EC",
+  hudScanGlow: "rgba(255, 23, 27, 0.10)",
+
+  /** Latar lingkaran langkah yang sedang berjalan. */
+  accentGlow: "rgba(255, 23, 27, 0.12)",
+  accentDim: "rgba(255, 23, 27, 0.45)",
+
   /** Lapisan gelap di atas video agar teks tetap terbaca. */
   overlayStrong: "rgba(0, 0, 0, 0.92)",
   overlayLight: "rgba(0, 0, 0, 0.42)",
@@ -160,7 +169,8 @@ export const layout = {
   maxContentWidth: 560,
   logoSize: 112,
   logoSizeCompact: 64,
-  scanIndicatorSize: 132,
+  /** Diameter cincin HUD pada layar pemeriksaan peran. */
+  loadingHudSize: 300,
   avatarSize: 40,
   iconSize: 20,
   iconSizeLarge: 28,
