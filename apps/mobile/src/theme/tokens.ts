@@ -86,10 +86,22 @@ export const radius = {
 } as const;
 
 /**
- * Tipografi. Ukuran mengikuti skala yang nyaman dibaca saat demo kelas. Belum
- * ada font kustom: font brand pada mockup belum diidentifikasi, dan menebaknya
- * akan menghasilkan tampilan yang hampir mirip tetapi tidak tepat.
+ * Tipografi. Ukuran mengikuti skala yang nyaman dibaca saat demo kelas.
+ *
+ * Keluarga huruf: **Poppins** (SIL Open Font License, gratis), dipilih pemilik
+ * project. Berkas TTF-nya dipasang lewat `@expo-google-fonts/poppins` dan
+ * dimuat sekali di `app/_layout.tsx`. Karena setiap ketebalan adalah berkas
+ * font tersendiri, pemilihan ketebalan memakai `fontFamily`, **bukan**
+ * `fontWeight` — mencampur keduanya membuat Android memilih fallback sistem.
  */
+export const fonts = {
+  regular: "Poppins_400Regular",
+  medium: "Poppins_500Medium",
+  semibold: "Poppins_600SemiBold",
+  bold: "Poppins_700Bold",
+  heavy: "Poppins_800ExtraBold",
+} as const;
+
 export const typography = {
   size: {
     caption: 12,
@@ -106,6 +118,14 @@ export const typography = {
     semibold: "600",
     bold: "700",
     heavy: "800",
+  },
+  /** Berkas font Poppins untuk setiap ketebalan. */
+  family: {
+    regular: fonts.regular,
+    medium: fonts.medium,
+    semibold: fonts.semibold,
+    bold: fonts.bold,
+    heavy: fonts.heavy,
   },
   lineHeight: {
     caption: 16,
@@ -138,7 +158,7 @@ export const touch = {
 export const layout = {
   screenPadding: spacing.xl,
   maxContentWidth: 560,
-  logoSize: 104,
+  logoSize: 112,
   logoSizeCompact: 64,
   scanIndicatorSize: 132,
   avatarSize: 40,
@@ -162,6 +182,7 @@ export const elevation = {
 
 export const theme = {
   colors,
+  fonts,
   spacing,
   radius,
   typography,

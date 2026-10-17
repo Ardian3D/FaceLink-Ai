@@ -13,9 +13,10 @@ import { colors, layout, spacing, typography } from "@/theme";
  *
  * Wordmark digambar sebagai teks, bukan gambar, supaya tajam pada semua
  * kerapatan layar: "FaceLink" putih dan "Ai" merah brand — susunan yang sama
- * dengan logo resmi. Font brand belum diidentifikasi pemilik, jadi yang dipakai
- * adalah font sistem dengan bobot dan jarak antarhuruf yang mendekati; ini
- * disebut sebagai keterbatasan, bukan dianggap sama persis.
+ * dengan logo resmi. Jenis hurufnya Poppins ExtraBold, dipilih pemilik project;
+ * mark tetap memakai berkas gambar resmi, jadi hanya wordmark yang bergantung
+ * pada font. Bila nanti pemilik memberikan wordmark sebagai gambar, ganti blok
+ * `wordmark` di bawah dengan `Image` dan hapus ketergantungan font ini.
  */
 export function BrandLogo({
   size = layout.logoSize,

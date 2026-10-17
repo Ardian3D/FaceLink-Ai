@@ -131,10 +131,16 @@ sesuai latar logo resmi. Aksen merah `#FF171B` diambil langsung dari piksel logo
 dan menjadi satu-satunya warna merek di `src/theme/tokens.ts`.
 
 Wordmark "FaceLink Ai" pada layar masuk digambar sebagai teks (bukan bagian dari
-berkas gambar) supaya tajam di semua kerapatan layar. **Font merek belum
-diidentifikasi**, jadi yang dipakai adalah font sistem dengan bobot tebal dan
-jarak antarhuruf yang mendekati — tampilannya mirip, bukan identik. Bila pemilik
-memberikan berkas font atau logo wordmark, cukup ganti komponen `BrandLogo`.
+berkas gambar) supaya tajam di semua kerapatan layar. Jenis hurufnya **Poppins**
+(SIL Open Font License, gratis) sesuai pilihan pemilik project, dimuat di
+`app/_layout.tsx` lewat `@expo-google-fonts/poppins`. Yang dibundel hanya lima
+ketebalan yang dipakai (400, 500, 600, 700, 800); impor dari akar paket akan
+membundel seluruh 18 berkas dan menambah ~2 MB tanpa manfaat.
+
+Pemilihan ketebalan memakai `fontFamily` (satu berkas per ketebalan), bukan
+`fontWeight`: pada Android, memaksa `fontWeight` untuk font kustom membuat
+sistem memilih fallback. Bila pemilik memberikan logo wordmark sebagai gambar,
+cukup ganti komponen `BrandLogo`.
 
 ### Menaruh bahan referensi dan video
 

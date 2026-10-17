@@ -4,10 +4,17 @@ import { Text, type TextProps } from "react-native";
 import { colors, typography } from "@/theme";
 
 type Variant = keyof typeof typography.size;
+type Weight = keyof typeof typography.weight;
 
 /**
- * Teks bertema. Seluruh layar memakai komponen ini supaya hierarki ukuran dan
- * warna teks tidak ditulis ulang di tiap komponen.
+ * Teks bertema. Seluruh layar memakai komponen ini supaya hierarki ukuran,
+ * ketebalan, dan warna teks tidak ditulis ulang di tiap komponen.
+ *
+ * Keluarga huruf Poppins dipilih lewat `fontFamily` (satu berkas per
+ * ketebalan), bukan `fontWeight`: pada Android, memaksa `fontWeight` untuk font
+ * kustom membuat sistem memilih fallback dan ketebalan yang diminta hilang.
+ * `fontWeight` tetap ditulis agar pengukuran dan pemilihan fallback web masuk
+ * akal bila berkas font belum termuat.
  */
 export function AppText({
   variant = "body",
@@ -19,9 +26,11 @@ export function AppText({
 }: TextProps & {
   variant?: Variant;
   color?: string;
-  weight?: keyof typeof typography.weight;
+  weight?: Weight;
   center?: boolean;
 }) {
+  const ketebalan: Weight = weight ?? (variant === "body" ? "regular" : "semibold");
+
   return (
     <Text
       {...rest}
@@ -30,7 +39,8 @@ export function AppText({
           fontSize: typography.size[variant],
           lineHeight: typography.lineHeight[variant],
           color,
-          fontWeight: typography.weight[weight ?? (variant === "body" ? "regular" : "semibold")],
+          fontFamily: typography.family[ketebalan],
+          fontWeight: typography.weight[ketebalan],
         },
         center && { textAlign: "center" },
         style,

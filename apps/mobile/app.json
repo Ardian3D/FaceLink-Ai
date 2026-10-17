@@ -18,7 +18,8 @@
           "backgroundColor": "#000000"
         }
       ],
-      "expo-video"
+      "expo-video",
+      "expo-font"
     ],
     "ios": {
       "supportsTablet": true,

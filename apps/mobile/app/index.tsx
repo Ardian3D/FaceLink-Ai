@@ -60,6 +60,12 @@ export default function LoginScreen() {
           {DEMO_MODE ? <DemoBanner keterangan="UI preview, belum terhubung backend" /> : null}
         </View>
 
+        {/* Dua ruang kosong dengan rasio berbeda menempatkan blok identitas di
+            bawah titik tengah layar, seperti pada mockup. Rasio dipakai, bukan
+            `justifyContent: space-between`, supaya posisinya tetap sama pada
+            layar pendek maupun tinggi. */}
+        <View style={styles.ruangAtas} />
+
         <View style={styles.tengah}>
           <BrandLogo size={layout.logoSize} />
 
@@ -84,6 +90,8 @@ export default function LoginScreen() {
           </View>
         </View>
 
+        <View style={styles.ruangBawah} />
+
         <View style={styles.bawah}>
           {/* Mockup menampilkan tautan kebijakan di dasar layar. Dokumen publiknya
               belum ada (docs/ baru memuat dokumen internal), jadi keduanya
@@ -100,7 +108,7 @@ export default function LoginScreen() {
             </AppText>
           </View>
           <AppText variant="caption" color={colors.textMuted} center>
-            Dokumen kebijakan dan ketentuan belum tersedia pada build preview ini.
+            Tautan kebijakan belum aktif pada preview.
           </AppText>
         </View>
       </Screen>
@@ -114,19 +122,31 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   isi: {
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
     gap: spacing.lg,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+    paddingBottom: spacing.xl,
   },
   atas: {
     minHeight: spacing.xl,
   },
-  /** Blok identitas, sedikit di bawah tengah seperti pada mockup. */
+  /**
+   * Ruang kosong di atas dan di bawah blok identitas. Perbandingan 7:1
+   * menaruh mark di sekitar 55% tinggi layar, wordmark di ~66%, tombol di
+   * ~79%, dan label kebijakan di ~89% — posisi yang diukur dari mockup
+   * pemilik. Karena memakai `flex`, proporsinya bertahan pada layar pendek
+   * maupun tinggi.
+   */
+  ruangAtas: {
+    flex: 1,
+    minHeight: spacing.xxl,
+  },
+  ruangBawah: {
+    height: spacing.md,
+  },
   tengah: {
     alignItems: "center",
-    gap: spacing.xxl,
-    paddingTop: spacing.xxl,
+    gap: spacing.xxxl,
   },
   aksi: {
     width: "100%",
