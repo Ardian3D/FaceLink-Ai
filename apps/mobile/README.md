@@ -38,14 +38,26 @@ npm run typecheck   # tsc --noEmit, TypeScript strict
 npm run lint        # eslint-config-expo
 ```
 
+Klip latar layar masuk (opsional, lokal saja):
+
+```bash
+npm run video:local   # salin klip dari design-inputs/video/ ke aset lokal
+npm run video:off     # hapus salinan lokal; layar masuk memakai latar animasi
+```
+
+Klip video **tidak** di-commit karena memuat wajah orang yang dapat dikenali.
+Tanpa klip, layar masuk tetap tampil utuh dengan latar animasi yang digambar di
+kode. Rinciannya ada di `assets/video/BACA-SAYA.md`.
+
 ## Alur preview saat ini
 
 ```
 Layar masuk  →  Role Checking  →  Pemilih role (development)  →  Beranda role
 ```
 
-- **Layar masuk:** logo placeholder, nama brand, satu tombol
-  **Continue with Google**. Tidak ada tombol "Skip" dan tidak ada jalur masuk lain.
+- **Layar masuk:** latar video atau animasi pindai, logo resmi FaceLink Ai, satu
+  tombol **Continue with Google**, dan label kebijakan di dasar layar. Tidak ada
+  tombol "Skip" dan tidak ada jalur masuk lain.
 - **Role Checking:** animasi pemindaian dan teks "Sedang mengecek peran anda…".
   Penundaan singkat di layar ini **hanya untuk preview** dan bukan mekanisme
   autentikasi.
@@ -91,16 +103,40 @@ apps/mobile/
 │   │   └── dashboard/       # blok dashboard dan data contoh
 │   ├── theme/               # design tokens (satu sumber kebenaran)
 │   └── types/               # tipe bersama
-└── assets/branding/         # PLACEHOLDER logo/ikon — lihat di bawah
+├── scripts/                 # pemasangan klip video lokal (tidak di-commit)
+├── metro.config.js          # memilih daftar klip saat bundel dibuat
+└── assets/
+    ├── branding/            # logo dan ikon aplikasi — DI-COMMIT
+    └── video/               # modul daftar klip; berkas .mp4 lokal, tidak di-commit
 ```
 
-## Aset brand — masih placeholder
+## Aset brand — logo resmi
 
-`assets/branding/` berisi **grafik sintetis sementara** yang dibuat sendiri:
-cincin pemindai geometris, bukan logo brand mana pun dan bukan foto wajah. Logo
-resmi FaceLink AI belum tersedia di repository.
+`assets/branding/` kini berisi turunan **logo resmi FaceLink AI** yang diberikan
+pemilik project. Mark dan ikon aplikasi berasal dari
+`design-inputs/logo/logo.png` (latar penuh) dan `logo-white-noBg.png` (latar
+dihapus); turunannya di-commit di sini sebagai aset aplikasi:
 
-### Menaruh aset resmi dan bahan referensi
+| Berkas | Isi |
+|---|---|
+| `logo-mark.png` | mark saja, 512×512, latar transparan — dipakai di layar masuk |
+| `icon.png` | ikon aplikasi 1024×1024 |
+| `adaptive-icon-foreground.png` | mark untuk ikon adaptif Android |
+| `adaptive-icon-monochrome.png` | mark satu warna untuk tema Android |
+| `splash-icon.png` | gambar splash |
+| `favicon.png` | ikon tab web |
+
+Latar aplikasi, splash, dan ikon adaptif memakai **hitam pekat** (`#000000`),
+sesuai latar logo resmi. Aksen merah `#FF171B` diambil langsung dari piksel logo
+dan menjadi satu-satunya warna merek di `src/theme/tokens.ts`.
+
+Wordmark "FaceLink Ai" pada layar masuk digambar sebagai teks (bukan bagian dari
+berkas gambar) supaya tajam di semua kerapatan layar. **Font merek belum
+diidentifikasi**, jadi yang dipakai adalah font sistem dengan bobot tebal dan
+jarak antarhuruf yang mendekati — tampilannya mirip, bukan identik. Bila pemilik
+memberikan berkas font atau logo wordmark, cukup ganti komponen `BrandLogo`.
+
+### Menaruh bahan referensi dan video
 
 Bahan mentah desain ditaruh di **`design-inputs/`** pada akar repository. Folder
 itu **tidak di-commit** (lihat `.gitignore`): isinya boleh berupa karya pihak
@@ -112,26 +148,19 @@ lain, berkas berukuran besar, atau rekaman yang memuat wajah orang.
 | `design-inputs/referensi-ui/` | Mockup, sketsa, moodboard, screenshot acuan |
 | `design-inputs/video/` | Video acuan (`.mp4`/`.mov`/`.webm`) |
 
-Yang **di-commit** hanyalah aset yang benar-benar dibangun aplikasi:
-`apps/mobile/assets/branding/`. Dari logo master di `design-inputs/logo/`, salinan
-yang dipakai aplikasi diletakkan di sini — konversi format dan pembuatan ukuran
-ikon dilakukan saat pemasangan, bukan dengan menaruh berkas master besar di
-repository.
-
 **Batas yang tidak boleh dilanggar:** video atau gambar yang memuat wajah orang
-tidak boleh ikut di-commit. Bila video ingin dipakai sebagai latar di dalam
-aplikasi, pilihannya adalah visual animasi yang dibuat di kode, video tanpa orang
-yang dapat dikenali, atau berkas yang tetap lokal untuk demo di laptop pemilik.
+tidak boleh ikut di-commit. Klip latar layar masuk karena itu **tidak** masuk
+repository; lihat `assets/video/BACA-SAYA.md` untuk cara memasangnya di laptop
+sendiri dan konsekuensinya pada mesin lain.
 
-Menggantinya setelah aset resmi diberikan:
+Mengganti aset brand:
 
-1. Timpa `assets/branding/logo-mark.png` (logo di dalam aplikasi, latar
+1. Timpa `assets/branding/logo-mark.png` (mark di dalam aplikasi, latar
    transparan, rasio 1:1).
 2. Timpa `icon.png`, `adaptive-icon-foreground.png`,
-   `adaptive-icon-background.png`, `adaptive-icon-monochrome.png`,
-   `splash-icon.png`, dan `favicon.png` bila ukuran berbeda diperlukan.
-3. Warna brand diatur terpusat di `src/theme/tokens.ts` — nilai sekarang
-   **sementara** dan tidak boleh dianggap keputusan final.
+   `adaptive-icon-monochrome.png`, `splash-icon.png`, dan `favicon.png` bila
+   ukuran berbeda diperlukan.
+3. Warna brand diatur terpusat di `src/theme/tokens.ts`.
 
 Tidak ada penyesuaian layout yang diperlukan: ukuran logo diambil dari token
 `layout.logoSize`, dan gambar memakai `resizeMode: contain` sehingga proporsi asli

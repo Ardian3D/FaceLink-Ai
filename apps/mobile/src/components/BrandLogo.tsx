@@ -2,16 +2,20 @@ import React from "react";
 import { Image, StyleSheet, View } from "react-native";
 
 import { AppText } from "./AppText";
-import { colors, layout, spacing } from "@/theme";
+import { colors, layout, spacing, typography } from "@/theme";
 
 /**
- * Logo FaceLink AI.
+ * Logo FaceLink AI: mark resmi + wordmark.
  *
- * PLACEHOLDER: aset logo resmi belum tersedia, sehingga yang ditampilkan adalah
- * gambar sementara dari `assets/branding/`. Berkas itu **bukan** logo brand dan
- * tidak boleh dianggap final. Saat aset resmi diberikan, cukup ganti
- * `assets/branding/logo-mark.png` — proporsi di sini sudah dijaga (rasio 1:1,
- * `resizeMode: contain`) sehingga tidak ada penyesuaian layout yang diperlukan.
+ * Mark diambil dari `assets/branding/logo-mark.png`, turunan dari logo resmi
+ * pemilik project (`design-inputs/logo/logo-white-noBg.png`) yang latarnya
+ * sudah dihapus, sehingga mark menyatu dengan latar gelap aplikasi.
+ *
+ * Wordmark digambar sebagai teks, bukan gambar, supaya tajam pada semua
+ * kerapatan layar: "FaceLink" putih dan "Ai" merah brand — susunan yang sama
+ * dengan logo resmi. Font brand belum diidentifikasi pemilik, jadi yang dipakai
+ * adalah font sistem dengan bobot dan jarak antarhuruf yang mendekati; ini
+ * disebut sebagai keterbatasan, bukan dianggap sama persis.
  */
 export function BrandLogo({
   size = layout.logoSize,
@@ -21,20 +25,19 @@ export function BrandLogo({
   showWordmark?: boolean;
 }) {
   return (
-    <View style={styles.wrap}>
+    <View style={styles.wrap} accessible accessibilityLabel="FaceLink Ai">
       <Image
         source={require("../../assets/branding/logo-mark.png")}
         style={{ width: size, height: size }}
         resizeMode="contain"
-        accessibilityLabel="Logo FaceLink AI (placeholder)"
       />
       {showWordmark ? (
-        <View style={styles.teks}>
-          <AppText variant="heading" weight="bold">
-            FaceLink AI
+        <View style={styles.wordmark}>
+          <AppText variant="wordmark" weight="heavy" style={styles.huruf}>
+            FaceLink
           </AppText>
-          <AppText variant="caption" color={colors.textMuted}>
-            Absensi wajah dan IoT
+          <AppText variant="wordmark" weight="heavy" color={colors.accent} style={styles.huruf}>
+            Ai
           </AppText>
         </View>
       ) : null}
@@ -45,10 +48,14 @@ export function BrandLogo({
 const styles = StyleSheet.create({
   wrap: {
     alignItems: "center",
-    gap: spacing.md,
+    gap: spacing.lg,
   },
-  teks: {
-    alignItems: "center",
-    gap: spacing.xs,
+  wordmark: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: spacing.sm,
+  },
+  huruf: {
+    letterSpacing: typography.tracking.wordmark,
   },
 });

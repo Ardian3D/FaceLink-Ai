@@ -17,18 +17,24 @@ export function Screen({
   scroll = false,
   center = false,
   contentStyle,
+  transparent = false,
 }: {
   children: React.ReactNode;
   scroll?: boolean;
   center?: boolean;
   contentStyle?: ViewStyle;
+  /**
+   * Membiarkan latar layar tembus pandang. Dipakai layar masuk, yang menaruh
+   * video atau animasi di belakang konten.
+   */
+  transparent?: boolean;
 }) {
   const isi = (
     <View style={[styles.content, center && styles.center, contentStyle]}>{children}</View>
   );
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+    <SafeAreaView style={[styles.safe, transparent && styles.transparent]} edges={["top", "bottom"]}>
       {scroll ? (
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -48,6 +54,9 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
+  },
+  transparent: {
+    backgroundColor: "transparent",
   },
   content: {
     flexGrow: 1,

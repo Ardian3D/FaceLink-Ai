@@ -15,9 +15,10 @@
           "image": "./assets/branding/splash-icon.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#0F172A"
+          "backgroundColor": "#000000"
         }
-      ]
+      ],
+      "expo-video"
     ],
     "ios": {
       "supportsTablet": true,
@@ -28,9 +29,8 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
-        "backgroundColor": "#0F172A",
+        "backgroundColor": "#000000",
         "foregroundImage": "./assets/branding/adaptive-icon-foreground.png",
-        "backgroundImage": "./assets/branding/adaptive-icon-background.png",
         "monochromeImage": "./assets/branding/adaptive-icon-monochrome.png"
       }
     },
