@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "expo-router";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, View, useWindowDimensions } from "react-native";
 
 import { AppText } from "@/components/AppText";
 import { BrandLogo } from "@/components/BrandLogo";
@@ -44,6 +44,12 @@ const LANGKAH_AWAL: Langkah[] = [
 export default function RoleCheckingScreen() {
   const router = useRouter();
   const { status, session } = useSession();
+  const { width } = useWindowDimensions();
+
+  // Cincin mengikuti lebar layar: pada HP sempit ia mengecil, pada layar lebar
+  // berhenti di ukuran mockup. Tanpa ini, cincin 300 px melebihi lebar konten
+  // pada layar 320 px dan terpotong di kedua sisi.
+  const lebarHud = Math.min(layout.loadingHudSize, width - layout.screenPadding * 2);
   const sudahDiarahkan = useRef(false);
 
   const [langkah, setLangkah] = useState<Langkah[]>(LANGKAH_AWAL);
@@ -95,7 +101,7 @@ export default function RoleCheckingScreen() {
       </View>
 
       <View style={styles.tengah}>
-        <LoadingHud />
+        <LoadingHud size={lebarHud} />
         <AppText variant="title" weight="semibold" center>
           Sedang mengecek peran anda…
         </AppText>

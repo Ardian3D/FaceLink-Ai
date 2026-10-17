@@ -168,7 +168,7 @@ export const layout = {
   screenPadding: spacing.xl,
   maxContentWidth: 560,
   logoSize: 112,
-  logoSizeCompact: 64,
+  logoSizeCompact: 40,
   /** Diameter cincin HUD pada layar pemeriksaan peran. */
   loadingHudSize: 300,
   avatarSize: 40,

@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, View } from "react-native";
+import { StyleSheet, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { AppText } from "./AppText";
@@ -25,6 +25,12 @@ export type Langkah = {
 };
 
 export function StepTracker({ langkah }: { langkah: Langkah[] }) {
+  const { width } = useWindowDimensions();
+  // Lebar tiap langkah dibagi rata, dengan batas atas supaya pada tablet tidak
+  // melebar berlebihan. Tanpa ini, label terpotong pada layar 320 px.
+  const lebarItem = Math.min(104, Math.max(64, Math.floor((width - 48) / langkah.length) - 8));
+  const lebarPenghubung = Math.max(8, Math.min(36, Math.round(lebarItem * 0.35)));
+
   return (
     <View style={styles.baris} accessibilityRole="progressbar">
       {langkah.map((l, i) => {
@@ -35,12 +41,16 @@ export function StepTracker({ langkah }: { langkah: Langkah[] }) {
           <React.Fragment key={l.label}>
             {i > 0 ? (
               <View
-                style={[styles.penghubung, (selesai || berjalan) && styles.penghubungAktif]}
+                style={[
+                  styles.penghubung,
+                  { width: lebarPenghubung },
+                  (selesai || berjalan) && styles.penghubungAktif,
+                ]}
               />
             ) : null}
 
             <View
-              style={styles.item}
+              style={[styles.item, { width: lebarItem }]}
               accessible
               accessibilityLabel={`${l.label}: ${l.status}`}
             >
@@ -85,7 +95,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   item: {
-    width: 92,
     alignItems: "center",
     gap: spacing.md,
   },
@@ -108,7 +117,6 @@ const styles = StyleSheet.create({
   },
   penghubung: {
     height: 1.5,
-    width: 36,
     marginTop: 27,
     backgroundColor: colors.hudLine,
   },
