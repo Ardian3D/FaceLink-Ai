@@ -5,7 +5,6 @@ import { LinearGradient } from "expo-linear-gradient";
 
 import { AppText } from "@/components/AppText";
 import { BrandLogo } from "@/components/BrandLogo";
-import { DemoBanner } from "@/components/DemoBanner";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 import { Screen } from "@/components/Screen";
 import { StateView } from "@/components/StateView";
@@ -56,12 +55,8 @@ export default function LoginScreen() {
       />
 
       <Screen transparent scroll contentStyle={styles.isi}>
-        <View style={styles.atas}>
-          {DEMO_MODE ? <DemoBanner keterangan="UI preview, belum terhubung backend" /> : null}
-        </View>
-
         {/* Dua ruang kosong dengan rasio berbeda menempatkan blok identitas di
-            bawah titik tengah layar, seperti pada mockup. Rasio dipakai, bukan
+            bagian bawah layar seperti pada mockup. Rasio dipakai, bukan
             `justifyContent: space-between`, supaya posisinya tetap sama pada
             layar pendek maupun tinggi. */}
         <View style={styles.ruangAtas} />
@@ -107,9 +102,6 @@ export default function LoginScreen() {
               Terms of service
             </AppText>
           </View>
-          <AppText variant="caption" color={colors.textMuted} center>
-            Tautan kebijakan belum aktif pada preview.
-          </AppText>
         </View>
       </Screen>
     </View>
@@ -127,22 +119,19 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.xl,
   },
-  atas: {
-    minHeight: spacing.xl,
-  },
   /**
-   * Ruang kosong di atas dan di bawah blok identitas. Perbandingan 7:1
-   * menaruh mark di sekitar 55% tinggi layar, wordmark di ~66%, tombol di
-   * ~79%, dan label kebijakan di ~89% — posisi yang diukur dari mockup
-   * pemilik. Karena memakai `flex`, proporsinya bertahan pada layar pendek
-   * maupun tinggi.
+   * Ruang kosong di atas dan di bawah blok identitas. Perbandingan 5:1
+   * menaruh mark sekitar 51% tinggi layar, wordmark ~62%, dan tombol ~75% —
+   * sedikit lebih tinggi daripada mockup, sesuai permintaan pemilik. Karena
+   * memakai `flex`, proporsinya bertahan pada layar pendek maupun tinggi.
    */
   ruangAtas: {
-    flex: 1,
+    flex: 5,
     minHeight: spacing.xxl,
   },
   ruangBawah: {
-    height: spacing.md,
+    flex: 1,
+    minHeight: spacing.xl,
   },
   tengah: {
     alignItems: "center",
