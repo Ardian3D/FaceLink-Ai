@@ -187,14 +187,18 @@ FaceLink-AI/                      # ← kondisi FL-001: hanya berkas di bawah in
 ├── .gitignore                    # ditambahkan pada FL-001
 ├── docs/                         # ADA — 16 dokumen perencanaan
 ├── research/                     # ADA — ruang kajian jurnal (referensi saja)
-├── apps/                         # BELUM ADA — hanya untuk aplikasi klien (fase 3)
-│   └── mobile/                   # BELUM ADA (React Native + Expo, fase 3)
+├── apps/                         # ADA — aplikasi klien
+│   └── mobile/                   # ADA sejak FL-UI01 — React Native + Expo (UI preview)
 │                                 # TIDAK ADA `apps/api/` — backend Go ada di `backend/` (§8.1)
 ├── services/                     # BELUM ADA
 │   └── face-engine/              # BELUM ADA (Python + OpenCV, fase 2)
 ├── firmware/                     # BELUM ADA (fase hardware)
 │   └── esp32-s3-cam/             # BELUM ADA (firmware, fase 5)
 ├── tests/                        # BELUM ADA (pengujian integrasi)
+├── design-inputs/                # LOKAL SAJA — tidak di-commit (.gitignore):
+│                                 # logo master, gambar referensi, video acuan.
+│                                 # Aset yang dipakai aplikasi disalin ke
+│                                 # apps/mobile/assets/branding/ (FL-UI01)
 ├── .github/workflows/            # ADA (FL-005R) — quality gate CI backend Go
 └── backend/                      # ADA (FL-005) — LOKASI RESMI Go Backend
     ├── cmd/server/
