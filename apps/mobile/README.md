@@ -100,6 +100,29 @@ apps/mobile/
 cincin pemindai geometris, bukan logo brand mana pun dan bukan foto wajah. Logo
 resmi FaceLink AI belum tersedia di repository.
 
+### Menaruh aset resmi dan bahan referensi
+
+Bahan mentah desain ditaruh di **`design-inputs/`** pada akar repository. Folder
+itu **tidak di-commit** (lihat `.gitignore`): isinya boleh berupa karya pihak
+lain, berkas berukuran besar, atau rekaman yang memuat wajah orang.
+
+| Folder | Isi |
+|---|---|
+| `design-inputs/logo/` | Logo resmi (master) — `.svg`, `.ai`, `.psd`, atau PNG besar |
+| `design-inputs/referensi-ui/` | Mockup, sketsa, moodboard, screenshot acuan |
+| `design-inputs/video/` | Video acuan (`.mp4`/`.mov`/`.webm`) |
+
+Yang **di-commit** hanyalah aset yang benar-benar dibangun aplikasi:
+`apps/mobile/assets/branding/`. Dari logo master di `design-inputs/logo/`, salinan
+yang dipakai aplikasi diletakkan di sini — konversi format dan pembuatan ukuran
+ikon dilakukan saat pemasangan, bukan dengan menaruh berkas master besar di
+repository.
+
+**Batas yang tidak boleh dilanggar:** video atau gambar yang memuat wajah orang
+tidak boleh ikut di-commit. Bila video ingin dipakai sebagai latar di dalam
+aplikasi, pilihannya adalah visual animasi yang dibuat di kode, video tanpa orang
+yang dapat dikenali, atau berkas yang tetap lokal untuk demo di laptop pemilik.
+
 Menggantinya setelah aset resmi diberikan:
 
 1. Timpa `assets/branding/logo-mark.png` (logo di dalam aplikasi, latar

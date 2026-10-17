@@ -195,6 +195,10 @@ FaceLink-AI/                      # ← kondisi FL-001: hanya berkas di bawah in
 ├── firmware/                     # BELUM ADA (fase hardware)
 │   └── esp32-s3-cam/             # BELUM ADA (firmware, fase 5)
 ├── tests/                        # BELUM ADA (pengujian integrasi)
+├── design-inputs/                # LOKAL SAJA — tidak di-commit (.gitignore):
+│                                 # logo master, gambar referensi, video acuan.
+│                                 # Aset yang dipakai aplikasi disalin ke
+│                                 # apps/mobile/assets/branding/ (FL-UI01)
 ├── .github/workflows/            # ADA (FL-005R) — quality gate CI backend Go
 └── backend/                      # ADA (FL-005) — LOKASI RESMI Go Backend
     ├── cmd/server/
