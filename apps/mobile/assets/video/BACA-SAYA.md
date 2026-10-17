@@ -35,8 +35,11 @@ Folder ini (`apps/mobile/assets/video/`) memakai aturan yang sama: berkas
 - **Klon baru / CI / laptop lain** — tidak ada klip → daftar kosong → layar
   masuk memakai latar animasi yang digambar di kode (`ScanBackdrop`). Bundel
   tetap berhasil; tidak ada berkas yang hilang.
-- **Laptop pemilik project** — klip ada → kedua klip diputar bergantian tanpa
-  jeda sebagai latar layar masuk.
+- **Laptop pemilik project** — klip ada → kedua klip diputar bergantian **tanpa
+  jeda dan tanpa layar hitam**: masing-masing klip menempati lapisan video
+  sendiri yang sudah termuat sejak awal, lalu keduanya saling menyeberang
+  (crossfade 450 ms) sebelum klip lama habis. Rinciannya di komentar
+  `src/components/VideoBackground.tsx`.
 
 ## Memasang / melepas klip di laptop sendiri
 
