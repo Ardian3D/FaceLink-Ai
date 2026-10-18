@@ -111,6 +111,25 @@ backups/
 !docs/**/*.svg
 !docs/**/*.jpg
 
+# Dikecualikan: aset antarmuka aplikasi mobile (FL-UI01). Isinya hanya grafik
+# sintetis — logo placeholder, ikon aplikasi, dan splash — bukan foto wajah,
+# sampel enrollment, atau data biometrik mana pun. Pola `*.png` di atas dibuat
+# untuk mencegah data biometrik masuk repository; pengecualian ini sengaja
+# dipersempit ke satu direktori aset UI agar maksud itu tidak melemah.
+!apps/mobile/assets/**/*.png
+!apps/mobile/assets/**/*.svg
+!apps/mobile/assets/**/*.jpg
+!apps/mobile/assets/**/*.jpeg
+!apps/mobile/assets/**/*.webp
+
+# Bahan kerja desain: logo master, gambar referensi, dan video acuan.
+# SELURUH folder ini sengaja TIDAK di-commit: isinya dapat berupa karya pihak
+# lain, berkas besar, atau rekaman yang memuat wajah orang. Aset yang benar-benar
+# dipakai aplikasi disalin (setelah dikonversi seperlunya) ke
+# `apps/mobile/assets/branding/` — di situlah satu-satunya jalur gambar yang
+# diizinkan masuk repository.
+design-inputs/
+
 # -----------------------------------------------------------------------------
 # 3. MODEL AI LOKAL (besar, lisensi berkas harus ditinjau sebelum di-commit)
 #    docs/FACE_ENGINE.md & docs/REFERENCES.md mensyaratkan versi + checksum.
