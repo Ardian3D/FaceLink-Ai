@@ -45,8 +45,6 @@ export type Palette = {
   error: string;
   info: string;
 
-  demo: string;
-
   backgroundAccent: string;
   glowStrong: string;
   glowSoft: string;
@@ -93,8 +91,6 @@ export const dark: Palette = {
   warning: "#FFB020",
   error: "#FF5A5F",
   info: "#7DD3FC",
-
-  demo: "#B9A7FF",
 
   backgroundAccent: "#170406",
   glowStrong: "rgba(255, 23, 27, 0.22)",
@@ -143,8 +139,6 @@ export const light: Palette = {
   warning: "#A65B00",
   error: "#C01519",
   info: "#0B6E99",
-
-  demo: "#6B4FD8",
 
   backgroundAccent: "#FFF5F5",
   glowStrong: "rgba(212, 17, 21, 0.18)",

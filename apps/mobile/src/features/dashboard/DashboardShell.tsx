@@ -3,14 +3,12 @@ import { useRouter } from "expo-router";
 import { StyleSheet, View } from "react-native";
 
 import { AppText } from "@/components/AppText";
-import { DemoBanner } from "@/components/DemoBanner";
 import { Screen } from "@/components/Screen";
 import { SettingsSheet } from "@/components/SettingsSheet";
 import { TopBar } from "@/components/TopBar";
 import { useSession } from "@/features/auth/SessionProvider";
-import { DEMO_MODE } from "@/features/auth/demoMode";
 import { roleHome } from "@/features/auth/roleRoutes";
-import { useTheme , spacing } from "@/theme";
+import { spacing, useTheme } from "@/theme";
 import type { Role } from "@/types";
 
 /**
@@ -61,8 +59,6 @@ export function DashboardShell({
           {title}
         </AppText>
       </View>
-
-      {DEMO_MODE ? <DemoBanner keterangan={`beranda ${role} memakai data contoh`} /> : null}
 
       {children}
 

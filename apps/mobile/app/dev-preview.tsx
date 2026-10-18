@@ -4,7 +4,6 @@ import { StyleSheet, View } from "react-native";
 
 import { AppButton } from "@/components/AppButton";
 import { AppText } from "@/components/AppText";
-import { DemoBanner } from "@/components/DemoBanner";
 import { Screen } from "@/components/Screen";
 import { StateView } from "@/components/StateView";
 import { useSession } from "@/features/auth/SessionProvider";
@@ -46,7 +45,6 @@ export default function DevRolePreview() {
 
   return (
     <Screen scroll>
-      <DemoBanner keterangan="hanya development build" />
       <View style={styles.header}>
         <AppText variant="heading" weight="bold">
           Preview sebagai

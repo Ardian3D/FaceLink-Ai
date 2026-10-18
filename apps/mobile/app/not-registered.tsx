@@ -6,10 +6,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { AppButton } from "@/components/AppButton";
 import { AppText } from "@/components/AppText";
 import { BrandLogo } from "@/components/BrandLogo";
-import { DemoBanner } from "@/components/DemoBanner";
 import { Screen } from "@/components/Screen";
 import { UnregisteredIllustration } from "@/components/UnregisteredIllustration";
-import { DEMO_MODE } from "@/features/auth/demoMode";
 import { useSession } from "@/features/auth/SessionProvider";
 import { layout, radius, spacing, useTheme } from "@/theme";
 
@@ -44,8 +42,6 @@ export default function NotRegisteredScreen() {
 
   return (
     <Screen scroll contentStyle={styles.isi}>
-      {DEMO_MODE ? <DemoBanner keterangan="layar ini dapat dipreview tanpa backend" /> : null}
-
       <View style={styles.atas}>
         <BrandLogo size={layout.logoSizeCompact} showWordmark />
       </View>

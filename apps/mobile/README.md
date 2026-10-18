@@ -85,7 +85,10 @@ Mode demo hanya aktif pada **development build** (`__DEV__`), lihat
 - Build produksi menolak tombol masuk dengan pesan "belum tersedia" dan layar
   pemilih role tidak menawarkan pilihan apa pun — **tidak ada** jalur yang
   menaikkan hak akses.
-- Setiap layar yang memakai data contoh menampilkan penanda **DEMO**.
+- Layar **tidak** lagi menampilkan spanduk "DEMO" (dihapus atas permintaan
+  pemilik project, 18 Oktober 2026, agar preview sama dengan tampilan akhir).
+  Karena itu angka pada beranda development build adalah **data contoh** dan
+  tidak boleh dikira data nyata; sumbernya `src/features/dashboard/mockData.ts`.
 - Status `unregistered` **tidak pernah** membawa sesi. Penjaga navigasi
   mengalihkan ke layar penjelasan, dan layar itu sendiri menolak dibuka langsung
   tanpa status tersebut — jadi tidak ada jalan masuk ke beranda lewat keadaan

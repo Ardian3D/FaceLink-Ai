@@ -9,14 +9,14 @@
  *     menaikkan hak akses lewat aplikasi.
  *  2. Tidak pernah memanggil backend, tidak menerbitkan token, dan tidak
  *     menyimpan apa pun ke penyimpanan kredensial.
- *  3. Selalu menampilkan penanda `DEMO` pada layar yang memakainya, supaya
- *     hasil preview tidak pernah tertukar dengan data produksi.
+ *  3. Tidak menampilkan spanduk "DEMO" di layar. Atas permintaan pemilik
+ *     project (18 Oktober 2026), spanduk itu dihapus agar tampilan preview
+ *     sama dengan tampilan akhir. Konsekuensinya: pada development build,
+ *     beranda yang berisi data contoh **tidak lagi ditandai** di layar, jadi
+ *     jangan menganggap angka di sana sebagai data nyata.
  *
  * Saat integrasi Google Auth dikerjakan (tugas terpisah), `SessionProvider`
  * diganti penyedia berbasis backend dan berkas ini dihapus bersama layar
  * `dev-preview`.
  */
 export const DEMO_MODE: boolean = __DEV__;
-
-/** Label penanda yang wajib tampil selama mode demo aktif. */
-export const DEMO_LABEL = "DEMO";
