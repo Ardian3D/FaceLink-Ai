@@ -2,7 +2,7 @@ import React, { useEffect } from "react";
 import { Redirect, Stack, useRouter } from "expo-router";
 
 import { useSession } from "@/features/auth/SessionProvider";
-import { colors } from "@/theme";
+import { useTheme } from "@/theme";
 
 /**
  * Kerangka area terautentikasi.
@@ -18,6 +18,7 @@ import { colors } from "@/theme";
  * masuk sebelum role sempat ditetapkan.
  */
 export default function AppLayout() {
+  const { colors } = useTheme();
   const { status, session } = useSession();
   const router = useRouter();
 

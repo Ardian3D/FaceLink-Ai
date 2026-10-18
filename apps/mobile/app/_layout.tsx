@@ -13,7 +13,7 @@ import { Poppins_700Bold } from "@expo-google-fonts/poppins/700Bold";
 import { Poppins_800ExtraBold } from "@expo-google-fonts/poppins/800ExtraBold";
 
 import { SessionProvider } from "@/features/auth/SessionProvider";
-import { colors } from "@/theme";
+import { ThemeProvider, useTheme } from "@/theme";
 
 /**
  * Layout akar.
@@ -51,17 +51,33 @@ export default function RootLayout() {
   if (!siap) return null;
 
   return (
-    <SafeAreaProvider>
-      <SessionProvider>
-        <StatusBar style="light" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: colors.background },
-            animation: "fade",
-          }}
-        />
-      </SessionProvider>
-    </SafeAreaProvider>
+    <ThemeProvider>
+      <SafeAreaProvider>
+        <SessionProvider>
+          <KerangkaNavigasi />
+        </SessionProvider>
+      </SafeAreaProvider>
+    </ThemeProvider>
+  );
+}
+
+/**
+ * Navigasi dipisah dari provider supaya dapat membaca tema aktif: status bar
+ * dan latar tumpukan layar harus ikut berubah saat pengguna mengganti tema.
+ */
+function KerangkaNavigasi() {
+  const { colors, mode } = useTheme();
+
+  return (
+    <>
+      <StatusBar style={mode === "dark" ? "light" : "dark"} />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.background },
+          animation: "fade",
+        }}
+      />
+    </>
   );
 }

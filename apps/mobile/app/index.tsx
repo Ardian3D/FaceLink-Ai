@@ -11,7 +11,7 @@ import { StateView } from "@/components/StateView";
 import { VideoBackground } from "@/components/VideoBackground";
 import { useSession } from "@/features/auth/SessionProvider";
 import { DEMO_MODE } from "@/features/auth/demoMode";
-import { colors, layout, spacing } from "@/theme";
+import { BrandThemeScope, layout, spacing, useTheme } from "@/theme";
 
 /**
  * Layar masuk (FL-UI01 §7), mengikuti mockup "FaceLink AI Sign-in Page".
@@ -28,11 +28,24 @@ import { colors, layout, spacing } from "@/theme";
  * "Skip" dan tidak ada jalur masuk lain.
  */
 export default function LoginScreen() {
+  // Layar masuk selalu gelap: ia dirancang untuk latar video hitam, bukan
+  // mengikuti tema dashboard. Isinya dipisah ke komponen anak supaya
+  // `useTheme()` di dalamnya membaca palet yang dikunci itu.
+  return (
+    <BrandThemeScope>
+      <LayarMasuk />
+    </BrandThemeScope>
+  );
+}
+
+function LayarMasuk() {
+  const { colors } = useTheme();
   const router = useRouter();
   const { status, error, startSignIn } = useSession();
 
   const mengecek = status === "checking";
-  const belumTersedia = error?.kind === "unknown" && error.message === "notImplemented";
+  const belumTersedia =
+    error?.kind === "unknown" && error.message === "notImplemented";
 
   const mulai = () => {
     startSignIn();
@@ -40,7 +53,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.layar}>
+    <View style={[styles.layar, { backgroundColor: colors.background }]}>
       <VideoBackground />
       <LinearGradient
         colors={[
@@ -56,9 +69,9 @@ export default function LoginScreen() {
 
       <Screen transparent scroll contentStyle={styles.isi}>
         {/* Dua ruang kosong dengan rasio berbeda menempatkan blok identitas di
-            bagian bawah layar seperti pada mockup. Rasio dipakai, bukan
-            `justifyContent: space-between`, supaya posisinya tetap sama pada
-            layar pendek maupun tinggi. */}
+              bagian bawah layar seperti pada mockup. Rasio dipakai, bukan
+              `justifyContent: space-between`, supaya posisinya tetap sama pada
+              layar pendek maupun tinggi. */}
         <View style={styles.ruangAtas} />
 
         <View style={styles.tengah}>
@@ -67,14 +80,18 @@ export default function LoginScreen() {
           <View style={styles.aksi}>
             <GoogleSignInButton onPress={mulai} loading={mengecek} />
             <AppText variant="caption" color={colors.textSecondary} center>
-              Masuk memerlukan internet. Role akun ditentukan backend FaceLink AI, bukan oleh
-              aplikasi.
+              Masuk memerlukan internet. Role akun ditentukan backend FaceLink
+              AI, bukan oleh aplikasi.
             </AppText>
 
             {error ? (
               <StateView
                 tone="error"
-                title={belumTersedia ? "Belum tersedia pada build ini" : "Gagal memulai"}
+                title={
+                  belumTersedia
+                    ? "Belum tersedia pada build ini"
+                    : "Gagal memulai"
+                }
                 description={
                   belumTersedia
                     ? "Masuk dengan Google belum diintegrasikan. Jalur demo hanya aktif pada development build."
@@ -89,15 +106,17 @@ export default function LoginScreen() {
 
         <View style={styles.bawah}>
           {/* Mockup menampilkan tautan kebijakan di dasar layar. Dokumen publiknya
-              belum ada (docs/ baru memuat dokumen internal), jadi keduanya
-              ditampilkan sebagai label — bukan tautan yang bisa ditekan dan tidak
-              menuju ke mana-mana. Beri tahu pemilik project bila dokumennya sudah
-              tersedia supaya baris ini berubah menjadi tautan sungguhan. */}
+                belum ada (docs/ baru memuat dokumen internal), jadi keduanya
+                ditampilkan sebagai label — bukan tautan yang bisa ditekan dan tidak
+                menuju ke mana-mana. Beri tahu pemilik project bila dokumennya sudah
+                tersedia supaya baris ini berubah menjadi tautan sungguhan. */}
           <View style={styles.footer}>
             <AppText variant="caption" color={colors.textMuted}>
               Privacy policy
             </AppText>
-            <View style={styles.pemisah} />
+            <View
+              style={[styles.pemisah, { backgroundColor: colors.border }]}
+            />
             <AppText variant="caption" color={colors.textMuted}>
               Terms of service
             </AppText>
@@ -111,7 +130,6 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   layar: {
     flex: 1,
-    backgroundColor: colors.background,
   },
   isi: {
     justifyContent: "flex-start",
@@ -153,6 +171,5 @@ const styles = StyleSheet.create({
   pemisah: {
     width: StyleSheet.hairlineWidth,
     height: spacing.lg,
-    backgroundColor: colors.border,
   },
 });

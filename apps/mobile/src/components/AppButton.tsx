@@ -2,7 +2,7 @@ import React from "react";
 import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 
 import { AppText } from "./AppText";
-import { colors, radius, spacing, touch, typography } from "@/theme";
+import { radius, spacing, touch, typography, useTheme } from "@/theme";
 
 type Variant = "primary" | "secondary";
 
@@ -28,6 +28,7 @@ export function AppButton({
   disabled?: boolean;
   icon?: React.ReactNode;
 }) {
+  const { colors } = useTheme();
   const nonaktif = disabled || loading;
   const utama = variant === "primary";
 
@@ -41,7 +42,13 @@ export function AppButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.base,
-        utama ? styles.primary : styles.secondary,
+        utama
+          ? { backgroundColor: colors.accent }
+          : {
+              backgroundColor: colors.surface,
+              borderWidth: StyleSheet.hairlineWidth,
+              borderColor: colors.border,
+            },
         pressed && !nonaktif && styles.pressed,
         nonaktif && styles.disabled,
       ]}
@@ -73,14 +80,6 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     justifyContent: "center",
     alignItems: "center",
-  },
-  primary: {
-    backgroundColor: colors.accent,
-  },
-  secondary: {
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
   pressed: {
     opacity: 0.85,

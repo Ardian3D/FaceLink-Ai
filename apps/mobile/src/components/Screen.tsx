@@ -2,7 +2,7 @@ import React from "react";
 import { ScrollView, StyleSheet, View, type ViewStyle } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { colors, layout, spacing } from "@/theme";
+import { layout, spacing, useTheme } from "@/theme";
 
 /**
  * Kerangka satu layar: latar tema, safe area Android (status bar dan gesture
@@ -29,12 +29,17 @@ export function Screen({
    */
   transparent?: boolean;
 }) {
+  const { colors } = useTheme();
+
   const isi = (
     <View style={[styles.content, center && styles.center, contentStyle]}>{children}</View>
   );
 
   return (
-    <SafeAreaView style={[styles.safe, transparent && styles.transparent]} edges={["top", "bottom"]}>
+    <SafeAreaView
+      style={[styles.safe, { backgroundColor: transparent ? "transparent" : colors.background }]}
+      edges={["top", "bottom"]}
+    >
       {scroll ? (
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -53,10 +58,6 @@ export function Screen({
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: colors.background,
-  },
-  transparent: {
-    backgroundColor: "transparent",
   },
   content: {
     flexGrow: 1,

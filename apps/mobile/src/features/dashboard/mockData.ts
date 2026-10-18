@@ -40,6 +40,19 @@ export type PerangkatStatus = {
   lastSeen: string;
 };
 
+/** Satu baris jadwal/sesi untuk komponen `ScheduleRow`. */
+export type JadwalItem = {
+  id: string;
+  jam: string;
+  judul: string;
+  keterangan?: string;
+  status?: string;
+  berjalan?: boolean;
+};
+
+/** Satu batang grafik mingguan. */
+export type BatangMingguan = { id: string; label: string; value: number };
+
 export const ringkasanAdmin: RingkasanMetric[] = [
   { id: "hadir", label: "Hadir hari ini", value: "42", hint: "dari 48 peserta terjadwal" },
   { id: "mahasiswa", label: "Total mahasiswa", value: "48", hint: "6 kelas demo" },
@@ -96,6 +109,99 @@ export const ringkasanMahasiswa: RingkasanMetric[] = [
   { id: "hadir", label: "Kehadiran saya", value: "9/10", hint: "semester ini" },
   { id: "berikut", label: "Sesi berikutnya", value: "10:00", hint: "IF-101" },
   { id: "konsen", label: "Persetujuan", value: "Aktif", hint: "biometrik" },
+];
+
+/** Kehadiran tujuh hari terakhir — admin dan dosen melihat tren ini. */
+export const trenMingguan: BatangMingguan[] = [
+  { id: "sen", label: "Sen", value: 38 },
+  { id: "sel", label: "Sel", value: 42 },
+  { id: "rab", label: "Rab", value: 35 },
+  { id: "kam", label: "Kam", value: 44 },
+  { id: "jum", label: "Jum", value: 40 },
+  { id: "sab", label: "Sab", value: 22 },
+  { id: "min", label: "Min", value: 0 },
+];
+
+/** Jadwal sesi hari ini untuk admin. */
+export const jadwalAdmin: JadwalItem[] = [
+  {
+    id: "j1",
+    jam: "08:00",
+    judul: "IF-101 · Pengantar Informatika",
+    keterangan: "Dosen Demo · Lab 1",
+    status: "Berjalan",
+    berjalan: true,
+  },
+  {
+    id: "j2",
+    jam: "10:00",
+    judul: "IF-202 · Basis Data",
+    keterangan: "Dosen Demo Dua · Lab 2",
+    status: "Terjadwal",
+  },
+  {
+    id: "j3",
+    jam: "13:00",
+    judul: "IF-303 · Jaringan Komputer",
+    keterangan: "Dosen Demo Tiga · Lab 1",
+    status: "Terjadwal",
+  },
+];
+
+/** Sesi milik dosen hari ini. */
+export const jadwalDosen: JadwalItem[] = [
+  {
+    id: "jd1",
+    jam: "08:00",
+    judul: "IF-101 · Pengantar Informatika",
+    keterangan: "24 peserta · Lab 1",
+    status: "Berjalan",
+    berjalan: true,
+  },
+  {
+    id: "jd2",
+    jam: "10:00",
+    judul: "IF-202 · Basis Data",
+    keterangan: "18 peserta · Lab 2",
+    status: "Terjadwal",
+  },
+];
+
+/** Jadwal kuliah mahasiswa hari ini. */
+export const jadwalMahasiswa: JadwalItem[] = [
+  {
+    id: "jm1",
+    jam: "08:00",
+    judul: "IF-101 · Pengantar Informatika",
+    keterangan: "Dosen Demo · Lab 1",
+    status: "Hadir",
+    berjalan: true,
+  },
+  {
+    id: "jm2",
+    jam: "10:00",
+    judul: "IF-202 · Basis Data",
+    keterangan: "Dosen Demo Dua · Lab 2",
+    status: "Terjadwal",
+  },
+];
+
+/** Riwayat kehadiran pribadi mahasiswa. */
+export const riwayatMahasiswa: JadwalItem[] = [
+  { id: "r1", jam: "12 Okt", judul: "IF-101 · Pengantar Informatika", keterangan: "08:02 · tepat waktu", status: "Hadir" },
+  { id: "r2", jam: "10 Okt", judul: "IF-202 · Basis Data", keterangan: "10:05 · tepat waktu", status: "Hadir" },
+  { id: "r3", jam: "05 Okt", judul: "IF-101 · Pengantar Informatika", keterangan: "Tidak ada rekaman", status: "Tidak hadir" },
+];
+
+/** Peserta yang perlu diperiksa dosen setelah pencocokan ambigu. */
+export const perluDiperiksa: JadwalItem[] = [
+  {
+    id: "p1",
+    jam: "08:21",
+    judul: "Satu wajah tidak dapat dipastikan",
+    keterangan: "Keyakinan rendah · perlu keputusan manual",
+    status: "Periksa",
+  },
 ];
 
 /** Pintasan pengelolaan untuk admin. Belum ada layarnya pada FL-UI01. */

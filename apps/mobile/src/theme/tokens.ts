@@ -1,33 +1,85 @@
 /**
  * Design tokens FaceLink AI.
  *
- * Palet ini berasal dari **logo resmi** yang diberikan pemilik proyek, bukan
- * lagi placeholder: latar hitam pekat, mark putih, dan satu aksen merah.
- * Nilai merah diambil langsung dari piksel logo resmi (`#FF171B`, saluran
- * paling jenuh pada berkas `logo-white-noBg.png`).
+ * Palet berasal dari **logo resmi** pemilik project: hitam pekat, mark putih,
+ * dan satu aksen merah (`#FF171B`, diambil dari piksel logo). Aturan mereknya
+ * ketat — hanya hitam, putih, dan merah — jadi tidak ada warna merek lain yang
+ * boleh ditambahkan di sini.
  *
- * Seluruh warna, jarak, radius, dan ukuran teks hanya boleh didefinisikan di
- * berkas ini. Mengganti warna brand berarti mengubah satu tempat.
+ * Dua palet disediakan:
+ *
+ * - `dark`  — tampilan utama, sesuai logo resmi.
+ * - `light` — dipilih pengguna lewat Settings. Bukan sekadar pembalikan warna:
+ *   aksen merah digelapkan sedikit (`#D41115`) supaya kontras teks di atasnya
+ *   tetap memenuhi pedoman keterbacaan pada latar putih.
+ *
+ * Warna status (success/warning/error/info) tetap memakai keluarga warna yang
+ * berbeda dari merek. Warna itu tidak boleh menjadi satu-satunya penanda status:
+ * setiap pemakaiannya selalu disertai ikon dan teks.
  */
 
-export const colors = {
-  /** Latar paling belakang. Hitam pekat, sama seperti latar logo resmi. */
+export type Palette = {
+  background: string;
+  surface: string;
+  surfaceMuted: string;
+  surfaceElevated: string;
+  border: string;
+
+  accent: string;
+  accentPressed: string;
+  accentGlow: string;
+  accentDim: string;
+  onAccent: string;
+
+  buttonLight: string;
+  buttonLightPressed: string;
+  onButtonLight: string;
+
+  textPrimary: string;
+  textSecondary: string;
+  textMuted: string;
+  textOnAccent: string;
+
+  success: string;
+  warning: string;
+  error: string;
+  info: string;
+
+  demo: string;
+
+  backgroundAccent: string;
+  glowStrong: string;
+  glowSoft: string;
+  glowFade: string;
+
+  hudLine: string;
+  hudBracket: string;
+  hudScanGlow: string;
+
+  overlayStrong: string;
+  overlayMedium: string;
+  overlayLight: string;
+
+  /** Isian tipis untuk kartu sorotan (mis. kartu merah utama). */
+  accentSurface: string;
+  /** Warna garis bantu grafik. */
+  chartTrack: string;
+};
+
+/** Palet gelap: tampilan utama aplikasi. */
+export const dark: Palette = {
   background: "#000000",
-  /** Permukaan kartu dan panel. */
   surface: "#111114",
-  /** Permukaan di dalam kartu, mis. baris daftar. */
   surfaceMuted: "#1C1C21",
-  /** Garis pemisah dan tepi kartu. */
+  surfaceElevated: "#232329",
   border: "#2B2B31",
 
-  /** Warna aksi utama, diambil dari aksen merah logo resmi. */
   accent: "#FF171B",
-  /** Aksen saat ditekan. */
   accentPressed: "#D41115",
-  /** Teks di atas aksen merah. */
+  accentGlow: "rgba(255, 23, 27, 0.12)",
+  accentDim: "rgba(255, 23, 27, 0.45)",
   onAccent: "#FFFFFF",
 
-  /** Tombol Google: putih, dengan teks gelap di atasnya. */
   buttonLight: "#FFFFFF",
   buttonLightPressed: "#E6E6E8",
   onButtonLight: "#111114",
@@ -35,44 +87,81 @@ export const colors = {
   textPrimary: "#FFFFFF",
   textSecondary: "#D6D6DB",
   textMuted: "#9A9AA3",
+  textOnAccent: "#FFFFFF",
 
-  /** Status. Selalu dipakai bersama ikon dan label, tidak pernah warna saja. */
   success: "#4ADE80",
   warning: "#FFB020",
   error: "#FF5A5F",
   info: "#7DD3FC",
 
-  /**
-   * Penanda mode demo. Sengaja bukan merah brand dan bukan warna status, supaya
-   * tidak terbaca sebagai bagian identitas atau sebagai peringatan sistem.
-   */
   demo: "#B9A7FF",
 
-  /**
-   * Nuansa merah sangat gelap untuk latar animasi layar masuk. Bukan warna
-   * merek dan bukan warna status: hanya kedalaman latar.
-   */
   backgroundAccent: "#170406",
-
-  /** Cahaya aksen pada latar animasi layar masuk, dari pekat ke transparan. */
   glowStrong: "rgba(255, 23, 27, 0.22)",
   glowSoft: "rgba(255, 23, 27, 0.12)",
   glowFade: "rgba(255, 23, 27, 0)",
 
-  /** Cincin HUD pada layar pemeriksaan peran. */
   hudLine: "#3A3A40",
   hudBracket: "#E8E8EC",
   hudScanGlow: "rgba(255, 23, 27, 0.10)",
 
-  /** Latar lingkaran langkah yang sedang berjalan. */
-  accentGlow: "rgba(255, 23, 27, 0.12)",
-  accentDim: "rgba(255, 23, 27, 0.45)",
-
-  /** Lapisan gelap di atas video agar teks tetap terbaca. */
   overlayStrong: "rgba(0, 0, 0, 0.92)",
-  overlayLight: "rgba(0, 0, 0, 0.42)",
   overlayMedium: "rgba(0, 0, 0, 0.55)",
-} as const;
+  overlayLight: "rgba(0, 0, 0, 0.42)",
+
+  accentSurface: "#1A0507",
+  chartTrack: "#2B2B31",
+};
+
+/**
+ * Palet terang. Aksen merah digelapkan supaya teks putih di atasnya tetap
+ * terbaca (kontras ≥ 4,5:1 pada ukuran teks normal).
+ */
+export const light: Palette = {
+  background: "#FFFFFF",
+  surface: "#F7F7F8",
+  surfaceMuted: "#EFEFF1",
+  surfaceElevated: "#FFFFFF",
+  border: "#DCDCE0",
+
+  accent: "#D41115",
+  accentPressed: "#B00E12",
+  accentGlow: "rgba(212, 17, 21, 0.10)",
+  accentDim: "rgba(212, 17, 21, 0.40)",
+  onAccent: "#FFFFFF",
+
+  buttonLight: "#111114",
+  buttonLightPressed: "#2B2B31",
+  onButtonLight: "#FFFFFF",
+
+  textPrimary: "#0B0B0D",
+  textSecondary: "#3A3A40",
+  textMuted: "#6E6E76",
+  textOnAccent: "#FFFFFF",
+
+  success: "#128A45",
+  warning: "#A65B00",
+  error: "#C01519",
+  info: "#0B6E99",
+
+  demo: "#6B4FD8",
+
+  backgroundAccent: "#FFF5F5",
+  glowStrong: "rgba(212, 17, 21, 0.18)",
+  glowSoft: "rgba(212, 17, 21, 0.10)",
+  glowFade: "rgba(212, 17, 21, 0)",
+
+  hudLine: "#C9C9CE",
+  hudBracket: "#3A3A40",
+  hudScanGlow: "rgba(212, 17, 21, 0.10)",
+
+  overlayStrong: "rgba(255, 255, 255, 0.92)",
+  overlayMedium: "rgba(255, 255, 255, 0.55)",
+  overlayLight: "rgba(255, 255, 255, 0.42)",
+
+  accentSurface: "#FFF0F0",
+  chartTrack: "#E4E4E8",
+};
 
 /** Skala jarak 4pt. Semua padding/margin memakai salah satu nilai ini. */
 export const spacing = {
@@ -91,6 +180,7 @@ export const radius = {
   md: 12,
   lg: 16,
   xl: 24,
+  xxl: 28,
   pill: 999,
 } as const;
 
@@ -113,6 +203,7 @@ export const fonts = {
 
 export const typography = {
   size: {
+    micro: 10,
     caption: 12,
     body: 14,
     bodyLarge: 16,
@@ -120,6 +211,7 @@ export const typography = {
     heading: 24,
     display: 32,
     wordmark: 44,
+    hero: 30,
   },
   weight: {
     regular: "400",
@@ -128,7 +220,6 @@ export const typography = {
     bold: "700",
     heavy: "800",
   },
-  /** Berkas font Poppins untuk setiap ketebalan. */
   family: {
     regular: fonts.regular,
     medium: fonts.medium,
@@ -137,6 +228,7 @@ export const typography = {
     heavy: fonts.heavy,
   },
   lineHeight: {
+    micro: 14,
     caption: 16,
     body: 20,
     bodyLarge: 24,
@@ -144,12 +236,15 @@ export const typography = {
     heading: 32,
     display: 40,
     wordmark: 52,
+    hero: 38,
   },
   /** Jarak antarhuruf untuk wordmark, menyesuaikan gaya logo. */
   tracking: {
     tight: -0.5,
     wordmark: -1,
     wide: 1.2,
+    /** Untuk label kecil huruf besar, mis. "HARI INI". */
+    caps: 1.6,
   },
 } as const;
 
@@ -169,13 +264,17 @@ export const layout = {
   maxContentWidth: 560,
   logoSize: 112,
   logoSizeCompact: 40,
-  /** Diameter cincin HUD pada layar pemeriksaan peran. */
-  loadingHudSize: 300,
+  /** Logo kecil di topbar dashboard. */
+  logoSizeBar: 30,
   avatarSize: 40,
   iconSize: 20,
   iconSizeLarge: 28,
   /** Tinggi tombol utama pada layar masuk. */
   buttonHeight: 58,
+  /** Diameter cincin HUD pada layar pemeriksaan peran. */
+  loadingHudSize: 300,
+  /** Tinggi kartu sorotan pada dashboard. */
+  heroCardHeight: 168,
 } as const;
 
 /** Tingkat elevasi kartu. Dipakai hemat agar tampilan tidak ramai. */
@@ -188,11 +287,19 @@ export const elevation = {
     shadowOffset: { width: 0, height: 6 },
     elevation: 4,
   },
+  /** Kartu yang menempel di atas latar terang tidak butuh bayangan pekat. */
+  soft: {
+    shadowColor: "#000000",
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+  },
 } as const;
 
 export const theme = {
-  colors,
-  fonts,
+  dark,
+  light,
   spacing,
   radius,
   typography,
@@ -200,5 +307,3 @@ export const theme = {
   layout,
   elevation,
 } as const;
-
-export type Theme = typeof theme;

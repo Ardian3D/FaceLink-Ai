@@ -3,7 +3,7 @@ import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { AppText } from "./AppText";
-import { colors, radius, spacing } from "@/theme";
+import { radius, spacing, useTheme } from "@/theme";
 
 /**
  * Keadaan UI yang harus punya tampilan jelas (pedoman UX §3).
@@ -23,8 +23,15 @@ export function StateView({
   description?: string;
   action?: React.ReactNode;
 }) {
+  const { colors } = useTheme();
+
   return (
-    <View style={styles.wrap}>
+    <View
+      style={[
+        styles.wrap,
+        { backgroundColor: colors.surface, borderColor: colors.border },
+      ]}
+    >
       {tone === "loading" ? (
         <ActivityIndicator color={colors.accent} />
       ) : (
@@ -54,9 +61,7 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingVertical: spacing.xl,
     paddingHorizontal: spacing.lg,
-    backgroundColor: colors.surface,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
   },
 });

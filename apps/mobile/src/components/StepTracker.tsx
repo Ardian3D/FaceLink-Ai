@@ -3,7 +3,7 @@ import { StyleSheet, View, useWindowDimensions } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { AppText } from "./AppText";
-import { colors, radius, spacing } from "@/theme";
+import { radius, spacing, useTheme } from "@/theme";
 
 /**
  * Tiga langkah proses masuk pada layar pemeriksaan peran.
@@ -25,6 +25,7 @@ export type Langkah = {
 };
 
 export function StepTracker({ langkah }: { langkah: Langkah[] }) {
+  const { colors } = useTheme();
   const { width } = useWindowDimensions();
   // Lebar tiap langkah dibagi rata, dengan batas atas supaya pada tablet tidak
   // melebar berlebihan. Tanpa ini, label terpotong pada layar 320 px.
@@ -43,8 +44,8 @@ export function StepTracker({ langkah }: { langkah: Langkah[] }) {
               <View
                 style={[
                   styles.penghubung,
-                  { width: lebarPenghubung },
-                  (selesai || berjalan) && styles.penghubungAktif,
+                  { width: lebarPenghubung, backgroundColor: colors.hudLine },
+                  (selesai || berjalan) && { backgroundColor: colors.accentDim },
                 ]}
               />
             ) : null}
@@ -57,8 +58,9 @@ export function StepTracker({ langkah }: { langkah: Langkah[] }) {
               <View
                 style={[
                   styles.lingkaran,
-                  selesai && styles.lingkaranSelesai,
-                  berjalan && styles.lingkaranBerjalan,
+                  { borderColor: colors.hudLine },
+                  // Cincin merah + halo tipis, seperti langkah aktif pada mockup.
+                  berjalan && { borderColor: colors.accent, backgroundColor: colors.accentGlow },
                 ]}
               >
                 {selesai ? (
@@ -103,25 +105,12 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: radius.pill,
     borderWidth: 1.5,
-    borderColor: colors.hudLine,
     alignItems: "center",
     justifyContent: "center",
-  },
-  lingkaranSelesai: {
-    borderColor: colors.hudLine,
-  },
-  /** Cincin merah + halo tipis, seperti langkah aktif pada mockup. */
-  lingkaranBerjalan: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentGlow,
   },
   penghubung: {
     height: 1.5,
     marginTop: 27,
-    backgroundColor: colors.hudLine,
-  },
-  penghubungAktif: {
-    backgroundColor: colors.accentDim,
   },
   label: {
     lineHeight: 18,

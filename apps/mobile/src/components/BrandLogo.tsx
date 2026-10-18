@@ -2,14 +2,20 @@ import React from "react";
 import { Image, StyleSheet, View } from "react-native";
 
 import { AppText } from "./AppText";
-import { colors, layout, typography } from "@/theme";
+import { layout, typography, useTheme } from "@/theme";
 
 /**
  * Logo FaceLink AI: mark resmi + wordmark.
  *
- * Mark diambil dari `assets/branding/logo-mark.png`, turunan dari logo resmi
- * pemilik project (`design-inputs/logo/logo-white-noBg.png`) yang latarnya
- * sudah dihapus, sehingga mark menyatu dengan latar gelap aplikasi.
+ * Mark diambil dari dua turunan logo resmi pemilik project
+ * (`design-inputs/logo/logo-white-noBg.png`), keduanya berlatar transparan:
+ *
+ * - `logo-mark.png`      — mark putih, untuk latar gelap.
+ * - `logo-mark-dark.png` — mark hitam, untuk latar terang.
+ *
+ * Mark putih tidak terlihat di atas latar putih, jadi pemilihan berkas
+ * mengikuti tema aktif — bukan sekadar hiasan, melainkan syarat agar logo tetap
+ * terbaca pada kedua tema.
  *
  * Wordmark digambar sebagai teks, bukan gambar, supaya tajam pada semua
  * kerapatan layar: "FaceLink" putih dan "Ai" merah brand — susunan yang sama
@@ -25,6 +31,7 @@ export function BrandLogo({
   size?: number;
   showWordmark?: boolean;
 }) {
+  const { colors, mode } = useTheme();
   // Wordmark mengikuti ukuran mark, bukan ukuran tetap. Dengan begitu layar
   // yang memakai mark kecil (layar pemeriksaan peran) tidak menampilkan teks
   // raksasa, dan proporsi mark : wordmark tetap sama di semua layar.
@@ -39,7 +46,11 @@ export function BrandLogo({
       accessibilityLabel="FaceLink Ai"
     >
       <Image
-        source={require("../../assets/branding/logo-mark.png")}
+        source={
+          mode === "dark"
+            ? require("../../assets/branding/logo-mark.png")
+            : require("../../assets/branding/logo-mark-dark.png")
+        }
         style={{ width: size, height: size }}
         resizeMode="contain"
       />

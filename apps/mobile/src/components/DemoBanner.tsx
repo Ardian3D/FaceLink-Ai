@@ -3,7 +3,7 @@ import { StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { AppText } from "./AppText";
-import { colors, radius, spacing } from "@/theme";
+import { radius, spacing, useTheme } from "@/theme";
 
 /**
  * Penanda mode demo.
@@ -12,8 +12,18 @@ import { colors, radius, spacing } from "@/theme";
  * preview tidak pernah tertukar dengan data produksi (FL-UI01 §11).
  */
 export function DemoBanner({ keterangan }: { keterangan: string }) {
+  const { colors } = useTheme();
+
   return (
-    <View style={styles.banner}>
+    <View
+      style={[
+        styles.banner,
+        {
+          backgroundColor: colors.surfaceMuted,
+          borderColor: colors.demo,
+        },
+      ]}
+    >
       <Ionicons name="flask" size={16} color={colors.demo} />
       <AppText variant="caption" weight="medium" color={colors.demo} style={styles.teks}>
         DEMO — {keterangan}
@@ -27,9 +37,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
-    backgroundColor: colors.surfaceMuted,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.demo,
     borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,

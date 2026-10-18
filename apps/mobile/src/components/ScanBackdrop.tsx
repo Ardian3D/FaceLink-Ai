@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Animated, Easing, Platform, StyleSheet, View, useWindowDimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 
-import { colors } from "@/theme";
+import { useTheme } from "@/theme";
 
 /**
  * Latar animasi yang digambar di kode untuk layar masuk.
@@ -18,6 +18,7 @@ import { colors } from "@/theme";
  * dan kontrasnya rendah supaya teks di atasnya tetap terbaca.
  */
 export function ScanBackdrop() {
+  const { colors } = useTheme();
   const { height } = useWindowDimensions();
 
   // Nilai animasi disimpan lewat `useState` dengan penginisialisasi malas,
@@ -77,7 +78,7 @@ export function ScanBackdrop() {
           end={{ x: 0.5, y: 1 }}
           style={styles.halo}
         />
-        <View style={styles.garis} />
+        <View style={[styles.garis, { backgroundColor: colors.accent }]} />
       </Animated.View>
     </View>
   );
@@ -100,6 +101,5 @@ const styles = StyleSheet.create({
   garis: {
     height: StyleSheet.hairlineWidth * 2,
     width: "100%",
-    backgroundColor: colors.accent,
   },
 });

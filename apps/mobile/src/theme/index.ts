@@ -1,6 +1,12 @@
 /**
- * Titik masuk tema. Komponen mengimpor dari sini, bukan dari `tokens` langsung,
- * supaya penambahan tema lain (mis. mode terang) nanti tidak menyentuh pemanggil.
+ * Titik masuk tema.
+ *
+ * Komponen memakai `useTheme()` untuk warna, dan token statis (spacing,
+ * radius, tipografi, layout) langsung dari sini. Warna **tidak** boleh
+ * diimpor sebagai konstanta oleh komponen yang tampil di layar: warna berubah
+ * mengikuti tema, sedangkan spacing tidak.
  */
-export { theme, colors, fonts, spacing, radius, typography, touch, layout, elevation } from "./tokens";
-export type { Theme } from "./tokens";
+export { ThemeProvider, BrandThemeScope, useTheme, palet } from "./ThemeProvider";
+export type { ThemeMode } from "./ThemeProvider";
+export { spacing, radius, typography, touch, layout, elevation, fonts } from "./tokens";
+export type { Palette } from "./tokens";

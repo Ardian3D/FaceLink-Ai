@@ -1,7 +1,7 @@
 import React from "react";
 import { Text, type TextProps } from "react-native";
 
-import { colors, typography } from "@/theme";
+import { typography, useTheme } from "@/theme";
 
 type Variant = keyof typeof typography.size;
 type Weight = keyof typeof typography.weight;
@@ -18,7 +18,7 @@ type Weight = keyof typeof typography.weight;
  */
 export function AppText({
   variant = "body",
-  color = colors.textPrimary,
+  color,
   weight,
   center = false,
   style,
@@ -29,7 +29,10 @@ export function AppText({
   weight?: Weight;
   center?: boolean;
 }) {
+  const { colors } = useTheme();
   const ketebalan: Weight = weight ?? (variant === "body" ? "regular" : "semibold");
+  // Warna teks mengikuti tema aktif; pemanggil boleh menimpanya.
+  const warna = color ?? colors.textPrimary;
 
   return (
     <Text
@@ -38,7 +41,7 @@ export function AppText({
         {
           fontSize: typography.size[variant],
           lineHeight: typography.lineHeight[variant],
-          color,
+          color: warna,
           fontFamily: typography.family[ketebalan],
           fontWeight: typography.weight[ketebalan],
         },

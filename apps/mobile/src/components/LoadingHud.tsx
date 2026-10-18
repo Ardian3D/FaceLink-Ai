@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Animated, Easing, Platform, StyleSheet, View } from "react-native";
 import Svg, { Circle, G, Line, Path } from "react-native-svg";
 
-import { colors, layout } from "@/theme";
+import { layout, useTheme } from "@/theme";
 
 /**
  * Cincin pemindaian untuk layar pemeriksaan peran.
@@ -67,6 +67,7 @@ function busur(cx: number, cy: number, r: number, mulai: number, akhir: number) 
 }
 
 export function LoadingHud({ size = layout.loadingHudSize }: { size?: number }) {
+  const { colors } = useTheme();
   const [sapuan] = useState(() => new Animated.Value(0));
 
   useEffect(() => {

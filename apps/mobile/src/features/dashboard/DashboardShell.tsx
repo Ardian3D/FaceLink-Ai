@@ -1,21 +1,25 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import { StyleSheet, View } from "react-native";
 
 import { AppText } from "@/components/AppText";
-import { AppButton } from "@/components/AppButton";
 import { DemoBanner } from "@/components/DemoBanner";
 import { Screen } from "@/components/Screen";
-import { StatusBadge } from "@/components/StatusBadge";
+import { SettingsSheet } from "@/components/SettingsSheet";
+import { TopBar } from "@/components/TopBar";
 import { useSession } from "@/features/auth/SessionProvider";
 import { DEMO_MODE } from "@/features/auth/demoMode";
 import { roleHome } from "@/features/auth/roleRoutes";
-import { colors, spacing } from "@/theme";
+import { useTheme , spacing } from "@/theme";
 import type { Role } from "@/types";
 
 /**
  * Kerangka beranda untuk satu role.
+ *
+ * Susunannya mengikuti referensi dashboard: topbar tipis (logo kiri, profil
+ * kanan), sapaan besar, lalu isi yang disusun per bagian. Topbar sengaja hanya
+ * memuat dua hal itu — pengaturan (termasuk tema) dibuka dari profil, bukan
+ * dari deretan ikon di header.
  *
  * Menjaga agar layar role hanya dapat dibuka oleh role yang sesuai: bila sesi
  * ternyata milik role lain, pengguna diarahkan ke berandanya sendiri. Satu akun
@@ -34,7 +38,9 @@ export function DashboardShell({
   children: React.ReactNode;
 }) {
   const router = useRouter();
+  const { colors } = useTheme();
   const { session, signOut } = useSession();
+  const [pengaturan, setPengaturan] = useState(false);
   const sesiRole = session?.user.role;
 
   useEffect(() => {
@@ -45,65 +51,37 @@ export function DashboardShell({
 
   return (
     <Screen scroll>
-      <View style={styles.header}>
-        <View style={styles.headerTeks}>
-          <AppText variant="caption" color={colors.textMuted}>
-            {subtitle}
-          </AppText>
-          <AppText variant="display" weight="bold">
-            {title}
-          </AppText>
-        </View>
-        <View style={styles.headerAksi}>
-          <StatusBadge label={session.user.displayName} tone="info" icon="person-circle-outline" />
-        </View>
+      <TopBar onOpenSettings={() => setPengaturan(true)} />
+
+      <View style={styles.sapaan}>
+        <AppText variant="caption" color={colors.textMuted}>
+          {subtitle}
+        </AppText>
+        <AppText variant="display" weight="bold">
+          {title}
+        </AppText>
       </View>
 
-      {DEMO_MODE ? (
-        <DemoBanner keterangan={`beranda ${role} memakai data contoh`} />
-      ) : null}
+      {DEMO_MODE ? <DemoBanner keterangan={`beranda ${role} memakai data contoh`} /> : null}
 
       {children}
 
-      <View style={styles.footer}>
-        {DEMO_MODE ? (
-          <AppButton
-            label="Ganti role (dev)"
-            variant="secondary"
-            onPress={() => router.push("/dev-preview")}
-            icon={<Ionicons name="swap-horizontal" size={18} color={colors.textPrimary} />}
-          />
-        ) : null}
-        <AppButton
-          label="Keluar"
-          variant="secondary"
-          onPress={() => {
-            signOut();
-            router.replace("/");
-          }}
-          icon={<Ionicons name="log-out-outline" size={18} color={colors.textPrimary} />}
-        />
-      </View>
+      <SettingsSheet
+        visible={pengaturan}
+        onClose={() => setPengaturan(false)}
+        onSignOut={() => {
+          setPengaturan(false);
+          signOut();
+          router.replace("/");
+        }}
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    gap: spacing.md,
-  },
-  headerTeks: {
-    flex: 1,
+  sapaan: {
     gap: spacing.xs,
-  },
-  headerAksi: {
-    alignItems: "flex-end",
-  },
-  footer: {
-    gap: spacing.sm,
     paddingTop: spacing.lg,
   },
 });

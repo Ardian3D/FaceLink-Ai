@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
 
 import { AppText } from "./AppText";
 import { GoogleGIcon } from "./GoogleGIcon";
-import { colors, layout, radius, spacing, touch, typography } from "@/theme";
+import { layout, radius, spacing, touch, typography, useTheme } from "@/theme";
 
 /**
  * Tombol "Continue with Google".
@@ -27,6 +27,7 @@ export function GoogleSignInButton({
   loading?: boolean;
   disabled?: boolean;
 }) {
+  const { colors } = useTheme();
   const nonaktif = disabled || loading;
 
   return (
@@ -39,7 +40,7 @@ export function GoogleSignInButton({
       onPress={onPress}
       style={({ pressed }) => [
         styles.tombol,
-        pressed && !nonaktif && styles.ditekan,
+        { backgroundColor: pressed && !nonaktif ? colors.buttonLightPressed : colors.buttonLight },
         nonaktif && styles.nonaktif,
       ]}
     >
@@ -66,12 +67,8 @@ const styles = StyleSheet.create({
   tombol: {
     minHeight: layout.buttonHeight,
     borderRadius: radius.pill,
-    backgroundColor: colors.buttonLight,
     justifyContent: "center",
     paddingHorizontal: spacing.xl,
-  },
-  ditekan: {
-    backgroundColor: colors.buttonLightPressed,
   },
   nonaktif: {
     opacity: 0.6,

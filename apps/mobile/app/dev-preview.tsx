@@ -10,7 +10,7 @@ import { StateView } from "@/components/StateView";
 import { useSession } from "@/features/auth/SessionProvider";
 import { DEMO_MODE } from "@/features/auth/demoMode";
 import { roleHome } from "@/features/auth/roleRoutes";
-import { colors, spacing } from "@/theme";
+import { useTheme , spacing } from "@/theme";
 import { ROLES, roleLabel, type Role } from "@/types";
 
 /**
@@ -24,6 +24,7 @@ import { ROLES, roleLabel, type Role } from "@/types";
  */
 export default function DevRolePreview() {
   const router = useRouter();
+  const { colors } = useTheme();
   const { previewAs } = useSession();
 
   if (!DEMO_MODE) {

@@ -6,11 +6,15 @@ import { AppText } from "@/components/AppText";
 import { BrandLogo } from "@/components/BrandLogo";
 import { LoadingHud } from "@/components/LoadingHud";
 import { Screen } from "@/components/Screen";
-import { StepTracker, type Langkah, type LangkahStatus } from "@/components/StepTracker";
+import {
+  StepTracker,
+  type Langkah,
+  type LangkahStatus,
+} from "@/components/StepTracker";
 import { useSession } from "@/features/auth/SessionProvider";
 import { DEMO_MODE } from "@/features/auth/demoMode";
 import { roleHome } from "@/features/auth/roleRoutes";
-import { layout, spacing } from "@/theme";
+import { BrandThemeScope, layout, spacing } from "@/theme";
 
 /**
  * Layar pemeriksaan peran (FL-UI01 §8), mengikuti mockup
@@ -42,6 +46,17 @@ const LANGKAH_AWAL: Langkah[] = [
 ];
 
 export default function RoleCheckingScreen() {
+  // Layar pemeriksaan peran selalu gelap: cincin HUD dirancang untuk latar
+  // hitam. Isinya dipisah ke komponen anak supaya `useTheme()` di dalamnya
+  // membaca palet yang dikunci itu.
+  return (
+    <BrandThemeScope>
+      <PemeriksaanPeran />
+    </BrandThemeScope>
+  );
+}
+
+function PemeriksaanPeran() {
   const router = useRouter();
   const { status, session } = useSession();
   const { width } = useWindowDimensions();
@@ -49,7 +64,10 @@ export default function RoleCheckingScreen() {
   // Cincin mengikuti lebar layar: pada HP sempit ia mengecil, pada layar lebar
   // berhenti di ukuran mockup. Tanpa ini, cincin 300 px melebihi lebar konten
   // pada layar 320 px dan terpotong di kedua sisi.
-  const lebarHud = Math.min(layout.loadingHudSize, width - layout.screenPadding * 2);
+  const lebarHud = Math.min(
+    layout.loadingHudSize,
+    width - layout.screenPadding * 2,
+  );
   const sudahDiarahkan = useRef(false);
 
   const [langkah, setLangkah] = useState<Langkah[]>(LANGKAH_AWAL);
@@ -63,15 +81,18 @@ export default function RoleCheckingScreen() {
     if (status !== "checking" || !session) return;
 
     const timers = LANGKAH_AWAL.map((_, i) =>
-      setTimeout(() => {
-        setLangkah((lama) =>
-          lama.map((l, j): Langkah => {
-            const baru: LangkahStatus =
-              j < i + 1 ? "selesai" : j === i + 1 ? "berjalan" : "menunggu";
-            return { ...l, status: baru };
-          })
-        );
-      }, DURASI_LANGKAH_MS * (i + 1))
+      setTimeout(
+        () => {
+          setLangkah((lama) =>
+            lama.map((l, j): Langkah => {
+              const baru: LangkahStatus =
+                j < i + 1 ? "selesai" : j === i + 1 ? "berjalan" : "menunggu";
+              return { ...l, status: baru };
+            }),
+          );
+        },
+        DURASI_LANGKAH_MS * (i + 1),
+      ),
     );
 
     // Setelah langkah terakhir selesai, arahkan ke beranda role. Mode preview:
@@ -87,8 +108,8 @@ export default function RoleCheckingScreen() {
           // pemilih role di jalur ini.
           router.replace(roleHome[session.user.role]);
         },
-        DURASI_LANGKAH_MS * (LANGKAH_AWAL.length + 1)
-      )
+        DURASI_LANGKAH_MS * (LANGKAH_AWAL.length + 1),
+      ),
     );
 
     return () => timers.forEach(clearTimeout);
