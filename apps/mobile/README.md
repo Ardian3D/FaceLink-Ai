@@ -3,9 +3,10 @@
 Aplikasi klien React Native + Expo untuk tiga role manusia: `admin`, `dosen`, dan
 `mahasiswa`. Target utama **Android**; web dipakai hanya sebagai jalur preview.
 
-> **Status: FL-UI01 — fondasi dan preview UI.** Belum ada integrasi backend,
-> belum ada Google OAuth sungguhan, dan belum ada sesi yang disimpan. Seluruh
-> angka di dashboard adalah **data contoh (DEMO)**.
+> **Status: FL-UI01 + FL-NET01.** UI lengkap untuk preview dan diagnostik
+> koneksi ke Go Backend (development saja). Belum ada Google OAuth sungguhan,
+> belum ada sesi yang disimpan, dan belum ada fitur yang memakai API. Seluruh
+> angka di dashboard adalah **data contoh**.
 
 ## Prasyarat
 
@@ -75,6 +76,81 @@ Layar masuk  →  Role Checking  →  Beranda role
   Kedua keadaan itu dapat dipreview dari `dev-preview` lewat tombol
   *Preview akun belum terdaftar* dan *Preview akun ditangguhkan*.
 
+## Menghubungkan aplikasi ke Go Backend (FL-NET01)
+
+Alamat backend **tidak** ditanam di kode. Aplikasi membacanya dari
+`EXPO_PUBLIC_FACELINK_API_BASE_URL`, yang di-*inline* saat bundel dibuat:
+
+```bash
+cd apps/mobile
+cp .env.example .env          # lalu sesuaikan bila perlu
+npm start
+```
+
+Nilai bawaan development adalah `http://127.0.0.1:8080` (loopback, port yang
+sama dengan `config.DefaultAddr` backend). Build produksi **tidak** punya nilai
+bawaan: tanpa variabel itu, diagnostik melaporkan alasan dan tidak ada
+permintaan yang dikirim.
+
+Aturan yang ditegakkan `src/features/api/config.ts`:
+
+| Alamat | Hasil |
+|---|---|
+| `https://…` | diterima |
+| `http://127.0.0.1:8080`, `http://localhost:…`, `http://[::1]:…` | diterima (loopback) |
+| `http://10.0.2.2:8080` | diterima (alias host emulator Android) |
+| `http://192.168.x.x:…` | **ditolak** — HTTP polos di LAN dilarang D-035 |
+| `user:pass@host`, query, atau fragmen | ditolak |
+
+### Menjalankan backend
+
+```bash
+cd backend
+go run ./cmd/server        # mendengarkan 127.0.0.1:8080
+```
+
+Backend sengaja mengikat **loopback**. Jangan mengubahnya menjadi `0.0.0.0`
+hanya agar perangkat Android dapat tersambung; pakai `adb reverse`.
+
+### Perangkat Android via USB
+
+```bash
+adb devices                       # pastikan perangkat terdeteksi
+adb reverse tcp:8080 tcp:8080     # port perangkat → port laptop
+```
+
+Setelah itu `http://127.0.0.1:8080` di dalam aplikasi menunjuk ke backend laptop.
+`adb reverse` hilang setiap perangkat dicabut atau server ADB di-restart; ulangi
+perintahnya. Untuk emulator, `http://10.0.2.2:8080` juga dapat dipakai tanpa
+`adb reverse`.
+
+### Diagnostik koneksi (development saja)
+
+Buka `dev-preview` dari lembar pengaturan (tombol "Ganti role (dev)"), lalu
+gulir ke bagian **Koneksi Go Backend**. Komponen
+`src/features/api/ConnectionDiagnostics.tsx` mengirim dua permintaan nyata —
+`GET /api/v1/healthz` dan `GET /api/v1/readyz` — tanpa login, token, atau data
+peserta, dan menyediakan tombol **Periksa ulang**.
+
+Tiga hasil dibedakan, bukan hanya dari warna:
+
+- **tidak terjangkau** — permintaan tidak sampai (backend mati, port salah,
+  `adb reverse` belum dipasang);
+- **menjawab tetapi galat** — status bukan `200`, atau bentuk badan tidak sesuai
+  kontrak;
+- **sukses** — `healthz: ok` dan `readyz: ready`.
+
+`ai_engine: unavailable` **tidak** dianggap kegagalan: mesin AI yang belum siap
+tidak menghalangi absensi manual (D-030 butir 10, `docs/SECURITY_PRIVACY.md`
+§5e). Layar ini tidak dirender pada build produksi; `DEMO_MODE` sudah memaksa
+`dev-preview` menampilkan "Tidak tersedia pada build ini" sebelum komponennya
+tercapai.
+
+> **Catatan web:** backend belum mengirim header CORS, jadi diagnostik **gagal
+> di browser** (`Failed to fetch`) meskipun backend hidup. Ini bukan kerusakan
+> aplikasi: `fetch` native Android tidak menerapkan CORS. Preview web tetap
+> berguna untuk tata letak, bukan untuk menguji konektivitas.
+
 ## Batas keamanan mode demo
 
 Mode demo hanya aktif pada **development build** (`__DEV__`), lihat
@@ -116,6 +192,7 @@ apps/mobile/
 ├── src/
 │   ├── components/          # komponen UI yang dipakai ulang
 │   ├── features/
+│   │   ├── api/             # klien HTTP + diagnostik koneksi backend (dev)
 │   │   ├── auth/            # sesi, mode demo, pemetaan role → rute
 │   │   └── dashboard/       # blok dashboard dan data contoh
 │   ├── theme/               # design tokens (satu sumber kebenaran)
@@ -189,8 +266,9 @@ Tidak ada penyesuaian layout yang diperlukan: ukuran logo diambil dari token
 `layout.logoSize`, dan gambar memakai `resizeMode: contain` sehingga proporsi asli
 selalu terjaga.
 
-## Yang belum ada (di luar lingkup FL-UI01)
+## Yang belum ada (di luar lingkup FL-UI01/FL-NET01)
 
-Google OAuth sungguhan, penyimpanan sesi/token, panggilan API backend, absensi,
-kamera IoT, pengenalan wajah, enrollment biometrik, notifikasi, dan seluruh layar
-CRUD admin.
+Google OAuth sungguhan, penyimpanan sesi/token, login pengguna produksi, CRUD
+admin, API absensi, kamera IoT, pengenalan wajah, enrollment biometrik,
+notifikasi, dan TLS LAN produksi. Diagnostik koneksi hanya membaca status
+layanan; ia bukan lapisan API untuk fitur.
