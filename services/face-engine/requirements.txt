@@ -1,0 +1,12 @@
+# Dependensi prototype FL-CV01.
+#
+# Versi dikunci persis supaya perilaku model dan hasil pengujian dapat diulang.
+# Semua pustaka di sini gratis dan berlisensi permisif; tidak ada layanan
+# berbayar, akun, atau API key yang dibutuhkan.
+#
+# Catatan pemasangan: gunakan virtual environment lokal (`.venv/`) dan jangan
+# memasang paket ini ke Python sistem.
+
+opencv-python==4.12.0.88
+numpy==2.2.6
+pytest==8.4.2

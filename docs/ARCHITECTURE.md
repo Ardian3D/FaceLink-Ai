@@ -190,8 +190,9 @@ FaceLink-AI/                      # ← kondisi FL-001: hanya berkas di bawah in
 ├── apps/                         # ADA — aplikasi klien
 │   └── mobile/                   # ADA sejak FL-UI01 — React Native + Expo (UI preview)
 │                                 # TIDAK ADA `apps/api/` — backend Go ada di `backend/` (§8.1)
-├── services/                     # BELUM ADA
-│   └── face-engine/              # BELUM ADA (Python + OpenCV, fase 2)
+├── services/                     # ADA sejak FL-CV01
+│   └── face-engine/              # ADA sejak FL-CV01 — prototype Python + OpenCV (YuNet/SFace)
+│                                 # BUKAN layanan jaringan dan BUKAN bagian absensi
 ├── firmware/                     # BELUM ADA (fase hardware)
 │   └── esp32-s3-cam/             # BELUM ADA (firmware, fase 5)
 ├── tests/                        # BELUM ADA (pengujian integrasi)
@@ -218,7 +219,7 @@ Konsekuensi yang berlaku:
 
 - **`apps/api/` TIDAK dipakai.** Rujukan aktif ke jalur itu dihapus dari dokumen; tidak ada berkas yang perlu ditulis di sana.
 - **`apps/` tetap ada dan tetap dipakai** untuk aplikasi klien; `apps/mobile/` (React Native + Expo) tetap rencana fase 3.
-- **`services/face-engine/`** tetap rencana fase 2 untuk mesin AI Python. Backend Go di `backend/` adalah satu-satunya layanan yang berjalan saat ini.
+- **`services/face-engine/`** berisi **prototype FL-CV01** (Python 3.12 + OpenCV, YuNet + SFace). Prototype ini berjalan sebagai program lokal dengan jendela webcam, **bukan** layanan jaringan, tidak membuka port, dan tidak terhubung ke `backend/`. Kontrak internal `docs/API_CONTRACT.md` §6 **belum diimplementasikan**; prototype tidak membaca atau menulis database. Backend Go di `backend/` tetap satu-satunya layanan yang berjalan saat ini.
 - **`firmware/`** dan **`tests/`** tetap rencana.
 
 > **Catatan historis:** usulan `apps/api/` berasal dari fase dokumentasi FL-001–FL-003, ketika belum ada kode sama sekali. Catatan itu tidak lagi menggambarkan jalur aktif dan **tidak boleh** diikuti oleh tugas implementasi berikutnya.
