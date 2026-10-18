@@ -51,7 +51,25 @@ export type Session = {
 
 /** Status akun di lapisan UI saat menunggu backend. */
 export type SessionError =
-  | { kind: "notGranted" }
+  /**
+   * Identitas Google sah, tetapi akun itu **belum terdaftar** di FaceLink AI.
+   * Backend menjawab `403 IDENTITY_NOT_LINKED` (`docs/AUTHORIZATION.md` §6.1):
+   * satu pesan generik untuk semua sebab, dengan alasan rinci hanya di audit
+   * (`auth.login.denied` + `reason` ber-kode `no_account`/`not_linked`).
+   * Aplikasi tidak pernah menerima alasan itu, jadi layar tidak membedakan
+   * "belum pernah diundang" dari "belum ditautkan".
+   *
+   * Role hanya ditetapkan admin (D-037), sehingga pengguna seperti ini harus
+   * menghubungi admin lebih dahulu.
+   */
+  | { kind: "notGranted"; email?: string }
+  /**
+   * Akun terdaftar tetapi sedang ditangguhkan (`users.status = suspended`).
+   * Pada kontrak, keadaan ini juga tampil sebagai `403 IDENTITY_NOT_LINKED`;
+   * pemisahan di UI hanya bertujuan agar pesan dan langkahnya tepat, bukan
+   * untuk membocorkan status akun ke pihak yang belum terbukti memilikinya.
+   */
+  | { kind: "suspended"; email?: string }
   | { kind: "network" }
   | { kind: "tls" }
   | { kind: "unknown"; message: string };

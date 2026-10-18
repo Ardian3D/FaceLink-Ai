@@ -10,7 +10,7 @@ import { StateView } from "@/components/StateView";
 import { useSession } from "@/features/auth/SessionProvider";
 import { DEMO_MODE } from "@/features/auth/demoMode";
 import { roleHome } from "@/features/auth/roleRoutes";
-import { useTheme , spacing } from "@/theme";
+import { spacing, useTheme } from "@/theme";
 import { ROLES, roleLabel, type Role } from "@/types";
 
 /**
@@ -25,7 +25,7 @@ import { ROLES, roleLabel, type Role } from "@/types";
 export default function DevRolePreview() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { previewAs } = useSession();
+  const { previewAs, markUnregistered } = useSession();
 
   if (!DEMO_MODE) {
     return (
@@ -66,6 +66,38 @@ export default function DevRolePreview() {
             onPress={() => pilih(role)}
           />
         ))}
+      </View>
+
+      {/* Keadaan akun ditolak juga perlu dapat dipreview tanpa backend. Yang
+            ditampilkan bukan galat teknis, melainkan layar penjelasan yang
+            sama dengan jalur produksi; tidak ada sesi yang dibuat. */}
+      <View style={styles.header}>
+        <AppText variant="bodyLarge" weight="semibold">
+          Akun ditolak
+        </AppText>
+        <AppText variant="caption" color={colors.textMuted}>
+          Memperlihatkan layar yang muncul bila backend menjawab bahwa akun belum
+          terdaftar atau sedang ditangguhkan. Tidak ada sesi yang dibuat.
+        </AppText>
+      </View>
+
+      <View style={styles.daftar}>
+        <AppButton
+          label="Preview akun belum terdaftar"
+          variant="secondary"
+          onPress={() => {
+            markUnregistered("notGranted", "belum.terdaftar@example.test");
+            router.replace("/not-registered");
+          }}
+        />
+        <AppButton
+          label="Preview akun ditangguhkan"
+          variant="secondary"
+          onPress={() => {
+            markUnregistered("suspended", "ditangguhkan@example.test");
+            router.replace("/not-registered");
+          }}
+        />
       </View>
 
       <AppButton label="Kembali" variant="secondary" onPress={() => router.back()} />

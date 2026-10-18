@@ -73,8 +73,23 @@ function PemeriksaanPeran() {
   const [langkah, setLangkah] = useState<Langkah[]>(LANGKAH_AWAL);
 
   useEffect(() => {
+    // Akun yang belum terdaftar tidak pernah sampai ke beranda: pemeriksaan
+    // dihentikan dan pengguna dibawa ke penjelasan, bukan diberi sesi kosong.
+    // Pemeriksaan ini berada **sebelum** penjagaan mode demo: keadaan ini nyata
+    // pada build produksi juga, jadi tidak boleh ikut dialihkan ke layar masuk.
+    if (status === "unregistered") {
+      router.replace("/not-registered");
+      return;
+    }
     if (!DEMO_MODE) {
       // Build produksi tidak pernah menampilkan layar demo.
+      router.replace("/");
+      return;
+    }
+    // Dibuka langsung tanpa proses masuk (mis. lewat URL/riwayat), layar ini
+    // akan berputar selamanya karena tidak ada pemeriksaan yang berjalan.
+    // Kembalikan ke layar masuk alih-alih menampilkan loading palsu.
+    if (status === "signedOut" || status === "failed") {
       router.replace("/");
       return;
     }

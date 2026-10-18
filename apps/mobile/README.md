@@ -52,7 +52,9 @@ kode. Rinciannya ada di `assets/video/BACA-SAYA.md`.
 ## Alur preview saat ini
 
 ```
-Layar masuk  →  Role Checking  →  Pemilih role (development)  →  Beranda role
+Layar masuk  →  Role Checking  →  Beranda role
+                     │
+                     └─ akun belum terdaftar / ditangguhkan  →  Layar penjelasan
 ```
 
 - **Layar masuk:** latar video atau animasi pindai, logo resmi FaceLink Ai, satu
@@ -61,10 +63,17 @@ Layar masuk  →  Role Checking  →  Pemilih role (development)  →  Beranda r
 - **Role Checking:** animasi pemindaian dan teks "Sedang mengecek peran anda…".
   Penundaan singkat di layar ini **hanya untuk preview** dan bukan mekanisme
   autentikasi.
-- **Pemilih role (development):** melihat beranda Admin, Dosen, dan Mahasiswa
-  tanpa Google Sign-In.
 - **Beranda role:** admin (ringkasan, kelas aktif, status perangkat, aktivitas,
   pintasan pengelolaan), dosen (kerangka), mahasiswa (kerangka baca-sendiri).
+  Perpindahan role saat preview memakai tombol "Ganti role (dev)" di lembar
+  pengaturan, bukan layar pemilih role di tengah alur masuk.
+- **Layar penjelasan akun ditolak:** dipakai bila backend menjawab bahwa akun
+  belum terdaftar (`notGranted`) atau sedang ditangguhkan (`suspended`). Layar
+  ini **tidak** memberi sesi, tidak menawarkan "coba lagi", dan hanya memuat
+  satu langkah keluar: kembali ke layar masuk. Role ditetapkan admin (D-037),
+  jadi mengulang login tidak mengubah keadaan sebelum admin mendaftarkan akun.
+  Kedua keadaan itu dapat dipreview dari `dev-preview` lewat tombol
+  *Preview akun belum terdaftar* dan *Preview akun ditangguhkan*.
 
 ## Batas keamanan mode demo
 
@@ -77,6 +86,10 @@ Mode demo hanya aktif pada **development build** (`__DEV__`), lihat
   pemilih role tidak menawarkan pilihan apa pun — **tidak ada** jalur yang
   menaikkan hak akses.
 - Setiap layar yang memakai data contoh menampilkan penanda **DEMO**.
+- Status `unregistered` **tidak pernah** membawa sesi. Penjaga navigasi
+  mengalihkan ke layar penjelasan, dan layar itu sendiri menolak dibuka langsung
+  tanpa status tersebut — jadi tidak ada jalan masuk ke beranda lewat keadaan
+  akun yang ditolak.
 - Role yang dipilih di preview **tidak pernah** dikirim sebagai klaim ke backend.
   Setelah integrasi, role hanya berasal dari sesi yang divalidasi Go Backend
   (lihat `docs/AUTHORIZATION.md` §5).
@@ -89,6 +102,7 @@ apps/mobile/
 │   ├── _layout.tsx          # provider sesi, status bar, tumpukan layar
 │   ├── index.tsx            # layar masuk
 │   ├── role-checking.tsx    # layar pemeriksaan peran
+│   ├── not-registered.tsx   # penjelasan akun belum terdaftar / ditangguhkan
 │   ├── dev-preview.tsx      # pemilih role (development saja)
 │   ├── +not-found.tsx
 │   └── (app)/               # area terautentikasi

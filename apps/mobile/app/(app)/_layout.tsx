@@ -27,7 +27,10 @@ export default function AppLayout() {
   }, [router, status]);
 
   // Hanya keadaan yang benar-benar berakhir tanpa sesi yang dialihkan.
+  // Akun yang belum terdaftar juga ditolak di sini: status itu tidak pernah
+  // membawa sesi, dan penjelasannya ada di layar tersendiri.
   if (status === "signedOut" || status === "failed") return <Redirect href="/" />;
+  if (status === "unregistered") return <Redirect href="/not-registered" />;
   if (!session) return <Redirect href="/" />;
 
   return (
