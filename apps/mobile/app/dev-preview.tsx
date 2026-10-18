@@ -6,6 +6,7 @@ import { AppButton } from "@/components/AppButton";
 import { AppText } from "@/components/AppText";
 import { Screen } from "@/components/Screen";
 import { StateView } from "@/components/StateView";
+import { ConnectionDiagnostics } from "@/features/api/ConnectionDiagnostics";
 import { useSession } from "@/features/auth/SessionProvider";
 import { DEMO_MODE } from "@/features/auth/demoMode";
 import { roleHome } from "@/features/auth/roleRoutes";
@@ -97,6 +98,21 @@ export default function DevRolePreview() {
           }}
         />
       </View>
+
+      {/* Diagnostik koneksi Go Backend (FL-NET01). Ditempatkan di layar preview
+          development, bukan di dashboard mana pun, dan hanya dirender di sini:
+          pada build produksi `DEMO_MODE` sudah memaksa layar ini menampilkan
+          "tidak tersedia" sebelum blok ini tercapai. */}
+      <View style={styles.header}>
+        <AppText variant="bodyLarge" weight="semibold">
+          Koneksi Go Backend
+        </AppText>
+        <AppText variant="caption" color={colors.textMuted}>
+          Dua permintaan nyata ke `healthz` dan `readyz`. Tidak ada login, token,
+          atau data peserta yang dikirim.
+        </AppText>
+      </View>
+      <ConnectionDiagnostics />
 
       <AppButton label="Kembali" variant="secondary" onPress={() => router.back()} />
     </Screen>
