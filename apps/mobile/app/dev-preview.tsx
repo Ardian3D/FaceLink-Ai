@@ -1,108 +1,120 @@
 import React from "react";
 import { useRouter } from "expo-router";
 import { StyleSheet, View } from "react-native";
-
 import { AppButton } from "@/components/AppButton";
 import { AppText } from "@/components/AppText";
 import { Screen } from "@/components/Screen";
-import { StateView } from "@/components/StateView";
 import { ConnectionDiagnostics } from "@/features/api/ConnectionDiagnostics";
 import { useSession } from "@/features/auth/SessionProvider";
-import { DEMO_MODE } from "@/features/auth/demoMode";
-import { roleHome } from "@/features/auth/roleRoutes";
-import { spacing, useTheme } from "@/theme";
-import { ROLES, roleLabel, type Role } from "@/types";
+import { konfigurasiApi } from "@/features/api/config";
+import { konfigurasiGoogle } from "@/features/auth/googleConfig";
+import { radius, spacing, useTheme } from "@/theme";
 
 /**
- * Pemilih role untuk preview (FL-UI01 §11).
+ * Diagnostik build development.
  *
- * Batas keamanan: layar ini **hanya** ada pada development build (`DEMO_MODE`,
- * yaitu `__DEV__`). Pada build produksi ia menampilkan penjelasan dan tidak
- * menawarkan tombol apa pun, sehingga tidak bisa dipakai menaikkan hak akses.
- * Role yang dipilih di sini juga tidak pernah dikirim ke backend sebagai klaim;
- * pada integrasi nanti role tetap berasal dari sesi yang divalidasi Go Backend.
+ * Sejak FL-UI02 berkas ini **tidak lagi** memilih role: satu akun hanya punya
+ * satu role utama (D-037), dan role hanya ditetapkan backend. Yang tersisa
+ * adalah hal-hal yang memang hanya berguna saat mengembangkan di perangkat:
+ *
+ *  - konfigurasi alamat backend yang benar-benar dipakai bundel ini;
+ *  - konfigurasi Web OAuth client ID untuk Google Sign-In;
+ *  - dua permintaan nyata ke `healthz` dan `readyz`.
+ *
+ * Layar ini tidak menampilkan token, bukan karena belum sempat, tetapi karena
+ * token memang tidak pernah melewatinya: ia hidup di penyimpanan kredensial
+ * platform dan hanya dibaca lapisan transport.
+ *
+ * Batas keamanan: seluruh isi layar hanya ada pada development build
+ * (`__DEV__`). Pada build produksi ia menampilkan penjelasan dan tidak
+ * menawarkan apa pun, sehingga tidak dapat dipakai sebagai alat bantu masuk.
  */
-export default function DevRolePreview() {
+export default function DevDiagnostics() {
   const router = useRouter();
   const { colors } = useTheme();
-  const { previewAs, markUnregistered } = useSession();
+  const { status, session } = useSession();
 
-  if (!DEMO_MODE) {
+  if (!__DEV__) {
     return (
       <Screen center>
-        <StateView
-          tone="error"
-          title="Tidak tersedia pada build ini"
-          description="Pemilih role hanya aktif pada development build."
-        />
+        <AppText variant="bodyLarge" weight="semibold" center>
+          Tidak tersedia pada build ini
+        </AppText>
+        <AppText variant="caption" color={colors.textMuted} center>
+          Diagnostik hanya aktif pada development build.
+        </AppText>
       </Screen>
     );
   }
-
-  const pilih = (role: Role) => {
-    previewAs(role);
-    router.replace(roleHome[role]);
-  };
 
   return (
     <Screen scroll>
       <View style={styles.header}>
         <AppText variant="heading" weight="bold">
-          Preview sebagai
+          Diagnostik
         </AppText>
         <AppText variant="caption" color={colors.textMuted}>
-          Pilih role untuk melihat berandanya. Tidak ada autentikasi yang dijalankan dan tidak ada
-          token yang diterbitkan.
+          Keadaan nyata build ini. Tidak ada token atau data peserta yang
+          ditampilkan.
         </AppText>
       </View>
 
-      <View style={styles.daftar}>
-        {ROLES.map((role) => (
-          <AppButton
-            key={role}
-            label={`Preview sebagai ${roleLabel[role]}`}
-            variant="secondary"
-            onPress={() => pilih(role)}
-          />
-        ))}
-      </View>
-
-      {/* Keadaan akun ditolak juga perlu dapat dipreview tanpa backend. Yang
-            ditampilkan bukan galat teknis, melainkan layar penjelasan yang
-            sama dengan jalur produksi; tidak ada sesi yang dibuat. */}
-      <View style={styles.header}>
-        <AppText variant="bodyLarge" weight="semibold">
-          Akun ditolak
+      <View
+        style={[
+          styles.kotak,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
+      >
+        <AppText variant="caption" color={colors.textMuted}>
+          Alamat backend
+        </AppText>
+        <AppText variant="body" weight="semibold">
+          {konfigurasiApi.ok ? konfigurasiApi.baseUrl : "tidak sah"}
         </AppText>
         <AppText variant="caption" color={colors.textMuted}>
-          Memperlihatkan layar yang muncul bila backend menjawab bahwa akun belum
-          terdaftar atau sedang ditangguhkan. Tidak ada sesi yang dibuat.
+          {konfigurasiApi.ok
+            ? konfigurasiApi.sumber === "environment"
+              ? "dari EXPO_PUBLIC_FACELINK_API_BASE_URL"
+              : "nilai bawaan development (loopback)"
+            : konfigurasiApi.alasan}
         </AppText>
       </View>
 
-      <View style={styles.daftar}>
-        <AppButton
-          label="Preview akun belum terdaftar"
-          variant="secondary"
-          onPress={() => {
-            markUnregistered("notGranted", "belum.terdaftar@example.test");
-            router.replace("/not-registered");
-          }}
-        />
-        <AppButton
-          label="Preview akun ditangguhkan"
-          variant="secondary"
-          onPress={() => {
-            markUnregistered("suspended", "ditangguhkan@example.test");
-            router.replace("/not-registered");
-          }}
-        />
+      <View
+        style={[
+          styles.kotak,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
+      >
+        <AppText variant="caption" color={colors.textMuted}>
+          Web OAuth client ID (Google Sign-In)
+        </AppText>
+        <AppText variant="body" weight="semibold">
+          {konfigurasiGoogle.ok ? konfigurasiGoogle.webClientId : "belum disetel"}
+        </AppText>
+        {!konfigurasiGoogle.ok ? (
+          <AppText variant="caption" color={colors.textMuted}>
+            {konfigurasiGoogle.alasan}
+          </AppText>
+        ) : null}
       </View>
 
-      {/* Diagnostik koneksi Go Backend (FL-NET01). Ditempatkan di layar preview
-          development, bukan di dashboard mana pun, dan hanya dirender di sini:
-          pada build produksi `DEMO_MODE` sudah memaksa layar ini menampilkan
-          "tidak tersedia" sebelum blok ini tercapai. */}
+      <View
+        style={[
+          styles.kotak,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
+      >
+        <AppText variant="caption" color={colors.textMuted}>
+          Sesi saat ini
+        </AppText>
+        <AppText variant="body" weight="semibold">
+          {session === null ? status : `${session.user.role} · ${session.user.displayName}`}
+        </AppText>
+      </View>
+
+      {/* Diagnostik koneksi Go Backend (FL-NET01): dua permintaan sungguhan.
+          Ditempatkan di layar development, bukan di dashboard mana pun. */}
       <View style={styles.header}>
         <AppText variant="bodyLarge" weight="semibold">
           Koneksi Go Backend
@@ -113,7 +125,6 @@ export default function DevRolePreview() {
         </AppText>
       </View>
       <ConnectionDiagnostics />
-
       <AppButton label="Kembali" variant="secondary" onPress={() => router.back()} />
     </Screen>
   );
@@ -123,7 +134,10 @@ const styles = StyleSheet.create({
   header: {
     gap: spacing.sm,
   },
-  daftar: {
-    gap: spacing.sm,
+  kotak: {
+    gap: spacing.xs,
+    padding: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
   },
 });

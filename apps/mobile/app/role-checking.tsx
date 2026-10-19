@@ -1,7 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { useRouter } from "expo-router";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
-
 import { AppText } from "@/components/AppText";
 import { BrandLogo } from "@/components/BrandLogo";
 import { LoadingHud } from "@/components/LoadingHud";
@@ -11,39 +10,56 @@ import {
   type Langkah,
   type LangkahStatus,
 } from "@/components/StepTracker";
-import { useSession } from "@/features/auth/SessionProvider";
-import { DEMO_MODE } from "@/features/auth/demoMode";
+import { useSession, type TahapMasuk } from "@/features/auth/SessionProvider";
 import { roleHome } from "@/features/auth/roleRoutes";
 import { BrandThemeScope, layout, spacing } from "@/theme";
 
 /**
- * Layar pemeriksaan peran (FL-UI01 §8), mengikuti mockup
+ * Layar pemeriksaan peran (FL-UI02), mengikuti mockup
  * "FaceLink Ai Loading Page".
  *
  * Layar ini memisahkan "sedang masuk" dari "sudah masuk" sehingga pengguna
  * tidak pernah melihat beranda sebelum identitas dan role dipastikan.
  *
- * Urutan langkah di layar mengikuti proses yang sebenarnya, bukan hiasan:
+ * Urutan langkah **mengikuti proses yang benar-benar berjalan**, bukan hiasan:
  *
- *   1. **Verifikasi akun** — identitas dari Google sudah diterima.
- *   2. **Mengecek peran** — backend menentukan role akun.
- *   3. **Menyiapkan aplikasi** — beranda role tersebut disiapkan.
+ *   1. **Verifikasi akun** — Google ID token diterima dan ditukar ke backend.
+ *   2. **Mengecek peran** — backend membaca role dari database (bukan dari token).
+ *   3. **Menyiapkan aplikasi** — sesi tersimpan dan beranda role disiapkan.
  *
- * Pada FL-UI01 tidak ada panggilan jaringan: identitas dan role berasal dari
- * sesi demo, dan durasi tiap langkah hanya untuk preview. Ia **bukan**
- * mekanisme autentikasi dan **bukan** bukti verifikasi apa pun. Pada integrasi
- * nanti, blok ini diganti pemeriksaan sesi ke Go Backend dan penundaan buatan
- * itu dihapus; urutan langkahnya tetap sama.
+ * Tidak ada penundaan buatan: status tiap langkah berasal dari `tahap` pada
+ * penyedia sesi, dan layar langsung berpindah begitu sesi sah. Bila proses
+ * berhenti (ditolak, jaringan mati, dibatalkan), layar ini menyerahkan kembali
+ * ke layar masuk atau layar penjelasan — ia tidak pernah berputar selamanya.
  */
-
-/** Lama tiap langkah pada preview. Total ~2,4 detik. */
-const DURASI_LANGKAH_MS = 800;
-
-const LANGKAH_AWAL: Langkah[] = [
-  { label: "Verifikasi akun", ikon: "person-outline", status: "berjalan" },
+const LANGKAH: Langkah[] = [
+  { label: "Verifikasi akun", ikon: "person-outline", status: "menunggu" },
   { label: "Mengecek peran", ikon: "layers-outline", status: "menunggu" },
   { label: "Menyiapkan aplikasi", ikon: "checkmark", status: "menunggu" },
 ];
+
+/**
+ * Memetakan tahap autentikasi ke status ketiga langkah.
+ *
+ * Pemetaan ditulis eksplisit, bukan diturunkan dari urutan indeks, karena satu
+ * permintaan backend menutup **dua** langkah sekaligus: `POST /auth/google`
+ * memverifikasi ID token **dan** membaca role dari database dalam satu jawaban.
+ * Karena itu pada tahap `menukar` langkah 1 dan 2 sama-sama berjalan — bukan
+ * langkah 1 sudah selesai sebelum verifikasinya benar-benar terjadi.
+ *
+ * Pemetaan ini tidak pernah memundurkan langkah: tahap yang lebih jauh selalu
+ * menandai langkah sebelumnya selesai.
+ */
+function langkahDari(tahap: TahapMasuk): Langkah[] {
+  const status: Record<TahapMasuk, LangkahStatus[]> = {
+    menganggur: ["menunggu", "menunggu", "menunggu"],
+    google: ["berjalan", "menunggu", "menunggu"],
+    menukar: ["berjalan", "berjalan", "menunggu"],
+    menyiapkan: ["selesai", "selesai", "berjalan"],
+    selesai: ["selesai", "selesai", "selesai"],
+  };
+  return LANGKAH.map((l, i) => ({ ...l, status: status[tahap][i] ?? "menunggu" }));
+}
 
 export default function RoleCheckingScreen() {
   // Layar pemeriksaan peran selalu gelap: cincin HUD dirancang untuk latar
@@ -58,76 +74,35 @@ export default function RoleCheckingScreen() {
 
 function PemeriksaanPeran() {
   const router = useRouter();
-  const { status, session } = useSession();
+  const { status, session, tahap } = useSession();
   const { width } = useWindowDimensions();
-
   // Cincin mengikuti lebar layar: pada HP sempit ia mengecil, pada layar lebar
   // berhenti di ukuran mockup. Tanpa ini, cincin 300 px melebihi lebar konten
   // pada layar 320 px dan terpotong di kedua sisi.
-  const lebarHud = Math.min(
-    layout.loadingHudSize,
-    width - layout.screenPadding * 2,
-  );
+  const lebarHud = Math.min(layout.loadingHudSize, width - layout.screenPadding * 2);
   const sudahDiarahkan = useRef(false);
-
-  const [langkah, setLangkah] = useState<Langkah[]>(LANGKAH_AWAL);
+  // Diturunkan langsung dari tahap, bukan disalin ke state lewat efek: salinan
+  // hanya menambah satu render dan dapat tertinggal satu tahap di belakang.
+  const langkah = useMemo(() => langkahDari(tahap), [tahap]);
 
   useEffect(() => {
-    // Akun yang belum terdaftar tidak pernah sampai ke beranda: pemeriksaan
-    // dihentikan dan pengguna dibawa ke penjelasan, bukan diberi sesi kosong.
-    // Pemeriksaan ini berada **sebelum** penjagaan mode demo: keadaan ini nyata
-    // pada build produksi juga, jadi tidak boleh ikut dialihkan ke layar masuk.
+    // Penolakan akun bukan kegagalan teknis: pengguna dibawa ke penjelasan,
+    // bukan dikembalikan ke layar masuk tanpa alasan.
     if (status === "unregistered") {
       router.replace("/not-registered");
       return;
     }
-    if (!DEMO_MODE) {
-      // Build produksi tidak pernah menampilkan layar demo.
+    // Layar ini hanya bermakna selama proses masuk berjalan. Dibuka langsung
+    // lewat tautan/riwayat, atau setelah proses berakhir dengan kegagalan, ia
+    // tidak boleh menampilkan loading palsu.
+    if (status !== "checking" && status !== "signedIn") {
       router.replace("/");
       return;
     }
-    // Dibuka langsung tanpa proses masuk (mis. lewat URL/riwayat), layar ini
-    // akan berputar selamanya karena tidak ada pemeriksaan yang berjalan.
-    // Kembalikan ke layar masuk alih-alih menampilkan loading palsu.
-    if (status === "signedOut" || status === "failed") {
-      router.replace("/");
-      return;
+    if (status === "signedIn" && session !== null && !sudahDiarahkan.current) {
+      sudahDiarahkan.current = true;
+      router.replace(roleHome[session.user.role]);
     }
-    if (status !== "checking" || !session) return;
-
-    const timers = LANGKAH_AWAL.map((_, i) =>
-      setTimeout(
-        () => {
-          setLangkah((lama) =>
-            lama.map((l, j): Langkah => {
-              const baru: LangkahStatus =
-                j < i + 1 ? "selesai" : j === i + 1 ? "berjalan" : "menunggu";
-              return { ...l, status: baru };
-            }),
-          );
-        },
-        DURASI_LANGKAH_MS * (i + 1),
-      ),
-    );
-
-    // Setelah langkah terakhir selesai, arahkan ke beranda role. Mode preview:
-    // pemilik memilih role yang ingin dilihat. Pada integrasi nanti role datang
-    // dari respons backend dan layar ini langsung menuju beranda role tersebut.
-    timers.push(
-      setTimeout(
-        () => {
-          if (sudahDiarahkan.current) return;
-          sudahDiarahkan.current = true;
-          // Role sudah ditetapkan saat sesi dibuat; layar ini hanya menampilkan
-          // prosesnya, lalu menuju beranda role tersebut. Tidak ada layar
-          // pemilih role di jalur ini.
-          router.replace(roleHome[session.user.role]);
-        },
-        DURASI_LANGKAH_MS * (LANGKAH_AWAL.length + 1),
-      ),
-    );
-
-    return () => timers.forEach(clearTimeout);
   }, [router, session, status]);
 
   return (
@@ -135,14 +110,12 @@ function PemeriksaanPeran() {
       <View style={styles.atas}>
         <BrandLogo size={layout.logoSizeCompact} />
       </View>
-
       <View style={styles.tengah}>
         <LoadingHud size={lebarHud} />
         <AppText variant="title" weight="semibold" center>
           Sedang mengecek peran anda…
         </AppText>
       </View>
-
       <View style={styles.bawah}>
         <StepTracker langkah={langkah} />
       </View>

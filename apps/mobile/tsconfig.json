@@ -1,6 +1,7 @@
 {
-  "extends": "expo/tsconfig.base",
+  "extends": "expo/tsconfig.base.json",
   "compilerOptions": {
+    "types": ["node"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "paths": {

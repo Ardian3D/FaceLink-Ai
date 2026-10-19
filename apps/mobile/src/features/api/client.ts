@@ -1,7 +1,8 @@
 import { konfigurasiApi } from "./config";
+import { adalahObjek, bacaJson, mintaHttp, type JawabanHttp } from "./http";
 
 /**
- * Klien HTTP tipis untuk Go Backend FaceLink AI (FL-NET01).
+ * Klien diagnostik Go Backend FaceLink AI (FL-NET01).
  *
  * Lingkupnya sengaja kecil: dua endpoint kesehatan yang **benar-benar ada**
  * pada `backend/internal/httpapi/router.go` — `GET /api/v1/healthz` dan
@@ -18,12 +19,10 @@ import { konfigurasiApi } from "./config";
  *    yang diharapkan. Periksa log backend, bukan jaringan.
  *  - **sukses** — badan respons terbaca dan bentuknya sesuai kontrak.
  *
- * Kesabaran menunggu dibatasi `TIMEOUT_MS`. Tanpa batas, backend yang mati di
- * tengah koneksi akan menggantung layar diagnostik tanpa penjelasan.
+ * Kesabaran menunggu dibatasi `TIMEOUT_BAWAAN_MS` pada `./http`: satu nilai
+ * untuk seluruh permintaan, sehingga diagnostik dan autentikasi tidak
+ * berperilaku berbeda saat backend menggantung.
  */
-
-/** Batas tunggu satu permintaan. Cukup longgar untuk laptop lambat, cukup ketat untuk debugging. */
-const TIMEOUT_MS = 5000;
 
 /**
  * Hasil satu pemeriksaan, sudah disiapkan untuk ditampilkan.
@@ -49,59 +48,17 @@ export type Diagnostik = {
   pada: string;
 };
 
-/** Jawaban mentah satu permintaan, sebelum ditafsirkan. */
-type JawabanMentah =
-  | { jenis: "jawaban"; status: number; teks: string; durasiMs: number }
-  | { jenis: "jaringan"; pesan: string; durasiMs: number }
-  | { jenis: "timeout"; pesan: string; durasiMs: number };
+
 
 /**
- * Type guard untuk JSON yang sudah di-`JSON.parse`.
+ * Menerjemahkan kegagalan transport menjadi satu hasil yang dapat ditampilkan.
  *
- * Dipakai alih-alih cast: setiap pembacaan properti sesudahnya tetap diperiksa
- * oleh TypeScript, sehingga backend yang mengubah bentuk respons menghasilkan
- * "bentuk tidak dikenal" — bukan nilai yang diam-diam salah.
+ * Tipe hasil diambil dari transport bersama, sehingga penambahan jenis
+ * kegagalan baru di sana memaksa fungsi ini diperbarui alih-alih terlewat.
  */
-function adalahObjek(nilai: unknown): nilai is Record<string, unknown> {
-  return typeof nilai === "object" && nilai !== null && !Array.isArray(nilai);
-}
-
-async function kirim(path: string, baseUrl: string): Promise<JawabanMentah> {
-  const mulai = Date.now();
-  const kendali = new AbortController();
-  let habisWaktu = false;
-  const timer = setTimeout(() => {
-    habisWaktu = true;
-    kendali.abort();
-  }, TIMEOUT_MS);
-
-  try {
-    const respons = await fetch(`${baseUrl}${path}`, {
-      method: "GET",
-      headers: { Accept: "application/json" },
-      signal: kendali.signal,
-    });
-    // Badan dibaca sebagai teks, bukan `json()`: backend dapat menjawab galat
-    // HTML dari proksi di depan, dan pesan "Unexpected token <" tidak berguna.
-    const teks = await respons.text();
-    return { jenis: "jawaban", status: respons.status, teks, durasiMs: Date.now() - mulai };
-  } catch (galat) {
-    const durasiMs = Date.now() - mulai;
-    if (habisWaktu) {
-      return { jenis: "timeout", pesan: `tidak ada jawaban dalam ${TIMEOUT_MS} ms`, durasiMs };
-    }
-    return {
-      jenis: "jaringan",
-      pesan: galat instanceof Error ? galat.message : String(galat),
-      durasiMs,
-    };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-/** Menerjemahkan kegagalan transport menjadi satu hasil yang dapat ditampilkan. */
-function hasilTransportGagal(jawaban: Extract<JawabanMentah, { jenis: "jaringan" | "timeout" }>): HasilCek {
+function hasilTransportGagal(
+  jawaban: Extract<JawabanHttp, { jenis: "jaringan" | "timeout" }>
+): HasilCek {
   const waktuHabis = jawaban.jenis === "timeout";
   return {
     terjangkau: false,
@@ -136,7 +93,7 @@ function teksAtau(objek: Record<string, unknown>, kunci: string, cadangan = "—
  * sebagai "bentuk tidak dikenal", bukan sebagai sukses palsu.
  */
 async function cekHealth(baseUrl: string): Promise<HasilCek> {
-  const jawaban = await kirim("/api/v1/healthz", baseUrl);
+  const jawaban = await mintaHttp("/api/v1/healthz", { baseUrl });
   if (jawaban.jenis !== "jawaban") return hasilTransportGagal(jawaban);
 
   if (jawaban.status !== 200) {
@@ -151,7 +108,7 @@ async function cekHealth(baseUrl: string): Promise<HasilCek> {
 
   let isi: unknown;
   try {
-    isi = JSON.parse(jawaban.teks);
+    isi = bacaJson(jawaban.teks);
   } catch {
     return {
       terjangkau: true,
@@ -194,12 +151,12 @@ async function cekHealth(baseUrl: string): Promise<HasilCek> {
  * kenyataannya, bukan kesimpulan yang lebih keras daripada backend sendiri.
  */
 async function cekReady(baseUrl: string): Promise<HasilCek> {
-  const jawaban = await kirim("/api/v1/readyz", baseUrl);
+  const jawaban = await mintaHttp("/api/v1/readyz", { baseUrl });
   if (jawaban.jenis !== "jawaban") return hasilTransportGagal(jawaban);
 
   let isi: unknown;
   try {
-    isi = JSON.parse(jawaban.teks);
+    isi = bacaJson(jawaban.teks);
   } catch {
     return {
       terjangkau: true,

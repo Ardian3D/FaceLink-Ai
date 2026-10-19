@@ -23,12 +23,13 @@ export const roleLabel: Record<Role, string> = {
 };
 
 /**
- * Identitas pemanggil sebagaimana diterima dari `GET /me`
- * (`docs/API_CONTRACT.md` §5.1). Pada FL-UI01 nilainya berasal dari mock
- * development, bukan dari backend.
+ * Identitas pemanggil sebagaimana diterima dari `POST /auth/google` dan
+ * `GET /me` (`docs/API_CONTRACT.md` §5.1). Seluruh nilai berasal dari
+ * backend; aplikasi tidak pernah menetapkan role sendiri.
  */
 export type CurrentUser = {
   id: string;
+  /** Kosong bila backend tidak mengirimkannya (`omitempty` pada kontrak). */
   email: string;
   displayName: string;
   role: Role;
@@ -39,37 +40,61 @@ export type CurrentUser = {
 };
 
 /**
- * Sesi aplikasi. Pada FL-UI01 token tidak pernah diterbitkan maupun disimpan:
- * antarmuka ini disiapkan supaya integrasi backend nanti hanya mengganti
- * penyedianya, bukan seluruh layar.
+ * Sesi aplikasi di lapisan UI.
+ *
+ * Token **tidak** ada di sini: ia hidup di `tokenStore` (penyimpanan
+ * kredensial platform) dan hanya dibaca oleh lapisan transport. Dengan begitu
+ * tidak ada layar yang dapat tanpa sengaja menampilkan atau mencatat token.
  */
 export type Session = {
   user: CurrentUser;
-  /** Menandai bahwa sesi ini berasal dari mock development, bukan backend. */
-  demo: true;
 };
 
-/** Status akun di lapisan UI saat menunggu backend. */
+/**
+ * Sebab kegagalan yang dapat dibedakan pengguna.
+ *
+ * Setiap keadaan di bawah ini benar-benar dihasilkan kode; tidak ada cabang
+ * yang hanya ada untuk preview. `notGranted` adalah satu-satunya bentuk
+ * penolakan akun, sesuai kontrak: backend memakai jawaban generik yang sama
+ * untuk "belum diundang", "belum ditautkan", dan "ditangguhkan" agar
+ * tidak membocorkan keberadaan akun. Aplikasi karena itu **tidak** membedakan
+ * akun ditangguhkan dari akun yang belum terdaftar.
+ */
 export type SessionError =
   /**
-   * Identitas Google sah, tetapi akun itu **belum terdaftar** di FaceLink AI.
-   * Backend menjawab `403 IDENTITY_NOT_LINKED` (`docs/AUTHORIZATION.md` §6.1):
-   * satu pesan generik untuk semua sebab, dengan alasan rinci hanya di audit
-   * (`auth.login.denied` + `reason` ber-kode `no_account`/`not_linked`).
-   * Aplikasi tidak pernah menerima alasan itu, jadi layar tidak membedakan
-   * "belum pernah diundang" dari "belum ditautkan".
-   *
-   * Role hanya ditetapkan admin (D-037), sehingga pengguna seperti ini harus
-   * menghubungi admin lebih dahulu.
+   * Identitas Google sah, tetapi akun itu belum diberi akses ke FaceLink AI
+   * (`403 IDENTITY_NOT_LINKED`). Role hanya ditetapkan admin (D-037), jadi
+   * pengguna seperti ini harus menghubungi admin lebih dahulu.
    */
   | { kind: "notGranted"; email?: string }
-  /**
-   * Akun terdaftar tetapi sedang ditangguhkan (`users.status = suspended`).
-   * Pada kontrak, keadaan ini juga tampil sebagai `403 IDENTITY_NOT_LINKED`;
-   * pemisahan di UI hanya bertujuan agar pesan dan langkahnya tepat, bukan
-   * untuk membocorkan status akun ke pihak yang belum terbukti memilikinya.
-   */
-  | { kind: "suspended"; email?: string }
+  /** Backend tidak menjawab: alamat salah, backend mati, atau `adb reverse` belum dipasang. */
   | { kind: "network" }
+  /** Sertifikat TLS backend tidak tepercaya pada perangkat ini. */
   | { kind: "tls" }
-  | { kind: "unknown"; message: string };
+  /** Konfigurasi alamat backend tidak sah; bukan masalah jaringan. */
+  | { kind: "config"; message: string }
+  /**
+   * Penyimpanan kredensial perangkat gagal (mis. Keystore terkunci) atau tidak
+   * tersedia pada platform ini (pratinjau web). Sesi tidak boleh dianggap sah
+   * bila tokennya tidak dapat disimpan: ia akan hilang tanpa penjelasan.
+   */
+  | { kind: "storage"; message: string }
+  /** Backend menjawab `503`: layanan autentikasi atau Google belum dikonfigurasi di server. */
+  | { kind: "unavailable"; message: string }
+  /** Bentuk respons atau kode galat yang belum dikenal aplikasi ini. */
+  | { kind: "unknown"; message: string }
+  /** Sesi tidak lagi berlaku di server (dicabut, akun ditangguhkan, atau token tidak dikenal). */
+  | { kind: "sessionEnded" }
+  /**
+   * Google ID token ditolak backend (): tanda tangan,
+   * audience, waktu, atau nonce tidak cocok. Berbeda dari `sessionEnded`: tidak
+   * ada sesi yang berakhir, dan percobaan ulang dengan nonce baru dapat berhasil
+   * (mis. jam perangkat yang menyimpang).
+   */
+  | { kind: "identityRejected" }
+  /** Pengguna menutup lembar akun Google. Bukan kegagalan; layar kembali tenang. */
+  | { kind: "cancelled" }
+  /** Google Play Services tidak tersedia atau perlu diperbarui. */
+  | { kind: "playServices" }
+  /** Platform ini tidak mendukung Credential Manager (mis. pratinjau web). */
+  | { kind: "unsupported" };

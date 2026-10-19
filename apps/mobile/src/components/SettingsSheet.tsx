@@ -1,10 +1,8 @@
 import React from "react";
 import { Modal, Pressable, StyleSheet, View } from "react-native";
-import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { AppText } from "@/components/AppText";
-import { DEMO_MODE } from "@/features/auth/demoMode";
 import { useTheme, type ThemeMode } from "@/theme";
 import { radius, spacing, touch } from "@/theme";
 
@@ -23,13 +21,15 @@ export function SettingsSheet({
   visible,
   onClose,
   onSignOut,
+  onOpenDiagnostics,
 }: {
   visible: boolean;
   onClose: () => void;
   onSignOut: () => void;
+  /** Hanya diberikan pada development build; membuka layar diagnostik. */
+  onOpenDiagnostics: () => void;
 }) {
   const { colors, mode, setMode } = useTheme();
-  const router = useRouter();
 
   const pilihan: {
     nilai: ThemeMode;
@@ -129,14 +129,14 @@ export function SettingsSheet({
             </AppText>
           </View>
 
-          {DEMO_MODE ? (
+          {/* Diagnostik build development. Tidak ada pemilih role di sini:
+              satu akun hanya memiliki satu role utama (D-037), dan role hanya
+              ditetapkan backend. */}
+          {__DEV__ ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Ganti role untuk preview"
-              onPress={() => {
-                onClose();
-                router.push("/dev-preview");
-              }}
+              accessibilityLabel="Buka diagnostik build"
+              onPress={onOpenDiagnostics}
               style={({ pressed }) => [
                 styles.keluar,
                 { borderColor: colors.border },
@@ -144,12 +144,12 @@ export function SettingsSheet({
               ]}
             >
               <Ionicons
-                name="swap-horizontal"
+                name="construct-outline"
                 size={20}
                 color={colors.textSecondary}
               />
               <AppText variant="bodyLarge" weight="medium">
-                Ganti role (dev)
+                Diagnostik (dev)
               </AppText>
             </Pressable>
           ) : null}

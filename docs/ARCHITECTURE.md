@@ -218,7 +218,7 @@ Alasan: kode backend sudah ditulis, diuji, dan di-merge ke `main` pada `backend/
 Konsekuensi yang berlaku:
 
 - **`apps/api/` TIDAK dipakai.** Rujukan aktif ke jalur itu dihapus dari dokumen; tidak ada berkas yang perlu ditulis di sana.
-- **`apps/` tetap ada dan tetap dipakai** untuk aplikasi klien; `apps/mobile/` (React Native + Expo) tetap rencana fase 3.
+- **`apps/` tetap ada dan tetap dipakai** untuk aplikasi klien; `apps/mobile/` (React Native + Expo) sudah berisi kode nyata sejak FL-UI01 dan, pada FL-UI02, menjadi klien autentikasi Google yang memanggil `POST /auth/nonce`, `POST /auth/google`, `POST /auth/refresh`, `POST /auth/logout`, dan `GET /me` pada `backend/`. Token sesi hanya disimpan di penyimpanan kredensial platform; Google ID token tidak pernah disimpan. Fitur dashboard masih memakai data contoh.
 - **`services/face-engine/`** berisi **prototype FL-CV01** (Python 3.12 + OpenCV, YuNet + SFace) beserta **alat kalibrasi FL-CV02A** (`evaluation.py`, `calibration.py`, `calibrate.py`). Prototype ini berjalan sebagai program lokal dengan jendela webcam, **bukan** layanan jaringan, tidak membuka port, dan tidak terhubung ke `backend/`. Alat kalibrasi juga tidak menulis berkas dan tidak mempersistensikan biometrik. Kontrak internal `docs/API_CONTRACT.md` §6 **belum diimplementasikan**; prototype tidak membaca atau menulis database. Backend Go di `backend/` tetap satu-satunya layanan yang berjalan saat ini.
 - **`firmware/`** dan **`tests/`** tetap rencana.
 

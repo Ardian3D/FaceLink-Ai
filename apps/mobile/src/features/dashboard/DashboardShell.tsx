@@ -7,7 +7,7 @@ import { Screen } from "@/components/Screen";
 import { SettingsSheet } from "@/components/SettingsSheet";
 import { TopBar } from "@/components/TopBar";
 import { useSession } from "@/features/auth/SessionProvider";
-import { roleHome } from "@/features/auth/roleRoutes";
+import { ruteAlihRole } from "@/features/auth/roleRoutes";
 import { spacing, useTheme } from "@/theme";
 import type { Role } from "@/types";
 
@@ -39,11 +39,13 @@ export function DashboardShell({
   const { colors } = useTheme();
   const { session, signOut } = useSession();
   const [pengaturan, setPengaturan] = useState(false);
-  const sesiRole = session?.user.role;
-
+  const sesiRole = session?.user.role ?? null;
+  // Aturannya ada di `ruteAlihRole` dan diuji terpisah: layar milik role lain
+  // selalu dialihkan ke beranda role sesi, tidak pernah ditampilkan sebagian.
+  const alih = ruteAlihRole(sesiRole, role);
   useEffect(() => {
-    if (sesiRole && sesiRole !== role) router.replace(roleHome[sesiRole]);
-  }, [role, router, sesiRole]);
+    if (alih !== null) router.replace(alih);
+  }, [alih, router]);
 
   if (!session) return null;
 
@@ -65,9 +67,13 @@ export function DashboardShell({
       <SettingsSheet
         visible={pengaturan}
         onClose={() => setPengaturan(false)}
+        onOpenDiagnostics={() => {
+          setPengaturan(false);
+          router.push("/dev-preview");
+        }}
         onSignOut={() => {
           setPengaturan(false);
-          signOut();
+          void signOut();
           router.replace("/");
         }}
       />

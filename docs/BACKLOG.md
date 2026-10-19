@@ -23,7 +23,7 @@ Daftar ini **usulan pembagian tugas**, bukan GitHub Issues yang telah dibuat. Ke
 | FL-023 | Enrollment berizin dan penghapusan template | FL-012/022 | Setelah izin dicabut, template tidak ada di cache |
 | FL-024 | Matching dan kasus ambigu | FL-023 | Wajah asing/ambigu tidak pernah check-in |
 | FL-031 | Dasar React Native + Expo | FL-002 | Aplikasi tampil di Android dan lolos typecheck |
-| FL-032 | Login dan sesi di aplikasi | FL-031/014 | Kelola sesi dengan API bekerja |
+| FL-032 | Login dan sesi di aplikasi | FL-031/014 | **BERJALAN** (cabang `feat/fl-ui02-google-auth-android`, belum di-merge): Google Sign-In dengan nonce backend, pertukaran ID token, token di penyimpanan kredensial platform, pemulihan sesi lewat `GET /me`, dan layar penolakan akun. **Sisa:** login Google di perangkat belum terverifikasi (tidak ada JDK/Android SDK/`adb` di mesin ini), belum ada pengujian otomatis lapisan auth, dan belum ada layar fitur yang memakai token. **FL-UI02V** menambahkan 80 pengujian autentikasi (`npm test`, Vitest, tanpa perangkat) dan memperbaiki tiga celah: penyegaran token paralel, logout yang dapat gagal, serta sisa token pada akun yang kehilangan akses. |
 | FL-033 | Peserta, enrollment, dan laporan | FL-031/016/023 | Alur izin dan fallback manual dapat dijalankan |
 | FL-041 | Adapter webcam dan integrasi lokal | FL-024/032 | Alur kamera→AI→catatan→UI dengan tes negatif |
 | FL-042 | Status koneksi dan pemulihan | FL-041 | Gangguan jaringan/mesin AI tampil tanpa check-in palsu |

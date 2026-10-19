@@ -10,9 +10,9 @@ import { radius, spacing, useTheme } from "@/theme";
 /**
  * Diagnostik koneksi Go Backend (FL-NET01).
  *
- * Hanya dirender dari `app/dev-preview.tsx`, yang sudah dijaga `DEMO_MODE`
- * (`__DEV__`). Komponen ini **tidak** dipakai oleh layar mana pun di alur
- * produksi, sehingga tidak ikut terlihat pada build rilis.
+ * Hanya dirender dari `app/dev-preview.tsx`, yang dijaga `__DEV__`. Komponen
+ * ini **tidak** dipakai oleh layar mana pun di alur produksi, sehingga tidak
+ * ikut terlihat pada build rilis.
  *
  * Yang dikerjakan: satu permintaan nyata ke `GET /api/v1/healthz` dan satu ke
  * `GET /api/v1/readyz`, lalu hasilnya ditampilkan apa adanya. Tidak ada login,
