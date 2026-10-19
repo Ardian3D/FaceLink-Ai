@@ -219,7 +219,7 @@ Konsekuensi yang berlaku:
 
 - **`apps/api/` TIDAK dipakai.** Rujukan aktif ke jalur itu dihapus dari dokumen; tidak ada berkas yang perlu ditulis di sana.
 - **`apps/` tetap ada dan tetap dipakai** untuk aplikasi klien; `apps/mobile/` (React Native + Expo) tetap rencana fase 3.
-- **`services/face-engine/`** berisi **prototype FL-CV01** (Python 3.12 + OpenCV, YuNet + SFace). Prototype ini berjalan sebagai program lokal dengan jendela webcam, **bukan** layanan jaringan, tidak membuka port, dan tidak terhubung ke `backend/`. Kontrak internal `docs/API_CONTRACT.md` §6 **belum diimplementasikan**; prototype tidak membaca atau menulis database. Backend Go di `backend/` tetap satu-satunya layanan yang berjalan saat ini.
+- **`services/face-engine/`** berisi **prototype FL-CV01** (Python 3.12 + OpenCV, YuNet + SFace) beserta **alat kalibrasi FL-CV02A** (`evaluation.py`, `calibration.py`, `calibrate.py`). Prototype ini berjalan sebagai program lokal dengan jendela webcam, **bukan** layanan jaringan, tidak membuka port, dan tidak terhubung ke `backend/`. Alat kalibrasi juga tidak menulis berkas dan tidak mempersistensikan biometrik. Kontrak internal `docs/API_CONTRACT.md` §6 **belum diimplementasikan**; prototype tidak membaca atau menulis database. Backend Go di `backend/` tetap satu-satunya layanan yang berjalan saat ini.
 - **`firmware/`** dan **`tests/`** tetap rencana.
 
 > **Catatan historis:** usulan `apps/api/` berasal dari fase dokumentasi FL-001–FL-003, ketika belum ada kode sama sekali. Catatan itu tidak lagi menggambarkan jalur aktif dan **tidak boleh** diikuti oleh tugas implementasi berikutnya.

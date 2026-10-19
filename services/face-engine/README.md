@@ -1,8 +1,12 @@
-# FaceLink AI — Mesin Wajah Lokal (Prototype FL-CV01)
+# FaceLink AI — Mesin Wajah Lokal (Prototype FL-CV01 + FL-CV02A)
 
 Prototype **deteksi dan pengenalan wajah lokal** memakai webcam laptop Windows.
 Tujuan FL-CV01 hanya membuktikan kemampuan YuNet + SFace bekerja di mesin
 pengembang; ia **bukan** fitur absensi dan **tidak** menyimpan data biometrik.
+**FL-CV02A** menambahkan alat pengukuran kalibrasi terpisah
+(`python -m face_engine.calibrate`) dan modul evaluasi tanpa kamera. Alat itu
+**belum dijalankan dengan peserta manusia**; laporan dan batas klaimnya ada di
+[`docs/CALIBRATION_FL_CV02A.md`](../../docs/CALIBRATION_FL_CV02A.md).
 
 > **Batas yang tidak boleh dilanggar prototype ini**
 >
@@ -118,17 +122,36 @@ Argumen lain:
 4. **Kondisi tepi.** Uji wajah lain (harus `tidak_dikenal`), dua orang dalam satu
    bingkai (tidak ada kandidat), ruangan gelap, dan wajah miring.
 
+## Alat kalibrasi FL-CV02A
+
+Sesi pengukuran lapangan berurutan: persetujuan → enrollment → kueri per kondisi
+→ analisis → pembersihan memori. Alat ini **tidak menulis berkas**; laporan
+dicetak ke stdout dan hanya angka agregat yang boleh disalin ke laporan.
+
+```powershell
+.venv\Scripts\python.exe -m face_engine.calibrate --help
+.venv\Scripts\python.exe -m face_engine.calibrate --peserta 5 --sampel 5 --kueri 3
+```
+
+Tombol di jendela: `spasi` ambil, `n` lewati, `q` batal. Minimal dua peserta
+ditolak dengan exit code 2, karena pengukuran impostor membutuhkan identitas
+pembanding. Kondisi kueri: `terang`, `redup`, `miring`, lalu `kacamata` dan
+`tanpa-kacamata` untuk peserta berkacamata. Wajah tak terdaftar diambil dari
+peserta yang **menyetujui tetapi tidak dienroll**, bukan dari orang lewat.
+
 ## Pengujian otomatis
 
 ```powershell
 .venv\Scripts\python.exe -m pytest
 ```
 
-38 pengujian lulus, 1 dilewati bila tidak ada wajah pada gambar acak. Pengujian
+98 pengujian lulus, 1 dilewati bila tidak ada wajah pada gambar acak. Pengujian
 **tidak** membuka kamera dan tidak memakai wajah peserta. Yang diuji: aturan
 galeri dan matcher, penilaian kualitas, penanganan kamera/model yang tidak
 tersedia, alur enrollment dengan model tiruan, serta tata letak baris YuNet dan
-rasio aspek masukan (dua regresi yang ditemukan saat pengembangan).
+rasio aspek masukan (dua regresi yang ditemukan saat pengembangan), ditambah
+aritmetika evaluasi FL-CV02A: kesetaraan aturan dengan `matcher.cocokkan()`,
+batas ambang, margin, peringkat 1:N, korelasi kualitas, dan laporan.
 
 ## Catatan teknis yang mudah salah
 
@@ -191,7 +214,10 @@ services/face-engine/
 │   ├── gallery.py      # identitas uji di RAM (tanpa serialisasi)
 │   ├── matcher.py      # skor, margin, tiga status kandidat
 │   ├── overlay.py      # kotak, landmark, panel status
-│   └── quality.py      # penolakan sampel (NO_FACE, MULTIPLE_FACES, ...)
+│   ├── quality.py      # penolakan sampel (NO_FACE, MULTIPLE_FACES, ...)
+│   ├── calibration.py  # harness sesi: persetujuan, label anonim, pembersihan
+│   ├── evaluation.py   # aritmetika kalibrasi (tanpa kamera)
+│   └── calibrate.py    # alat lapangan FL-CV02A + laporan stdout
 ├── scripts/download_models.py
 ├── tests/
 ├── models/             # TIDAK di-commit
@@ -206,6 +232,8 @@ services/face-engine/
   ketajaman di area mata dan membuat sampel ditolak.
 - Tidak ada liveness. Foto cetak atau layar ponsel dapat terdeteksi sebagai
   wajah dan, bila identitasnya sudah terdaftar, dapat menghasilkan skor tinggi.
-- Ambang dan margin belum dikalibrasi; Q-07 tetap terbuka.
+- Ambang dan margin belum dikalibrasi; Q-07 tetap terbuka. Alat kalibrasi
+  FL-CV02A sudah ada, tetapi **belum ada sesi dengan peserta manusia** — lihat
+  `docs/CALIBRATION_FL_CV02A.md`.
 - Prototype tidak berjalan sebagai layanan jaringan dan tidak terhubung ke Go
   Backend. Kontrak internal `docs/API_CONTRACT.md` §6 belum diimplementasikan.

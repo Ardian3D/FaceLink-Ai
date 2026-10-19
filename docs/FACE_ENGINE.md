@@ -1,6 +1,7 @@
 # Spesifikasi Mesin Pengenalan Wajah Lokal
 
 **Status:** Rencana pengujian, bukan laporan hasil eksperimen. Seluruh proses dilakukan lokal; peserta harus berizin dan dapat memilih absensi manual.
+**Alat yang sudah ada:** `services/face-engine` menyediakan harness FL-CV02A (`python -m face_engine.calibrate`) dan modul evaluasi tanpa kamera. Status pelaksanaannya — termasuk **belum adanya peserta manusia** — dicatat di [`CALIBRATION_FL_CV02A.md`](CALIBRATION_FL_CV02A.md). Dokumen ini tetap rencana; matriks §7 belum dijalankan.
 
 ## 1. Tujuan
 
