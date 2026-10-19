@@ -103,7 +103,13 @@ Ambang terendah yang lolos adalah **kandidat**, bukan ambang produksi.
   `test_harness_tidak_punya_metode_penyimpanan`.
 - Label selalu `PERSON-00N`; nama, NIM, dan inisial tidak pernah masuk objek sesi.
 - Persetujuan wajib sebelum kueri; `tambah_kueri` melempar `GalatEnrollment` bila
-  ada peserta yang belum menyetujui.
+  ada peserta yang belum ditanya.
+- **Menolak dibedakan dari belum ditanya.** Peserta yang menolak dicatat lewat
+  `tolak_persetujuan()`: label tetap ada (urutan stabil, jumlah peserta jujur),
+  tidak ada sampel yang diambil, dan sesi peserta lain **tidak** terblokir.
+  Sebelum perbaikan ini, satu penolakan membuat seluruh sesi gagal dengan
+  `GalatEnrollment` saat peserta pertama mengambil sampel — perilaku yang sudah
+  direproduksi sebelum ditambal.
 - Pencabutan persetujuan membuang peserta **dan** sampelnya seketika.
 - `akhiri_sesi()` mengosongkan vektor; rekap hanya berisi hitungan dan label.
 - Penolakan kualitas hanya menyimpan angka, bukan potongan gambar.
@@ -120,7 +126,7 @@ cd services/face-engine
 Hasil nyata pada 20 Oktober 2026:
 
 ```text
-98 passed, 1 skipped in 1.22s
+102 passed, 1 skipped in 1.23s
 ```
 
 Yang dilewati: `tests/test_models.py:122` — gambar acak tidak memuat wajah,
@@ -140,7 +146,9 @@ Cakupan tambahan FL-CV02A:
 - distribusi genuine/impostor/margin dan peringkat 1:N;
 - korelasi kualitas dan kelompok kualitas;
 - laporan memuat seluruh bagian dan hitungan, termasuk penolakan kualitas;
-- pembersihan galeri dan sesi saat program berakhir.
+- pembersihan galeri dan sesi saat program berakhir;
+- penolakan eksplisit: tidak memblokir peserta lain, tidak menghapus peserta
+  lain, menolak label asing, dan menolak kueri untuk peserta yang menolak.
 
 Smoke test alat:
 

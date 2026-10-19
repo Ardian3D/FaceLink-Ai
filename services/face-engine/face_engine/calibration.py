@@ -53,10 +53,19 @@ class Peserta:
     persetujuan_dicatat: bool = False
     waktu_persetujuan: str | None = None
     kacamata: bool = False
+    #: True bila peserta secara eksplisit menolak. Menolak **berbeda** dari
+    #: "belum ditanya": penolakan tidak boleh memblokir seluruh sesi, sedangkan
+    #: peserta yang belum ditanya memang harus memblokir pengambilan sampel.
+    menolak: bool = False
 
     def catat(self) -> None:
         self.persetujuan_dicatat = True
         self.waktu_persetujuan = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+    def tolak(self) -> None:
+        self.persetujuan_dicatat = False
+        self.waktu_persetujuan = None
+        self.menolak = True
 
 
 @dataclass
@@ -81,7 +90,9 @@ class SesiKalibrasi:
 
         Persetujuan **belum** dicatat pada titik ini. Peserta yang belum
         menyetujui tetap boleh ada dalam daftar (supaya urutan label stabil),
-        tetapi `mulai_pengambilan()` menolak berjalan.
+        tetapi `tambah_kueri()` menolak berjalan sampai statusnya jelas:
+        menyetujui lewat `catat_persetujuan()` atau menolak lewat
+        `tolak_persetujuan()`.
         """
         nomor = len(self.peserta) + 1
         while f"PERSON-{nomor:03d}" in self.peserta:
@@ -96,6 +107,18 @@ class SesiKalibrasi:
             raise GalatEnrollment(f"Peserta {label} belum terdaftar pada sesi ini.")
         self.peserta[label].catat()
 
+    def tolak_persetujuan(self, label: str) -> None:
+        """Mencatat penolakan eksplisit; label tetap dipakai agar urutan stabil.
+
+        Ini bukan pencabutan: tidak ada data yang pernah diambil dari peserta
+        yang menolak. Bedanya penting — penolakan tidak boleh menghapus data
+        peserta lain atau memblokir seluruh sesi.
+        """
+        if label not in self.peserta:
+            raise GalatEnrollment(f"Peserta {label} belum terdaftar pada sesi ini.")
+        self.peserta[label].tolak()
+        self.catatan.append(f"{label} menolak ikut serta; tidak ada sampel diambil.")
+
     def tarik_persetujuan(self, label: str) -> None:
         """Mencabut persetujuan: peserta dan seluruh sampelnya dibuang.
 
@@ -109,11 +132,16 @@ class SesiKalibrasi:
         self.catatan.append(f"{label} mencabut persetujuan; data di memori dibuang.")
 
     def pastikan_semua_setuju(self) -> None:
-        belum = [p.label for p in self.peserta.values() if not p.persetujuan_dicatat]
+        """Menolak pengambilan sampel selama ada peserta yang belum ditanya."""
+        belum = [
+            p.label
+            for p in self.peserta.values()
+            if not p.persetujuan_dicatat and not p.menolak
+        ]
         if belum:
             raise GalatEnrollment(
-                "Persetujuan belum dicatat untuk: " + ", ".join(belum) + ". "
-                "Bacakan penjelasan dan catat persetujuan sebelum mengambil sampel."
+                "Status persetujuan belum dicatat untuk: " + ", ".join(belum) + ". "
+                "Catat persetujuan atau penolakan sebelum mengambil sampel."
             )
 
     # ------------------------------------------------------------- kueri
@@ -139,8 +167,14 @@ class SesiKalibrasi:
         untuk melihat apakah skor turun pada frame buram atau gelap.
         """
         self.pastikan_semua_setuju()
-        if label_benar is not None and label_benar not in self.peserta:
-            raise GalatEnrollment(f"Label {label_benar} bukan peserta sesi ini.")
+        if label_benar is not None:
+            peserta = self.peserta.get(label_benar)
+            if peserta is None:
+                raise GalatEnrollment(f"Label {label_benar} bukan peserta sesi ini.")
+            if not peserta.persetujuan_dicatat:
+                raise GalatEnrollment(
+                    f"Persetujuan {label_benar} tidak aktif; sampel tidak disimpan."
+                )
 
         sampel = Sampel(
             label=label_benar,

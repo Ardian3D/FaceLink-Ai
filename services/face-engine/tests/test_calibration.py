@@ -63,7 +63,51 @@ def test_tambah_kueri_ditolak_tanpa_persetujuan() -> None:
     with pytest.raises(GalatEnrollment) as info:
         s.tambah_kueri(p.label, vektor(), "terang")
 
-    assert "Persetujuan belum dicatat" in str(info.value)
+    assert "Status persetujuan belum dicatat" in str(info.value)
+    assert s.kueri == []
+
+
+def test_peserta_menolak_tidak_memblokir_peserta_lain() -> None:
+    """Penolakan eksplisit bukan 'belum ditanya'.
+
+    Tanpa pembedaan ini, satu peserta yang menolak membuat seluruh sesi gagal
+    saat peserta lain mengambil sampel — perilaku yang sudah direproduksi.
+    """
+    s = SesiKalibrasi(nama_sesi="uji")
+    a = s.daftarkan_peserta()
+    b = s.daftarkan_peserta()
+    s.catat_persetujuan(a.label)
+    s.tolak_persetujuan(b.label)
+    s.pastikan_semua_setuju()  # tidak melempar
+    s.tambah_kueri(a.label, vektor(), "terang")
+    assert [k.label for k in s.kueri] == [a.label]
+    assert any("menolak ikut serta" in c for c in s.catatan)
+
+
+def test_penolakan_tidak_menghapus_peserta_lain() -> None:
+    s = SesiKalibrasi(nama_sesi="uji")
+    a = s.daftarkan_peserta()
+    b = s.daftarkan_peserta()
+    s.catat_persetujuan(a.label)
+    s.tolak_persetujuan(b.label)
+    s.tambah_kueri(a.label, vektor(), "terang")
+    assert set(s.peserta) == {a.label, b.label}
+    assert len(s.kueri) == 1
+
+
+def test_tolak_persetujuan_menolak_label_asing() -> None:
+    s = SesiKalibrasi(nama_sesi="uji")
+    with pytest.raises(GalatEnrollment):
+        s.tolak_persetujuan("PERSON-777")
+
+
+def test_kueri_untuk_peserta_yang_menolak_ditolak() -> None:
+    s = SesiKalibrasi(nama_sesi="uji")
+    p = s.daftarkan_peserta()
+    s.tolak_persetujuan(p.label)
+    with pytest.raises(GalatEnrollment) as info:
+        s.tambah_kueri(p.label, vektor(), "terang")
+    assert "tidak aktif" in str(info.value)
     assert s.kueri == []
 
 

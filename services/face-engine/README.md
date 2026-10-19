@@ -145,7 +145,7 @@ peserta yang **menyetujui tetapi tidak dienroll**, bukan dari orang lewat.
 .venv\Scripts\python.exe -m pytest
 ```
 
-98 pengujian lulus, 1 dilewati bila tidak ada wajah pada gambar acak. Pengujian
+102 pengujian lulus, 1 dilewati bila tidak ada wajah pada gambar acak. Pengujian
 **tidak** membuka kamera dan tidak memakai wajah peserta. Yang diuji: aturan
 galeri dan matcher, penilaian kualitas, penanganan kamera/model yang tidak
 tersedia, alur enrollment dengan model tiruan, serta tata letak baris YuNet dan

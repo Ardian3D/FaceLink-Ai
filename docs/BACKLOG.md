@@ -17,7 +17,7 @@ Daftar ini **usulan pembagian tugas**, bukan GitHub Issues yang telah dibuat. Ke
 | FL-014 | Kelola sesi, roster, keterlambatan | FL-012 | Sesi hanya dapat menerima input saat terbuka |
 | FL-015 | Absensi manual dan anti-duplikasi | FL-013/014 | Check-in bersamaan hanya menghasilkan satu catatan |
 | FL-016 | CSV dan riwayat koreksi | FL-015 | CSV tidak berisi biometrik, alasan koreksi tercatat |
-| FL-CV02A | **Alat kalibrasi dan evaluasi pengenalan wajah** — harness sesi berpersetujuan, aritmetika evaluasi, laporan agregat | FL-CV01 | **Harness SELESAI dan diuji; pengujian lapangan BLOCKED** (belum ada peserta). `evaluation.py` + `calibration.py` + `calibrate.py`; 98 pengujian lulus, 1 dilewati. **Q-07 tetap terbuka**: tidak ada angka ambang produk. Lihat `docs/CALIBRATION_FL_CV02A.md` |
+| FL-CV02A | **Alat kalibrasi dan evaluasi pengenalan wajah** — harness sesi berpersetujuan, aritmetika evaluasi, laporan agregat | FL-CV01 | **Harness SELESAI dan diuji; pengujian lapangan BLOCKED** (belum ada peserta). `evaluation.py` + `calibration.py` + `calibrate.py`; 102 pengujian lulus, 1 dilewati. **Q-07 tetap terbuka**: tidak ada angka ambang produk. Lihat `docs/CALIBRATION_FL_CV02A.md` |
 | FL-021 | Model AI lokal, versi/checksum/lisensi | FL-002 | Memuat model offline dan mencatat versinya |
 | FL-022 | Pemeriksaan kualitas dan tepat satu wajah | FL-021 | Tanpa wajah, lebih dari satu, blur ditolak |
 | FL-023 | Enrollment berizin dan penghapusan template | FL-012/022 | Setelah izin dicabut, template tidak ada di cache |
@@ -66,5 +66,5 @@ Baris **FL-CV02A** ditambahkan dari pekerjaan pada cabang `research/fl-cv02a-fac
 
 - **Yang dikerjakan.** Tiga modul baru di `services/face-engine/face_engine/`: `evaluation.py` (aritmetika evaluasi), `calibration.py` (harness persetujuan dan sesi), `calibrate.py` (alat lapangan). Kode runtime FL-CV01 tidak berubah perilakunya.
 - **Keputusan rekayasa yang penting.** Aturan keputusan diterapkan satu kali oleh `evaluation.status_uji()`, yang meniru urutan `matcher.cocokkan()`; kesetaraannya diuji pada vektor acak. Wajah tak dikenal yang ambigu kini **tidak** dihitung sebagai penerimaan — sebelumnya skor teratas yang lolos ambang dihitung diterima walau sistem tidak menyatakan identitas. `HasilUji` menyimpan skor seluruh identitas sehingga distribusi impostor dan margin tidak kehilangan data.
-- **Pengujian yang benar-benar dijalankan.** `pytest` di `services/face-engine`: **98 lulus, 1 dilewati** (gambar acak tanpa wajah pada `test_models.py:122`). Smoke: `calibrate --help`, `--peserta 1` → exit 2, sesi persetujuan lewat stdin, dan laporan sintetis memuat seluruh bagian.
+- **Pengujian yang benar-benar dijalankan.** `pytest` di `services/face-engine`: **102 lulus, 1 dilewati** (gambar acak tanpa wajah pada `test_models.py:122`). Smoke: `calibrate --help`, `--peserta 1` → exit 2, sesi persetujuan lewat stdin, dan laporan sintetis memuat seluruh bagian.
 - **Yang belum ada.** **Tidak ada peserta manusia yang diukur.** Seluruh angka pada `docs/CALIBRATION_FL_CV02A.md` berasal dari vektor sintetis dan membuktikan aritmetika alat, bukan performa model. **Q-07 tetap terbuka.**

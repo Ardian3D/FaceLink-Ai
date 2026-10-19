@@ -286,13 +286,15 @@ def cetak_laporan(
     hasil = nilai_semua(galeri, sesi.kueri)
     kalibrasi, evaluasi = bagi_kueri(hasil)
     disetujui = [p for p in sesi.peserta.values() if p.persetujuan_dicatat]
+    menolak = [p for p in sesi.peserta.values() if p.menolak]
     berkacamata = [p for p in disetujui if p.kacamata]
 
     print("\n" + "=" * 78)
     print("RINGKASAN SESI")
     print("=" * 78)
     print(f"sesi             : {sesi.nama_sesi}")
-    print(f"peserta          : {len(sesi.peserta)} (persetujuan tercatat: {len(disetujui)})")
+    print(f"peserta          : {len(sesi.peserta)} (persetujuan tercatat: {len(disetujui)}, "
+          f"menolak: {len(menolak)})")
     print(f"berkacamata      : {len(berkacamata)}")
     print(f"identitas galeri : {len(galeri)}")
     print(f"kueri            : {len(sesi.kueri)} "
@@ -417,6 +419,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"Label anonim: {peserta.label}")
             if not tanya_ya("Apakah peserta sudah membaca penjelasan dan setuju? (ya/tidak) "):
                 print("Peserta tidak menyetujui. Sampel peserta ini tidak akan diambil.")
+                sesi.tolak_persetujuan(peserta.label)
                 continue
             sesi.catat_persetujuan(peserta.label)
     except (KeyboardInterrupt, EOFError):
