@@ -12,7 +12,8 @@
     "video:local": "node scripts/use-local-video.mjs",
     "video:off": "node scripts/use-local-video.mjs --off",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "check:native": "node scripts/check-native-env.mjs"
   },
   "dependencies": {
     "@expo-google-fonts/poppins": "^0.4.1",

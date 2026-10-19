@@ -46,10 +46,22 @@ rendering. Rinciannya di `tests/`.
 
 ### Development build (wajib untuk masuk Google)
 
+Panduan lengkap Windows (JDK 17, Android SDK, ADB, emulator, OAuth Android,
+urutan pengujian di perangkat): **`docs/ANDROID_SETUP.md`**.
+
+Periksa prasyarat mesin ini kapan saja:
+
+```bash
+npm run check:native   # PASSED / FAILED / BLOCKED per komponen
+```
+
 ```bash
 npx expo prebuild        # menghasilkan folder android/
 npx expo run:android     # build + pasang ke perangkat/emulator
 ```
+
+`npm run android` masih menjalankan `expo start --android` (Expo Go) dan **tidak
+dapat** dipakai untuk login Google; gunakan `npx expo run:android`.
 
 `adb reverse tcp:8080 tcp:8080` harus dipasang agar perangkat menjangkau backend
 loopback di laptop (lihat bagian konektivitas).
