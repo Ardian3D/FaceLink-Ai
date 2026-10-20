@@ -53,7 +53,7 @@ cd apps/mobile
 npm run check:native
 ```
 
-### Status mesin pengembangan (20 Oktober 2026)
+### Status mesin pengembangan (diperbarui 21 Oktober 2026)
 
 Keluaran nyata `npm run check:native`. **Sebelum** instalasi: 3 PASSED, 0 FAILED,
 11 BLOCKED. **Sesudah** instalasi toolchain: **11 PASSED, 0 FAILED, 3 BLOCKED**.
@@ -68,19 +68,23 @@ Keluaran nyata `npm run check:native`. **Sebelum** instalasi: 3 PASSED, 0 FAILED
 | CMake | BLOCKED | **PASSED** | 3.22.1 dan 3.31.6 terpasang |
 | `NDK 27.1.12297006` | BLOCKED | **PASSED** | |
 | `adb` | BLOCKED | **PASSED** | Platform-Tools 37.0.1 |
-| perangkat terhubung | BLOCKED | **BLOCKED** | `adb devices` kosong — tidak ada HP tersambung |
-| AVD emulator | BLOCKED | INFO | emulator tidak dipasang (target HP fisik) |
+| perangkat terhubung | BLOCKED | **PASSED** (21 Okt 2026) | `adb devices` → TECNO LJ7 berstatus `device`; sekarang **tidak tersambung** karena pengujian dihentikan (§12) |
+| AVD emulator | BLOCKED | INFO | emulator tidak dipasang (target HP fisik); kelayakannya diaudit di §13 |
 | `EXPO_PUBLIC_FACELINK_GOOGLE_WEB_CLIENT_ID` | BLOCKED | **BLOCKED** | menunggu OAuth client dari pemilik (§5) |
 | `android/` hasil prebuild | PASSED | **PASSED** | diabaikan Git |
 | keystore debug | PASSED | **PASSED** | SHA-1 sudah diambil (§5) |
 | ninja (jalur panjang) | — | **PASSED** | ninja 1.12.1 dari CMake 3.31.6 |
-| ruang disk | PASSED | **PASSED** | 219 GB bebas |
+| ruang disk | PASSED | **PASSED** | 223 GB bebas |
 
-**Dua BLOCKED yang tersisa bukan cacat pemasangan:** keduanya menunggu tindakan
-pemilik — HP fisik dan kredensial OAuth.
+**Satu BLOCKED yang tersisa bukan cacat pemasangan:** kredensial OAuth menunggu
+tindakan pemilik (§5). Perangkat fisik sudah terhubung dan diuji pada 21 Oktober
+2026 (§12).
 
-**Yang sudah terbukti:** `assembleDebug` berhasil dan APK tersigning.
-**Yang belum terbukti:** pemasangan di HP dan seluruh skenario §8.
+**Yang sudah terbukti:** `assembleDebug` berhasil dan APK tersigning; APK itu
+**terpasang dan berjalan** di HP fisik, dan `check:native` mencapai
+**13 PASSED, 0 FAILED, 1 BLOCKED** saat perangkat tersambung.
+**Yang belum terbukti:** Google Sign-In end-to-end dan skenario A1–A12 (§8).
+
 ## 2. JDK 17
 
 **Jalur yang dipakai dan terbukti (tanpa administrator).** Unduh arsip Temurin 17
