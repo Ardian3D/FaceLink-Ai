@@ -284,6 +284,58 @@ SHA-1/package belum cocok.
 `FACELINK_GOOGLE_CLIENT_IDS` di backend. Client ID **Android** hanya dipakai
 Google untuk memverifikasi paket + SHA-1; ia **bukan** audience backend dan
 **tidak** ditanam di aplikasi.
+
+### 5b. Langkah setelah kedua client ID ada (urutan yang terverifikasi)
+
+Semua nilai `EXPO_PUBLIC_*` disisipkan **saat Metro membundel**, bukan saat APK
+dikompilasi. Karena itu **APK tidak perlu dibangun ulang**, tetapi dev server
+**wajib dijalankan ulang**. Urutannya:
+
+```powershell
+# 1. isi .env aplikasi (berkas diabaikan Git)
+cd apps/mobile
+Copy-Item .env.example .env -ErrorAction SilentlyContinue
+#    EXPO_PUBLIC_FACELINK_API_BASE_URL=http://127.0.0.1:8080
+#    EXPO_PUBLIC_FACELINK_GOOGLE_WEB_CLIENT_ID=<Web client ID>
+
+# 2. jalankan backend DENGAN client ID yang sama
+cd ..\..\backend
+$env:FACELINK_GOOGLE_CLIENT_IDS = "<Web client ID>"
+.\facelink-server.exe
+#    Sebelum variabel ini disetel, backend mencetak:
+#      WARN login Google belum dikonfigurasi; setel FACELINK_GOOGLE_CLIENT_IDS
+#    Setelah disetel, baris WARN itu tidak muncul lagi. Itu bukti konfigurasi
+#    terbaca, bukan sekadar berkasnya ada.
+
+# 3. jalankan ulang Metro (CI dihapus, port yang benar)
+cd ..\apps\mobile
+Remove-Item Env:CI -ErrorAction SilentlyContinue
+npx expo start --dev-client --port 8082
+
+# 4. sambungkan perangkat
+adb reverse tcp:8082 tcp:8082      # Metro
+adb reverse tcp:8080 tcp:8080      # backend
+
+# 5. di perangkat: tutup paksa aplikasi lalu buka lagi, tekan Continue with Google
+adb shell am force-stop ai.facelink.mobile
+adb shell monkey -p ai.facelink.mobile -c android.intent.category.LAUNCHER 1
+```
+
+**Cara membedakan kegagalan** (semuanya sudah punya pesan sendiri di aplikasi):
+
+| Gejala di layar | Arti | Periksa |
+|---|---|---|
+| "Aplikasi belum dikonfigurasi" | `EXPO_PUBLIC_FACELINK_GOOGLE_WEB_CLIENT_ID` kosong pada bundel | `.env` terisi, Metro **dijalankan ulang** setelah `.env` diubah |
+| "Layanan masuk belum siap" | backend hidup tanpa `FACELINK_GOOGLE_CLIENT_IDS` | baris WARN backend; `503 GOOGLE_UNAVAILABLE` |
+| "Backend tidak terjangkau" | `adb reverse` hilang | `adb reverse --list` harus memuat 8080 dan 8082 |
+| Google menolak sebelum kembali ke aplikasi | SHA-1/package belum cocok atau akun tak ada di *Test users* | `DEVELOPER_ERROR` di logcat, §5 |
+| Google mengembalikan token tetapi backend menolak | `aud` ≠ `FACELINK_GOOGLE_CLIENT_IDS` | `IDENTITY_TOKEN_INVALID` di log backend |
+
+Akun uji harus dibuat lebih dahulu (§9): bootstrap admin → masuk sekali →
+undang `dosen`/`mahasiswa`. Tanpa itu, login berhasil di sisi Google tetapi
+aplikasi berhenti di layar "Anda belum terdaftar" — itu perilaku yang benar,
+bukan kerusakan.
+
 ## 6. Berkas `.env` aplikasi
 
 `apps/mobile/.env` (diabaikan Git):
