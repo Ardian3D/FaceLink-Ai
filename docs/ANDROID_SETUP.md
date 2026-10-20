@@ -479,3 +479,89 @@ dapat dijalankan. Membangun ulang APK **tidak** diperlukan karena nilai
 `EXPO_PUBLIC_*` disisipkan saat Metro membundel JS, bukan saat APK dikompilasi —
 tetapi dev server **harus dihentikan dan dijalankan ulang** agar `.env` dibaca
 ulang, lalu aplikasi memuat bundel baru (Reload).
+
+## 13. Kelayakan Android Emulator di laptop ini (audit 21 Oktober 2026)
+
+Audit **hanya membaca keadaan**: tidak ada paket yang dipasang dan tidak ada
+perubahan sistem. Tujuannya menjawab satu pertanyaan: dapatkah HP fisik diganti
+emulator untuk pengujian rutin?
+
+### 13a. Temuan lingkungan (terukur)
+
+| Butir | Nilai nyata | Arti |
+|---|---|---|
+| CPU | AMD Ryzen 7 170, 8 core / 16 thread | Cukup untuk emulator x86_64 |
+| RAM total / bebas | **15,2 GB / 2,1 GB** saat audit | **Kendala utama** — emulator menuntut 2–4 GB khusus untuk dirinya |
+| Virtualisasi firmware | `VirtualizationFirmwareEnabled = True` | AMD-V aktif di BIOS |
+| Hypervisor berjalan | `HypervisorPresent = True`, `hvhost` + `vmcompute` berjalan | Windows sudah menjalankan hypervisor (VBS/Core Isolation) |
+| `HypervisorPlatform` (WHPX) | **InstallState = 2 (Disabled)** | **Android Emulator tidak dapat memakai akselerasi** |
+| `VirtualMachinePlatform` | InstallState = 1 (Enabled) | Cukup untuk WSL2/Docker, **bukan** untuk WHPX emulator |
+| Hyper-V lengkap | tidak terpasang | — |
+| AEHD (Android Emulator Hypervisor Driver) | **tidak terpasang**, service `aehd` tidak ada | Tidak ada akselerasi alternatif |
+| Folder `emulator/` | **tidak ada** | Emulator belum diunduh |
+| `system-images/` | **tidak ada** | Belum ada image |
+| AVD | **0** (`avdmanager list avd` kosong) | — |
+| Disk bebas | 221 GB | Cukup (emulator ± 1 GB, image ± 1,5 GB, AVD ± 8 GB) |
+
+### 13b. Kesimpulan: **LAYAK dengan satu hambatan yang butuh keputusan pemilik**
+
+Tanpa akselerasi, emulator x86_64 tetap dapat dijalankan memakai
+`-accel off` (emulasi penuh, QEMU TCG). Itu **tidak** cocok untuk pengujian
+rutin: boot dapat memakan puluhan menit dan UI menjadi sangat lambat, sehingga
+hasil "aplikasi berjalan" tidak mewakili performa nyata.
+
+Akselerasi dapat diperoleh lewat salah satu dari dua jalur, **keduanya menuntut
+hak administrator dan restart**:
+
+| Jalur | Yang diubah | Konsekuensi |
+|---|---|---|
+| **A. Windows Hypervisor Platform (WHPX)** — disarankan | aktifkan fitur `HypervisorPlatform` (dan `VirtualMachinePlatform` yang sudah aktif) | memakai hypervisor yang sudah berjalan; **tidak** menuntut perubahan BIOS; emulator memakai `-accel on` dengan backend WHPX |
+| **B. AEHD** | pasang `extras;google;Android_Emulator_Hypervisor_Driver` lalu `sc start aehd` | **tidak** dapat dipakai bersamaan dengan Hyper-V/VBS yang aktif; pada mesin ini VBS sedang berjalan, jadi jalur ini kemungkinan besar ditolak sampai VBS dimatikan |
+
+**Rekomendasi:** jalur **A**. Jalur B berkonflik dengan VBS yang sudah aktif
+(Status VBS: *Running*), dan mematikannya mengurangi keamanan sistem demi
+emulator.
+
+### 13c. Yang harus diputuskan sebelum instalasi
+
+1. **Izin administrator + restart** untuk mengaktifkan `HypervisorPlatform`.
+   Ini perubahan tingkat sistem, berbeda dari pemasangan user-local sebelumnya.
+2. **Anggaran RAM.** Mesin ini hanya menyisakan **2,1 GB** bebas dari 15,2 GB.
+   Emulator perlu 2–4 GB; tanpa menutup aplikasi lain (Docker Desktop, beberapa
+   dev server Node, dan IDE) emulator akan tertukar ke disk. Sebelum menjalankan
+   emulator, tutup Docker Desktop dan dev server lain.
+3. **Image mana.** Untuk login Google, image harus bertanda **Google Play**
+   (`google_apis_playstore`) agar Credential Manager tersedia;
+   `google_apis`/AOSP tidak cukup. Android 36.1 tersedia untuk x86_64.
+4. **ABI APK.** APK debug yang ada **hanya berisi `lib/arm64-v8a`**, sedangkan
+   emulator di laptop ini memakai **x86_64**. Jadi APK itu **tidak dapat
+   dipasang di emulator**; perlu build ulang dengan
+   `-PreactNativeArchitectures=x86_64` (gradle.properties sudah mencantumkan
+   `x86_64` pada `reactNativeArchitectures`, jadi cukup satu flag build).
+
+### 13d. Rencana langkah bila disetujui
+
+```powershell
+# 1. (Administrator, sekali, butuh restart) aktifkan WHPX
+Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -All
+# 2. unduh emulator + image Play Store x86_64
+sdkmanager "emulator" "system-images;android-36.1;google_apis_playstore;x86_64"
+# 3. buat AVD
+avdmanager create avd -n facelink -k "system-images;android-36.1;google_apis_playstore;x86_64" -d pixel_7
+# 4. verifikasi akselerasi SEBELUM boot
+emulator -accel-check
+# 5. APK x86_64 (wajib; APK arm64 yang ada tidak cocok)
+cd apps/mobile/android
+.\gradlew assembleDebug -PreactNativeArchitectures=x86_64 --console=plain
+# 6. jalankan
+emulator -avd facelink
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb reverse tcp:8082 tcp:8082     # Metro; 8080 untuk backend
+```
+
+**Catatan penting yang tidak berubah:** emulator **tidak** menghapus kebutuhan
+HP fisik untuk verifikasi akhir. Emulator memakai GPU dan sensor tiruan, tidak
+memuat Play Services sungguhan pada sebagian image, dan tidak membuktikan
+perilaku perangkat nyata (kamera, sensor, Keystore perangkat). Untuk FaceLink AI
+— yang kelak memakai kamera dan penyimpanan kredensial — HP fisik tetap menjadi
+bukti akhir; emulator hanya mempercepat iterasi UI dan alur non-kamera.
