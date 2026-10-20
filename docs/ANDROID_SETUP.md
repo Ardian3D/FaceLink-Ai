@@ -709,3 +709,96 @@ sama (`-Disable`) bila tidak dipakai.
 
 **Yang belum dilakukan dan tidak akan dilakukan tanpa izin:** aktivasi fitur,
 unduhan, pembuatan AVD, build x86_64, restart, dan penghentian container.
+
+## 14. FL-ANDROID02B — Persiapan bertahap (dimulai 21 Oktober 2026)
+
+Tugas ini dibagi menjadi gate. Status saat ini: **gate B4 dan C3 belum dilewati**,
+sehingga tidak ada perubahan sistem, unduhan, atau instalasi yang dijalankan.
+
+### 14a. Baseline resource (21 Oktober 2026, sebelum optimasi)
+
+| Butir | Nilai | Ambang yang disepakati |
+|---|---|---|
+| RAM fisik | 15,19 GB (satu modul 16 GB; slot ke-2 kosong) | — |
+| RAM tersedia | **0,96–1,10 GB** (5 sampel) | target 5–6 GB sebelum emulator |
+| Commit charge | **51,8 / 61,2 GB (85%)** | — |
+| Pagefile | 46 GB dialokasikan, 9,1 GB terpakai, puncak 11,9 GB | — |
+| Disk C: | **219,1 GB bebas** dari 474,5 GB | ≥ 15 GB |
+| CPU | Ryzen 7 170, 8C/16T | — |
+
+**Kesimpulan baseline:** RAM tersedia **≈ 1 GB**, jadi emulator **tidak boleh**
+dijalankan sekarang. Selisih terhadap target ± 4–5 GB.
+
+### 14b. Proses yang dapat dibebaskan (tanpa dihentikan oleh agent)
+
+Angka adalah *working set* agregat; jumlah yang benar-benar kembali ke sistem
+biasanya lebih besar daripada selisihnya, karena memori bersama dilepas saat
+semua proses pemiliknya berhenti.
+
+| Aplikasi | Proses | Working set | Perlu ditutup seluruhnya? |
+|---|---|---|---|
+| Chrome | 63 | **5.858 MB** | ya — menutup sebagian tab tidak cukup |
+| ChatGPT desktop | 13 | 957 MB | ya |
+| Telegram | 1 | 294 MB | ya |
+| Microsoft Edge | 7 | 307 MB | ya |
+| LegionSpace | 10 | 211 MB | opsional |
+| codex | 3 | 196 MB | opsional |
+
+**Yang TIDAK boleh ditutup untuk keperluan ini:** OMP (sesi ini), VS Code,
+Docker Desktop + `vmmemWSL` (5 container: tracker-worker, tracker-dashboard,
+tracker-db, qdrant, tei), dan Go/JDK yang dipakai build. Agent tidak
+menghentikan satu pun dari mereka.
+
+**Perkiraan setelah penutupan:** menutup Chrome + ChatGPT + Telegram + Edge
+membebaskan ± 5,5–7 GB working set; RAM tersedia diperkirakan **5–7 GB**.
+Angka ini **perkiraan**, bukan jaminan — harus diukur ulang (gate B4).
+
+### 14c. Status WHPX (gate C3)
+
+| Butir | Nilai |
+|---|---|
+| `HypervisorPlatform` (WHPX) | **InstallState = 2 (Disabled)** — terdaftar, belum aktif |
+| `VirtualMachinePlatform` | InstallState = 1 (Enabled) — untuk WSL2, bukan WHPX |
+| `VirtualizationFirmwareEnabled` | **True** — AMD-V aktif, **BIOS tidak perlu diubah** |
+| Hypervisor berjalan | **True** (VBS aktif, `VirtualizationBasedSecurityStatus = 2`) |
+| AEHD | tidak terpasang — **tidak disarankan** (sunset 31 Des 2026, konflik VBS) |
+
+**Perintah resmi (belum dijalankan; menuntut PowerShell Administrator):**
+
+```powershell
+# aktifkan (butuh administrator + satu restart)
+Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -All
+
+# membatalkan bila kelak tidak diperlukan
+Disable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -All
+```
+
+Setelah restart, verifikasi harus memakai biner emulator, bukan asumsi:
+
+```powershell
+& "$env:LOCALAPPDATA\Android\Sdk\emulator\emulator.exe" -accel-check
+```
+
+### 14d. Paket yang menunggu izin unduh (gate D)
+
+Terverifikasi ulang lewat `sdkmanager --list` pada 21 Oktober 2026:
+
+| Paket | Versi | Unduhan |
+|---|---|---|
+| `emulator` | 37.2.12 | 434 MB |
+| `system-images;android-36;google_apis_playstore;x86_64` | rev 7 | 1.836 MB |
+
+Folder `emulator/`, `system-images/`, dan AVD **belum ada** di mesin ini.
+
+### 14e. Urutan gate yang disepakati
+
+| Gate | Isi | Status |
+|---|---|---|
+| B4 | pemilik menutup aplikasi, agent mengukur ulang; target 5–6 GB | **menunggu tindakan pemilik** |
+| C3 | izin administrator + restart untuk aktivasi WHPX | **menunggu persetujuan** |
+| D | unduh emulator + image, buat AVD 2048 MB / 2 vCPU | terkunci oleh B4 dan C3 |
+| D4 | boot emulator, ukur RAM aktual | terkunci |
+| E | build APK x86_64, instal, jalankan, logcat | terkunci |
+
+**Aturan berhenti yang berlaku:** bila setelah optimasi RAM tersedia masih jauh
+di bawah target, rencana instalasi dihentikan dan dilaporkan — bukan dipaksakan.
