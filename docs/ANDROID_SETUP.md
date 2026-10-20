@@ -536,88 +536,176 @@ dapat dijalankan. Membangun ulang APK **tidak** diperlukan karena nilai
 tetapi dev server **harus dihentikan dan dijalankan ulang** agar `.env` dibaca
 ulang, lalu aplikasi memuat bundel baru (Reload).
 
-## 13. Kelayakan Android Emulator di laptop ini (audit 21 Oktober 2026)
+## 13. Kelayakan Android Emulator (FL-ANDROID02A, audit 21 Oktober 2026)
 
-Audit **hanya membaca keadaan**: tidak ada paket yang dipasang dan tidak ada
-perubahan sistem. Tujuannya menjawab satu pertanyaan: dapatkah HP fisik diganti
-emulator untuk pengujian rutin?
+**Tahap audit saja.** Tidak ada Windows Optional Feature yang diubah, tidak ada
+perintah administrator, tidak ada unduhan emulator/image, tidak ada restart, dan
+tidak ada container/proses yang dihentikan. Seluruh angka di bawah dibaca dari
+mesin ini pada 21 Oktober 2026.
 
-### 13a. Temuan lingkungan (terukur)
+### 13a. Resource laptop
 
-| Butir | Nilai nyata | Arti |
+| Butir | Nilai nyata | Catatan |
 |---|---|---|
-| CPU | AMD Ryzen 7 170, 8 core / 16 thread | Cukup untuk emulator x86_64 |
-| RAM total / bebas | **15,2 GB / 2,1 GB** saat audit | **Kendala utama** — emulator menuntut 2–4 GB khusus untuk dirinya |
-| Virtualisasi firmware | `VirtualizationFirmwareEnabled = True` | AMD-V aktif di BIOS |
-| Hypervisor berjalan | `HypervisorPresent = True`, `hvhost` + `vmcompute` berjalan | Windows sudah menjalankan hypervisor (VBS/Core Isolation) |
-| `HypervisorPlatform` (WHPX) | **InstallState = 2 (Disabled)** | **Android Emulator tidak dapat memakai akselerasi** |
-| `VirtualMachinePlatform` | InstallState = 1 (Enabled) | Cukup untuk WSL2/Docker, **bukan** untuk WHPX emulator |
-| Hyper-V lengkap | tidak terpasang | — |
-| AEHD (Android Emulator Hypervisor Driver) | **tidak terpasang**, service `aehd` tidak ada | Tidak ada akselerasi alternatif |
-| Folder `emulator/` | **tidak ada** | Emulator belum diunduh |
-| `system-images/` | **tidak ada** | Belum ada image |
-| AVD | **0** (`avdmanager list avd` kosong) | — |
-| Disk bebas | 221 GB | Cukup (emulator ± 1 GB, image ± 1,5 GB, AVD ± 8 GB) |
+| Model | Lenovo 83S0 (LOQ), Windows 11 **Home Single Language** 26200 | — |
+| CPU | AMD Ryzen 7 170, 8 core / 16 thread, 3.2 GHz | beban 18% saat audit |
+| RAM fisik | **15,19 GB** — **satu** modul 16 GB (Samsung, 5600 MT/s) | 2 slot tersedia, **1 kosong**; kapasitas maksimum 64 GB |
+| RAM tersedia | **0,6–1,7 GB** (fluktuasi) | ≈ 4–11% dari total |
+| Commit charge | **52,4 GB / 61,2 GB (85%)** | indikator paling jujur: sistem sudah menekan pagefile |
+| Pagefile | 47 GB dialokasikan, 8,9 GB terpakai, puncak 12,2 GB | tanda tekanan memori berulang |
+| Disk C: | 219,5 GB bebas dari 474,5 GB | cukup |
+| GPU | NVIDIA RTX 3050 Laptop 6 GB + AMD Radeon 680M | emulator dapat memakai GPU host |
 
-### 13b. Kesimpulan: **LAYAK dengan satu hambatan yang butuh keputusan pemilik**
+**Pemakai RAM terbesar (agregat per aplikasi):**
 
-Tanpa akselerasi, emulator x86_64 tetap dapat dijalankan memakai
-`-accel off` (emulasi penuh, QEMU TCG). Itu **tidak** cocok untuk pengujian
-rutin: boot dapat memakan puluhan menit dan UI menjadi sangat lambat, sehingga
-hasil "aplikasi berjalan" tidak mewakili performa nyata.
-
-Akselerasi dapat diperoleh lewat salah satu dari dua jalur, **keduanya menuntut
-hak administrator dan restart**:
-
-| Jalur | Yang diubah | Konsekuensi |
+| Proses | Jumlah | RAM |
 |---|---|---|
-| **A. Windows Hypervisor Platform (WHPX)** — disarankan | aktifkan fitur `HypervisorPlatform` (dan `VirtualMachinePlatform` yang sudah aktif) | memakai hypervisor yang sudah berjalan; **tidak** menuntut perubahan BIOS; emulator memakai `-accel on` dengan backend WHPX |
-| **B. AEHD** | pasang `extras;google;Android_Emulator_Hypervisor_Driver` lalu `sc start aehd` | **tidak** dapat dipakai bersamaan dengan Hyper-V/VBS yang aktif; pada mesin ini VBS sedang berjalan, jadi jalur ini kemungkinan besar ditolak sampai VBS dimatikan |
+| Chrome | 61 proses | **4,3–5,6 GB** |
+| ChatGPT (desktop) | 13 proses | 0,86 GB |
+| OMP (sesi ini) | 9 proses | 0,71 GB |
+| VS Code | 20 proses | 0,60 GB |
+| Docker Desktop + `vmmemWSL` | 6 proses + 1 VM | 0,54 GB |
+| Telegram, LegionSpace, Edge, layanan sistem | — | 1,1 GB |
 
-**Rekomendasi:** jalur **A**. Jalur B berkonflik dengan VBS yang sudah aktif
-(Status VBS: *Running*), dan mematikannya mengurangi keamanan sistem demi
-emulator.
+Docker menjalankan **5 container** yang sudah hidup 4 hari: `tracker-worker`,
+`tracker-dashboard`, `tracker-db` (postgres), `enowx-rag-local-qdrant-1`, dan
+`enowx-rag-local-tei-1`. **Tidak dihentikan** — itu pekerjaan Anda, dan
+penghentiannya butuh persetujuan.
 
-### 13c. Yang harus diputuskan sebelum instalasi
+### 13b. Virtualisasi
+
+| Butir | Nilai | Arti |
+|---|---|---|
+| `VirtualizationFirmwareEnabled` | **True** | AMD-V aktif di firmware; **tidak perlu** masuk BIOS |
+| Hypervisor berjalan | `HypervisorPresent = True`; `hvhost` + `vmcompute` aktif | Windows sudah menjalankan hypervisor |
+| VBS / Core Isolation | **aktif** (`VirtualizationBasedSecurityStatus = 2`) | memakai hypervisor yang sama |
+| `HypervisorPlatform` (WHPX) | **terdaftar, InstallState = 2 (Disabled)** | **dapat diaktifkan tanpa BIOS**, tetapi butuh administrator + restart |
+| `VirtualMachinePlatform` | InstallState = 1 (Enabled) | dipakai WSL2/Docker; **bukan** WHPX |
+| Hyper-V lengkap | tidak terpasang | tidak diperlukan |
+| AEHD | tidak terpasang; service `aehd` tidak ada | **tidak disarankan** — diumumkan *sunset* 31 Desember 2026 dan berkonflik dengan VBS |
+| `VMMonitorModeExtensions` / SLAT (WMI) | `False` | **bukan** bukti virtualisasi mati: ketika hypervisor sudah berjalan, Windows menyembunyikan flag ini dari sistem operasi tamu |
+
+**Kesimpulan virtualisasi:** hambatannya **hanya satu fitur Windows** yang perlu
+diaktifkan, bukan BIOS dan bukan perubahan keamanan. Jalur WHPX kompatibel dengan
+VBS yang sudah aktif.
+
+### 13c. Paket yang tersedia (diverifikasi lewat SDK Manager + metadata Google)
+
+| Paket | Versi | Unduhan | Status |
+|---|---|---|---|
+| `emulator` | 37.2.12 (stable) | **434 MB** (Windows x64) | tersedia, belum dipasang |
+| `system-images;android-36;google_apis_playstore;x86_64` | rev 1 | **1.836 MB** | tersedia |
+| `system-images;android-36.1;google_apis_playstore;x86_64` | rev 4 | 1.909 MB | tersedia |
+| `system-images;android-37.0;google_apis_playstore;x86_64` | rev 1 | 2.218 MB | tersedia (paling baru) |
+| `system-images;android-35;google_apis_playstore;x86_64` | — | 1.680 MB | tersedia (paling ringan yang masih Play Store) |
+| `extras;google;Android_Emulator_Hypervisor_Driver` | 2.2.0 | — | tersedia; **tidak disarankan** (lihat 13b) |
+
+Tidak ada `emulator/`, `system-images/`, maupun AVD di mesin ini — semuanya masih
+perlu diunduh. Profil perangkat yang tersedia untuk AVD antara lain
+`medium_phone`, `pixel_6`, `pixel_7`, dan `small_phone`.
+
+### 13d. Kesesuaian build: **x86_64 didukung, tetapi APK saat ini tidak**
+
+- `android/gradle.properties` → `reactNativeArchitectures=armeabi-v7a,arm64-v8a,x86,x86_64`.
+- `react-native-nitro-google-signin` dan `react-native-nitro-modules` menyaring ABI
+  dengan daftar yang **memuat `x86_64`** (`abiFilters`), jadi modul native
+  (termasuk Google Sign-In) dapat dikompilasi untuk emulator.
+- APK yang ada **hanya berisi `lib/arm64-v8a`** karena build sebelumnya dibatasi
+  `-PreactNativeArchitectures=arm64-v8a`. APK itu **tidak dapat dipasang** di
+  emulator x86_64; perlu build baru dengan `-PreactNativeArchitectures=x86_64`.
+- Gradle memakai `-Xmx2048m` (`org.gradle.jvmargs`), jadi build x86_64 menambah
+  beban ±2–3 GB selama kompilasi. Build **tidak** dijalankan pada audit ini
+  (menunggu keputusan), karena justru akan menghabiskan sisa RAM.
+
+### 13e. Anggaran RAM: Emulator + Metro + OMP + backend
+
+| Komponen | Perkiraan | Dasar |
+|---|---|---|
+| Emulator x86_64 (2 core, 2048 MB RAM tamu) | 2,5–3,5 GB | RAM tamu 2 GB + overhead QEMU/GPU ±0,5–1,5 GB |
+| Metro (`expo start`) | 0,4–0,9 GB | proses Node saat melayani bundel |
+| OMP | 0,7 GB | terukur pada sesi ini |
+| Go Backend + SQLite | 0,1–0,2 GB | biner kecil |
+| **Subtotal yang dibutuhkan** | **± 4–5,5 GB** | — |
+| **Tersedia saat audit** | **0,6–1,7 GB** | — |
+
+**Selisih ± 3–4 GB.** Emulator **tidak akan** berjalan layak tanpa membebaskan
+memori lebih dahulu. Dua sumber terbesar yang dapat dibebaskan **tanpa**
+menyentuh pekerjaan Anda:
+
+| Tindakan | Bebas | Dampak |
+|---|---|---|
+| Tutup tab/instance Chrome yang tidak dipakai (61 proses, 4,3–5,6 GB) | 2–4 GB | tidak ada; dapat dibuka lagi |
+| Tutup ChatGPT desktop (0,86 GB) dan Telegram (0,2 GB) | ± 1 GB | tidak ada |
+| Tutup Docker Desktop **hanya bila** pekerjaan tracker/rag boleh berhenti | 0,5–1,5 GB | **butuh persetujuan Anda** — 5 container aktif 4 hari |
+
+Dengan menutup Chrome + ChatGPT + Telegram saja, tersedia ± 3,5–6,5 GB — cukup
+untuk emulator 2 GB. **Docker tidak perlu dihentikan** untuk konfigurasi ini.
+
+### 13f. Konfigurasi paling ringan yang direkomendasikan
+
+| Keputusan | Nilai | Alasan |
+|---|---|---|
+| Image | `system-images;android-36;google_apis_playstore;x86_64` (1.836 MB) | **Play Store wajib** untuk Credential Manager/Google Sign-In; Android 36 mencakup `targetSdk 36` aplikasi; 382 MB lebih kecil dari 37.0 dan 73 MB lebih kecil dari 36.1 |
+| Alternatif lebih hemat | `system-images;android-35;...;x86_64` (1.680 MB) | hanya bila ruang/unduhan jadi masalah; tetap Play Store |
+| Profil AVD | `medium_phone` (1080×2400, 420 dpi) | lebih ringan dari `pixel_7` (1080×2400 @ 420 dpi dengan fitur tambahan); cukup untuk tata letak aplikasi |
+| RAM tamu | **2048 MB** | batas bawah yang masih stabil untuk Android 36 + Play Services |
+| Heap tamu | `vm.heapSize=256` | mengurangi tekanan |
+| Core | **2** | menyisakan 14 thread untuk host |
+| Penyimpanan AVD | 6 GB (data partition) | aplikasi debug 100 MB + cache Play Services |
+| GPU | `-gpu host` (fallback `swiftshader_indirect`) | RTX 3050 tersedia; fallback bila driver bermasalah |
+| Boot | `-no-boot-anim -no-snapshot-load` | boot lebih cepat, RAM lebih rendah |
+| Disk cache | `-no-audio` | menghemat CPU/RAM |
+
+**Jangan** memakai `-accel off` sebagai jalur utama: tanpa akselerasi emulator
+berjalan sebagai emulasi penuh dan boot dapat memakan puluhan menit — hasil
+ujinya tidak mewakili performa nyata.
+
+### 13g. Estimasi unduhan dan ruang SSD
+
+| Tahap | Unduhan | Setelah ekstrak (perkiraan) |
+|---|---|---|
+| `emulator` 37.2.12 | 434 MB | ± 1,2 GB |
+| Image `android-36;google_apis_playstore;x86_64` | 1.836 MB | ± 4,0 GB |
+| AVD (data + snapshot awal) | — | ± 2–6 GB |
+| **Total** | **± 2,3 GB** | **± 7–11 GB** |
+
+Ruang bebas 219,5 GB — jauh di atas kebutuhan. Angka "setelah ekstrak" adalah
+perkiraan, bukan hasil pengukuran.
+
+### 13h. Perubahan Windows yang diperlukan
+
+| Perubahan | Butuh | Dampak |
+|---|---|---|
+| `Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -All` | **administrator + restart** | mengaktifkan API WHPX; hypervisor sudah berjalan karena VBS, jadi tidak menambah lapisan baru secara konseptual |
+| Restart Windows | **ya**, sekali | wajib agar fitur aktif |
+| Perubahan BIOS/UEFI | **tidak** | AMD-V sudah aktif |
+| Mematikan VBS/Core Isolation | **tidak** | WHPX berjalan **di atas** VBS |
+| Mematikan Hyper-V | **tidak** | Hyper-V penuh tidak terpasang |
+| AEHD | **tidak** | *sunset* 31 Des 2026 dan berkonflik dengan VBS |
+
+**Risiko:** mengaktifkan WHPX menambah permukaan virtualisasi yang dapat dipakai
+proses lain, dan sebagian kecil pengguna melaporkan penurunan performa game/GPU
+setelah fitur ini aktif. Fitur dapat dinonaktifkan kembali dengan perintah yang
+sama (`-Disable`) bila tidak dipakai.
+
+### 13i. Alternatif bila emulator tetap terlalu berat
+
+| Alternatif | Kelebihan | Kekurangan |
+|---|---|---|
+| **Tetap HP fisik, hanya saat perlu** | bukti paling nyata; sudah terbukti (FL-ANDROID01C) | menuntut kabel; tidak dapat dipakai bersamaan dengan mobilitas |
+| **Emulator 1 GB RAM + Android 35** | jejak RAM ± 2 GB | lebih lambat, Play Services berat |
+| **Tambah RAM fisik** (slot ke-2 kosong, maks 64 GB) | menghilangkan hambatan akar | biaya perangkat keras |
+| **Uji UI di preview web** (`npm run web`) | nol biaya RAM tambahan | tanpa modul native, tanpa Google Sign-In |
+| **Uji logika di Node** (`npm test`) | sudah berjalan 80/80 | tidak menguji rendering/perangkat |
+
+### 13j. Keputusan yang diminta
 
 1. **Izin administrator + restart** untuk mengaktifkan `HypervisorPlatform`.
-   Ini perubahan tingkat sistem, berbeda dari pemasangan user-local sebelumnya.
-2. **Anggaran RAM.** Mesin ini hanya menyisakan **2,1 GB** bebas dari 15,2 GB.
-   Emulator perlu 2–4 GB; tanpa menutup aplikasi lain (Docker Desktop, beberapa
-   dev server Node, dan IDE) emulator akan tertukar ke disk. Sebelum menjalankan
-   emulator, tutup Docker Desktop dan dev server lain.
-3. **Image mana.** Untuk login Google, image harus bertanda **Google Play**
-   (`google_apis_playstore`) agar Credential Manager tersedia;
-   `google_apis`/AOSP tidak cukup. Android 36.1 tersedia untuk x86_64.
-4. **ABI APK.** APK debug yang ada **hanya berisi `lib/arm64-v8a`**, sedangkan
-   emulator di laptop ini memakai **x86_64**. Jadi APK itu **tidak dapat
-   dipasang di emulator**; perlu build ulang dengan
-   `-PreactNativeArchitectures=x86_64` (gradle.properties sudah mencantumkan
-   `x86_64` pada `reactNativeArchitectures`, jadi cukup satu flag build).
+2. **Izin unduh ± 2,3 GB** (`emulator` + image `android-36` Play Store x86_64).
+3. **Konfirmasi bahwa menutup Chrome/ChatGPT/Telegram sementara** boleh
+   dilakukan saat pengujian (Docker **tidak** perlu dihentikan).
+4. **Konfirmasi build APK x86_64** boleh dijalankan (menambah ± 2–3 GB RAM selama
+   kompilasi; sebaiknya setelah Chrome ditutup).
 
-### 13d. Rencana langkah bila disetujui
-
-```powershell
-# 1. (Administrator, sekali, butuh restart) aktifkan WHPX
-Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform -All
-# 2. unduh emulator + image Play Store x86_64
-sdkmanager "emulator" "system-images;android-36.1;google_apis_playstore;x86_64"
-# 3. buat AVD
-avdmanager create avd -n facelink -k "system-images;android-36.1;google_apis_playstore;x86_64" -d pixel_7
-# 4. verifikasi akselerasi SEBELUM boot
-emulator -accel-check
-# 5. APK x86_64 (wajib; APK arm64 yang ada tidak cocok)
-cd apps/mobile/android
-.\gradlew assembleDebug -PreactNativeArchitectures=x86_64 --console=plain
-# 6. jalankan
-emulator -avd facelink
-adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb reverse tcp:8082 tcp:8082     # Metro; 8080 untuk backend
-```
-
-**Catatan penting yang tidak berubah:** emulator **tidak** menghapus kebutuhan
-HP fisik untuk verifikasi akhir. Emulator memakai GPU dan sensor tiruan, tidak
-memuat Play Services sungguhan pada sebagian image, dan tidak membuktikan
-perilaku perangkat nyata (kamera, sensor, Keystore perangkat). Untuk FaceLink AI
-— yang kelak memakai kamera dan penyimpanan kredensial — HP fisik tetap menjadi
-bukti akhir; emulator hanya mempercepat iterasi UI dan alur non-kamera.
+**Yang belum dilakukan dan tidak akan dilakukan tanpa izin:** aktivasi fitur,
+unduhan, pembuatan AVD, build x86_64, restart, dan penghentian container.
