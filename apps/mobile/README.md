@@ -93,10 +93,31 @@ Build iOS menuntut tambahan yang belum dikonfigurasi — `iosUrlScheme` berisi
 ID token tidak dapat diterima dan `masukDenganGoogle` akan gagal, jadi jangan
 menganggap iOS sudah siap sebelum plugin itu ditambahkan dan diuji.
 
-**Status: BELUM TERVERIFIKASI pada perangkat.** Pemeriksaan di atas dibaca dari
-kode sumber paket, bukan dari hasil build; `expo prebuild` dan `expo run:android`
-belum pernah dijalankan pada mesin ini karena JDK, Android SDK, dan `adb` tidak
-tersedia.
+**Status pemasangan: PASSED pada HP fisik (21 Oktober 2026).** APK debug
+arm64-v8a terpasang di TECNO LJ7 (Android 16) dan aplikasi terbuka dengan layar
+masuk yang dirender native — bukti dan batasannya di
+`docs/ANDROID_SETUP.md` §12. **Google Sign-In tetap BLOCKED**: Web OAuth client
+ID belum ada, sehingga tombol masuk berhenti dengan pesan *"Aplikasi belum
+dikonfigurasi"*. Pemeriksaan config plugin di atas dibaca dari kode sumber paket
+2.3.0, bukan dari hasil login.
+
+### Port Metro dan variabel `CI`
+
+Dua jebakan nyata saat menjalankan dev server di laptop ini:
+- **Port 8081 bisa sudah dipakai proses lain.** Di mesin ini `127.0.0.1:8081`
+  dipegang Docker Desktop dan menjawab `200` dengan badan **0 byte**, sehingga
+  `curl` tampak "berhasil" padahal Metro tidak pernah menerima permintaan.
+  Periksa pemilik port sebelum menyalahkan aplikasi:
+  `netstat -ano | findstr :8081`, lalu jalankan Metro di port lain:
+  `npx expo start --dev-client --port 8082` **dan** `adb reverse tcp:8082 tcp:8082`.
+- **`CI=true` mematikan watch mode.** Expo mencetak
+  `Metro is running in CI mode, reloads are disabled`; Fast Refresh berhenti dan
+  perubahan berkas tidak terlihat. Jalankan dengan `CI` dihapus
+  (`env -u CI npx expo start …` di Git Bash, atau `Remove-Item Env:CI` di
+  PowerShell).
+Bila aplikasi menampilkan **"There was a problem loading the project."**,
+bundel tidak pernah sampai ke perangkat: periksa port Metro yang benar dan
+`adb reverse` untuk port itu, bukan konfigurasi OAuth.
 
 **Pratinjau web tetap berguna** untuk memeriksa tata letak: `npm run web`. Di
 sana tombol masuk berhenti dengan pesan *"Masuk Google tidak tersedia di sini"* —

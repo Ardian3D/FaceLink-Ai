@@ -12,8 +12,12 @@ OAuth Android untuk FaceLink AI di **Windows**.
 > memuat langkah yang benar-benar dipakai, termasuk dua kendala nyata saat build
 > (nama paket platform dan batas jalur ninja, §3c).
 >
-> **Yang belum terverifikasi:** pemasangan pada HP fisik, Google Sign-In, dan
-> seluruh skenario §8 — `adb devices` kosong dan kredensial OAuth belum ada.
+> **Yang belum terverifikasi:** Google Sign-In dan seluruh skenario autentikasi
+> §8 — kredensial OAuth belum ada. **Yang sudah terverifikasi (21 Oktober
+> 2026):** APK terpasang dan berjalan di HP fisik TECNO LJ7 (Android 16,
+> arm64-v8a); layar masuk dirender native, latar video aktif, dan diagnostik
+> aplikasi menjangkau Go Backend lewat `adb reverse`. Rincian dan batasannya di
+> **§12**.
 >
 > Seluruh pemasangan dijalankan manual oleh pemilik atau atas izinnya; tidak ada
 > skrip di repository ini yang mengunduh atau memasang paket.
@@ -330,15 +334,18 @@ Hasil: `android/app/build/outputs/apk/debug/app-debug.apk`.
 `ai.facelink.mobile` versionCode 1, compileSdk 37, targetSdk 36, minSdk 24,
 tersigning sertifikat debug dengan SHA-1 yang cocok dengan §5. Bundel
 JavaScript Android juga diverifikasi terpisah dengan
-`npx expo export --platform android` (3,4 MB, exit 0). **APK belum dipasang ke
-HP mana pun** — `adb devices` kosong.
+`npx expo export --platform android` (3,4 MB, exit 0). **Pemasangan ke HP dan
+pengoperasian aplikasi dibuktikan pada 21 Oktober 2026** (FL-ANDROID01C, §12);
+APK yang berjalan di perangkat terbukti identik dengan artefak ini.
 ## 8. Urutan pengujian setelah build terpasang
 
-**Status seluruh skenario: BLOCKED** — belum ada HP terhubung (`adb devices`
-kosong) dan kredensial OAuth belum dibuat. Tidak satu pun butir di bawah pernah
-dijalankan.
+**Status skenario A1–A12: BLOCKED** — kredensial OAuth belum dibuat, sehingga
+tidak satu pun butir di bawah pernah dijalankan. **Yang SUDAH diuji pada HP
+fisik tanpa kredensial** adalah lapisan perangkat: pemasangan, splash, layar
+masuk, latar video, safe area, dan konektivitas `adb reverse` — hasil nyata di
+**§12**.
 
-Semua langkah menuntut akun uji terdaftar (lihat bagian 9).
+Semua langkah di bawah menuntut akun uji terdaftar (lihat bagian 9).
 
 | # | Skenario | Cara | Kriteria lulus |
 |---|---|---|---|
@@ -394,3 +401,81 @@ Backend tidak memiliki pendaftaran mandiri. Urutannya:
   `AndroidManifest.xml` dan `res/values/styles.xml` **byte-identik**, sehingga
   penghapusan tidak mengubah tata letak; safe area tetap ditangani
   `SafeAreaProvider` dan `Screen` (`edges={["top","bottom"]}`).
+
+## 12. Bukti pengujian perangkat fisik (FL-ANDROID01C, 21 Oktober 2026)
+
+Dijalankan pada HP yang benar-benar tersambung USB dengan USB debugging aktif.
+Tidak ada perubahan kode aplikasi pada tahap ini: verifikasi dan dokumentasi saja.
+
+**Perangkat**
+
+| Butir | Nilai (dibaca dari perangkat) |
+|---|---|
+| Model | TECNO LJ7 (`ro.product.model` = `TECNO_LJ7`) |
+| Android | 16 (`ro.build.version.release` = 16, SDK 36) |
+| ABI | `arm64-v8a` (satu-satunya pada `ro.product.cpu.abilist`) |
+| Layar | 1080×2460, densitas 440 (override 432) |
+| Transport ADB | `device` (bukan `unauthorized`), `transport_id=4` |
+
+**Kesesuaian APK.** `unzip -l app-debug.apk` → satu-satunya direktori
+`lib/` adalah `arm64-v8a`, cocok dengan ABI perangkat. Aplikasi sudah terpasang
+(`ai.facelink.mobile`, versionCode 1, minSdk 24, targetSdk 36,
+`primaryCpuAbi=arm64-v8a`). `base.apk` yang ditarik dari perangkat memiliki
+**SHA-256 identik** dengan `android/app/build/outputs/apk/debug/app-debug.apk`
+(`31d51107…79c4801`), jadi yang berjalan memang artefak build ini, bukan versi
+lain.
+
+**Hasil per butir**
+
+| # | Pemeriksaan | Hasil | Bukti |
+|---|---|---|---|
+| D1 | ADB mendeteksi perangkat berstatus `device` | **PASSED** | `adb devices -l` |
+| D2 | ABI APK cocok dengan perangkat | **PASSED** | `lib/arm64-v8a` vs `ro.product.cpu.abilist` |
+| D3 | Instalasi tanpa menghapus aplikasi lain | **PASSED** | paket sudah ada, data tidak disentuh |
+| D4 | Splash screen tampil | **PASSED** | tangkapan 2–3 setelah `am start`: latar hitam (luma 16) dengan ikon di tengah (luma rata-rata 128) |
+| D5 | Layar masuk dirender native | **PASSED** | dump UI: `FaceLink` + `Ai`, tombol `Continue with Google` (`clickable="true"`), teks keterangan, `Privacy policy` / `Terms of service` |
+| D6 | Latar video aktif (bukan animasi cadangan) | **PASSED** | `TextureView` penuh layar di hierarki; bundel Metro memuat `video-clips.local` + `video1/video2.mp4`; dekoder (`MediaCodec`) berpindah status tiap ±8 dtk; dua tangkapan 3 dtk terpisah berbeda (PSNR 21,8 dB) |
+| D7 | Safe area dan status bar | **PASSED** | blok merek mulai y=1096 dan baris terbawah y=2352, keduanya di dalam area aman (status bar 0–105, nav bar 2417–2460); jam/ikon status bar terbaca di tangkapan (luma > 180 pada 11% piksel) |
+| D8 | Aplikasi tidak crash | **PASSED** | `FATAL EXCEPTION`/ANR untuk `ai.facelink.mobile` = 0; proses hidup setelah restart paksa |
+| D9 | `adb reverse` menjangkau Go Backend | **PASSED** | layar Diagnostik di perangkat: `healthz: ok`, `readyz: ready`, `database: ok`, `migrations: applied`, `WAL: wal`; log backend mencatat `GET /api/v1/healthz` dan `/readyz` status 200 dari perangkat |
+| D10 | Tombol masuk menolak tanpa Web client ID | **PASSED** | tekan tombol → "Aplikasi belum dikonfigurasi" + alasan `EXPO_PUBLIC_FACELINK_GOOGLE_WEB_CLIENT_ID belum disetel`; **tidak ada** permintaan ke backend (log backend bersih) dan tidak ada sesi palsu |
+| D11 | Sesi kosong setelah restart | **PASSED** | `am force-stop` lalu buka lagi → layar masuk biasa, tanpa dashboard |
+| D12 | Google Sign-In nyata (A1–A12) | **BLOCKED** | Web/Android OAuth client belum ada (§5) |
+
+**Dua kendala nyata saat menjalankan dev server** (bukan cacat aplikasi, tetapi
+memakan waktu diagnosis):
+
+1. **Port 8081 dipakai Docker Desktop.** `127.0.0.1:8081` menjawab `200` dengan
+   badan **0 byte**, sehingga pemeriksaan `curl` tampak berhasil padahal Metro
+   tidak menerima permintaan. Gejala di perangkat: *"There was a problem loading
+   the project."* Solusi yang dipakai: `npx expo start --dev-client --port 8082`
+   + `adb reverse tcp:8082 tcp:8082`.
+2. **`CI=true` mematikan watch mode.** Metro mencetak
+   `Metro is running in CI mode, reloads are disabled`; dev server tetap
+   melayani bundel, tetapi Fast Refresh mati. Jalankan dengan `CI` dihapus.
+
+**Catatan menjalankan `check:native`.** Variabel `JAVA_HOME`/`ANDROID_HOME`
+tersimpan pada lingkup *User* Windows; shell yang belum login ulang tidak
+mewariskannya. Bila skrip melaporkan JDK/SDK BLOCKED padahal foldernya ada,
+berikan variabel itu eksplisit, dengan **PATH bergaya Windows** (`;`):
+
+```powershell
+$jdk = "$env:LOCALAPPDATA\facelink-toolchain\jdk\jdk-17.0.20.1+1"
+$env:JAVA_HOME = $jdk
+$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
+$env:Path = "$jdk\bin;$env:ANDROID_HOME\platform-tools;$env:Path"
+cd apps/mobile; npm run check:native
+```
+
+Hasil nyata dengan perangkat tersambung: **13 PASSED, 0 FAILED, 1 BLOCKED**
+(satu-satunya BLOCKED adalah `EXPO_PUBLIC_FACELINK_GOOGLE_WEB_CLIENT_ID`), dan
+`npm test` **80/80 lulus**.
+
+**Langkah berikutnya (tindakan pemilik, §5):** buat OAuth client **Web** dan
+**Android**, lalu isi `apps/mobile/.env`
+(`EXPO_PUBLIC_FACELINK_GOOGLE_WEB_CLIENT_ID`) dan jalankan backend dengan
+`FACELINK_GOOGLE_CLIENT_IDS` bernilai sama. Setelah itu skenario A1–A12 baru
+dapat dijalankan. Membangun ulang APK **tidak** diperlukan karena nilai
+`EXPO_PUBLIC_*` disisipkan saat Metro membundel JS, bukan saat APK dikompilasi —
+tetapi dev server **harus dihentikan dan dijalankan ulang** agar `.env` dibaca
+ulang, lalu aplikasi memuat bundel baru (Reload).
