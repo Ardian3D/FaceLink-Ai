@@ -5,7 +5,7 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
+    "android": "expo run:android",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
@@ -13,7 +13,9 @@
     "video:off": "node scripts/use-local-video.mjs --off",
     "test": "vitest run",
     "test:watch": "vitest",
-    "check:native": "node scripts/check-native-env.mjs"
+    "check:native": "node scripts/check-native-env.mjs",
+    "android:device": "expo run:android --device",
+    "android:go": "expo start --android"
   },
   "dependencies": {
     "@expo-google-fonts/poppins": "^0.4.1",

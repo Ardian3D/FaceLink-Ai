@@ -15,7 +15,7 @@
  *
  * Pemakaian: node scripts/check-native-env.mjs
  */
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync, statfsSync } from "node:fs";
 import path from "node:path";
 
@@ -43,16 +43,19 @@ const SYARAT = {
  * daftar tetap di berkas ini (tidak ada masukan pengguna).
  */
 function jalankan(perintah) {
-  try {
-    return execFileSync(perintah, {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-      timeout: 20_000,
-      shell: true,
-    }).trim();
-  } catch {
-    return null;
-  }
+  // `java -version` menulis ke stderr, sedangkan `adb version` ke stdout.
+  // Keduanya digabung supaya versi terbaca apa pun kanal yang dipakai.
+  const hasil = spawnSync(perintah, {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    timeout: 20_000,
+    shell: true,
+  });
+  const gabungan = `${hasil.stdout ?? ""}${hasil.stderr ?? ""}`.trim();
+  // Perintah yang tidak ada memberi kode 1 dengan pesan shell; keduanya harus
+  // dibedakan dari perintah yang berhasil tetapi keluar bukan-nol.
+  if (hasil.error || hasil.status !== 0) return { ok: false, teks: null };
+  return { ok: true, teks: gabungan || null };
 }
 
 const hasil = [];
@@ -102,9 +105,10 @@ function bandingkanVersi(a, b) {
 }
 
 // ---------------------------------------------------------------- JDK
-const keluaranJava = jalankan("java -version");
+const hasilJava = jalankan("java -version");
+const keluaranJava = hasilJava.ok ? hasilJava.teks : null;
 const majorJava = versiMayor(keluaranJava?.replace(/^.*version\s+/, "") ?? "");
-if (keluaranJava === null) {
+if (!hasilJava.ok || keluaranJava === null) {
   catat("JDK", "BLOCKED", `java tidak ada pada PATH (perlu JDK ${SYARAT.jdk})`);
 } else if (majorJava === null) {
   catat("JDK", "FAILED", `versi tidak terbaca: ${keluaranJava.split("\n")[0]}`);
@@ -134,11 +138,18 @@ if (!sdk) {
 }
 
 if (sdk && existsSync(sdk)) {
-  const platform = path.join(sdk, "platforms", `android-${SYARAT.compileSdk}`);
+  // SDK Manager menamai folder platform dengan revisi minor (`android-37.0`),
+  // sedangkan `compileSdk` di Gradle hanya memakai nomor API. Keduanya sah.
+  const platformDir = path.join(sdk, "platforms");
+  const platformCocok = existsSync(platformDir)
+    ? readdirSync(platformDir).filter((n) => n === `android-${SYARAT.compileSdk}` || n.startsWith(`android-${SYARAT.compileSdk}.`))
+    : [];
   catat(
     `platform android-${SYARAT.compileSdk}`,
-    existsSync(platform) ? "PASSED" : "BLOCKED",
-    existsSync(platform) ? platform : "belum dipasang (compileSdk hasil prebuild = 37)"
+    platformCocok.length > 0 ? "PASSED" : "BLOCKED",
+    platformCocok.length > 0
+      ? path.join(platformDir, platformCocok[0])
+      : `belum dipasang (compileSdk hasil prebuild = ${SYARAT.compileSdk})`
   );
 
   const tools = path.join(sdk, "build-tools", SYARAT.buildTools);
@@ -176,11 +187,15 @@ if (sdk && existsSync(sdk)) {
   );
 
   const adbPath = path.join(sdk, "platform-tools", "adb.exe");
-  const adb = jalankan(`"${adbPath}" version`);
-  catat("adb", adb ? "PASSED" : "BLOCKED", adb ? adb.split("\n")[0] : "platform-tools belum terpasang");
-  if (adb) {
+  const hasilAdb = jalankan(`"${adbPath}" version`);
+  catat(
+    "adb",
+    hasilAdb.ok ? "PASSED" : "BLOCKED",
+    hasilAdb.ok ? (hasilAdb.teks ?? "ada").split("\n")[0] : "platform-tools belum terpasang"
+  );
+  if (hasilAdb.ok) {
     const perangkat = jalankan(`"${adbPath}" devices`);
-    const siap = (perangkat ?? "").split(/\r?\n/).filter((l) => /\tdevice$/.test(l));
+    const siap = (perangkat.teks ?? "").split(/\r?\n/).filter((l) => /\tdevice$/.test(l));
     catat(
       "perangkat/emulator terhubung",
       siap.length > 0 ? "PASSED" : "BLOCKED",
@@ -188,14 +203,17 @@ if (sdk && existsSync(sdk)) {
     );
   }
 
-  const emulator = jalankan(`"${path.join(sdk, "emulator", "emulator.exe")}" -list-avds`);
-  const avds = (emulator ?? "").split(/\r?\n/).filter(Boolean);
+  // Emulator sengaja TIDAK diwajibkan: target pengujian adalah HP fisik.
+  const hasilEmulator = jalankan(`"${path.join(sdk, "emulator", "emulator.exe")}" -list-avds`);
+  const avds = (hasilEmulator.teks ?? "").split(/\r?\n/).filter(Boolean);
   catat(
-    "AVD emulator",
-    avds.length > 0 ? "PASSED" : "BLOCKED",
-    avds.length > 0
-      ? avds.join(", ")
-      : "belum ada AVD; Credential Manager memerlukan image bertanda Google Play"
+    "AVD emulator (opsional)",
+    "INFO",
+    hasilEmulator.ok
+      ? avds.length > 0
+        ? `tersedia: ${avds.join(", ")}`
+        : "tidak ada AVD — boleh diabaikan bila memakai HP fisik"
+      : "emulator tidak dipasang — boleh diabaikan, target uji adalah HP fisik"
   );
 } else {
   for (const nama of [
@@ -205,10 +223,46 @@ if (sdk && existsSync(sdk)) {
     "NDK 27.1.12297006",
     "adb",
     "perangkat/emulator terhubung",
-    "AVD emulator",
+    "AVD emulator (opsional)",
   ]) {
-    catat(nama, "BLOCKED", "menunggu ANDROID_HOME yang sah");
+    catat(
+      nama,
+      nama === "AVD emulator (opsional)" ? "INFO" : "BLOCKED",
+      nama === "AVD emulator (opsional)" ? "emulator tidak diperlukan untuk HP fisik" : "menunggu ANDROID_HOME yang sah"
+    );
   }
+}
+
+// ------------------------------------------------------------ CMake + ninja
+// Ninja bawaan CMake 3.22.1 (versi 1.10) gagal membuat folder objek ketika
+// jalur build melewati 260 karakter — keadaan yang lazim terjadi pada proyek
+// React Native di `node_modules`. CMake 3.31.x membawa ninja 1.12 yang
+// menanganinya. Karena itu `android/local.properties` perlu `cmake.dir`.
+if (sdk && existsSync(sdk)) {
+  const lokal = path.join(akar, "android", "local.properties");
+  const isiLokal = existsSync(lokal) ? readFileSync(lokal, "utf8") : "";
+  const cocok = /^cmake\.dir=(.+)$/m.exec(isiLokal);
+  const cmakeDir =
+    cocok?.[1]?.trim() ||
+    (existsSync(path.join(sdk, "cmake", "3.31.6"))
+      ? path.join(sdk, "cmake", "3.31.6")
+      : path.join(sdk, "cmake", "3.22.1"));
+  const ninjaPath = path.join(cmakeDir, "bin", "ninja.exe");
+  const hasilNinja = existsSync(ninjaPath) ? jalankan(`"${ninjaPath}" --version`) : { ok: false };
+  const versiNinja = hasilNinja.ok ? (hasilNinja.teks ?? "").trim() : "";
+  // Objek ninja berada di <akar>/node_modules/<paket>/... ; dengan prefiks
+  // .cxx/CMakeFiles/<target>.dir/ jalur ini mudah melewati 260 karakter.
+  const akarPanjang = path.join(akar, "node_modules").length > 55;
+  const cukup = bandingkanVersi(versiNinja || "0", "1.11.0") >= 0;
+  catat(
+    "ninja (jalur panjang)",
+    !hasilNinja.ok ? "BLOCKED" : akarPanjang && !cukup ? "FAILED" : "PASSED",
+    !hasilNinja.ok
+      ? "ninja belum ada; pasang CMake lewat sdkmanager"
+      : akarPanjang && !cukup
+        ? `ninja ${versiNinja} dipakai; jalur build > 260 karakter. Setel cmake.dir ke CMake 3.31.6 lewat android/local.properties`
+        : `ninja ${versiNinja} dari ${cmakeDir}`
+  );
 }
 
 // ------------------------------------------------------- konfigurasi OAuth

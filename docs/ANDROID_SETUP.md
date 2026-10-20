@@ -6,13 +6,17 @@ OAuth Android untuk FaceLink AI di **Windows**.
 > **Status dokumen ini:** seluruh angka versi di bawah **dibaca dari berkas yang
 > benar-benar ada di repository ini**, yaitu hasil `npx expo prebuild
 > --platform android` atas `apps/mobile` (Expo SDK 58.0.13, React Native 0.88.0).
-> Panduan ini **belum pernah dijalankan sampai tuntas** di mesin pengembangan
-> saat ini karena JDK, Android SDK, dan ADB belum terpasang. Setiap langkah yang
-> belum dijalankan ditandai **BELUM TERVERIFIKASI**.
+> **Toolchain sudah dipasang dan build sudah dibuktikan pada 20 Oktober 2026**
+> dengan izin pemilik: `assembleDebug` menghasilkan APK arm64 tersigning debug
+> (`ai.facelink.mobile`, compileSdk 37, targetSdk 36). Bagian §2–§4, §7, dan §8
+> memuat langkah yang benar-benar dipakai, termasuk dua kendala nyata saat build
+> (nama paket platform dan batas jalur ninja, §3c).
 >
-> Dokumen ini tidak meminta pemasangan apa pun secara otomatis: tidak ada skrip
-> yang mengunduh atau memasang paket. Semua langkah dijalankan manual oleh
-> pemilik project.
+> **Yang belum terverifikasi:** pemasangan pada HP fisik, Google Sign-In, dan
+> seluruh skenario §8 — `adb devices` kosong dan kredensial OAuth belum ada.
+>
+> Seluruh pemasangan dijalankan manual oleh pemilik atau atas izinnya; tidak ada
+> skrip di repository ini yang mengunduh atau memasang paket.
 
 ## 1. Persyaratan yang dituntut repository ini
 
@@ -45,110 +49,183 @@ cd apps/mobile
 npm run check:native
 ```
 
-### Status mesin pengembangan saat panduan ini ditulis (2026-10-20)
+### Status mesin pengembangan (20 Oktober 2026)
 
-Keluaran nyata `npm run check:native`, bukan perkiraan:
+Keluaran nyata `npm run check:native`. **Sebelum** instalasi: 3 PASSED, 0 FAILED,
+11 BLOCKED. **Sesudah** instalasi toolchain: **11 PASSED, 0 FAILED, 3 BLOCKED**.
 
-| Butir | Status | Keterangan |
-|---|---|---|
-| JDK 17 | **BLOCKED** | `java` tidak ada pada PATH |
-| `JAVA_HOME` | **BLOCKED** | belum disetel |
-| `ANDROID_HOME` | **BLOCKED** | belum disetel |
-| platform `android-37` | **BLOCKED** | menunggu `ANDROID_HOME` |
-| build-tools `37.0.0` | **BLOCKED** | idem |
-| CMake | **BLOCKED** | idem; yang diperiksa "ada versi ≥ 3.13", bukan satu nomor |
-| `NDK 27.1.12297006` | **BLOCKED** | idem; versi lain tidak memenuhi |
-| `adb` | **BLOCKED** | idem |
-| perangkat/emulator terhubung | **BLOCKED** | idem |
-| AVD emulator | **BLOCKED** | idem |
-| `EXPO_PUBLIC_FACELINK_GOOGLE_WEB_CLIENT_ID` | **BLOCKED** | belum ada di environment maupun `.env`; butuh langkah §5 |
-| `android/` hasil prebuild | **PASSED** | dibuat 2026-10-20, diabaikan Git |
-| keystore debug | **PASSED** | SHA-1 belum diambil (butuh `keytool` dari JDK) |
-| ruang disk | **PASSED** | 230 GB bebas (perlu ≥ 15 GB) |
+| Butir | Sebelum | Sesudah | Keterangan |
+|---|---|---|---|
+| JDK 17 | BLOCKED | **PASSED** | Temurin 17.0.20.1 di `%LOCALAPPDATA%\facelink-toolchain` |
+| `JAVA_HOME` | BLOCKED | **PASSED** | lingkup User, tanpa administrator |
+| `ANDROID_HOME` | BLOCKED | **PASSED** | `%LOCALAPPDATA%\Android\Sdk` |
+| platform `android-37` | BLOCKED | **PASSED** | folder nyata bernama `android-37.0` |
+| build-tools `37.0.0` | BLOCKED | **PASSED** | |
+| CMake | BLOCKED | **PASSED** | 3.22.1 dan 3.31.6 terpasang |
+| `NDK 27.1.12297006` | BLOCKED | **PASSED** | |
+| `adb` | BLOCKED | **PASSED** | Platform-Tools 37.0.1 |
+| perangkat terhubung | BLOCKED | **BLOCKED** | `adb devices` kosong — tidak ada HP tersambung |
+| AVD emulator | BLOCKED | INFO | emulator tidak dipasang (target HP fisik) |
+| `EXPO_PUBLIC_FACELINK_GOOGLE_WEB_CLIENT_ID` | BLOCKED | **BLOCKED** | menunggu OAuth client dari pemilik (§5) |
+| `android/` hasil prebuild | PASSED | **PASSED** | diabaikan Git |
+| keystore debug | PASSED | **PASSED** | SHA-1 sudah diambil (§5) |
+| ninja (jalur panjang) | — | **PASSED** | ninja 1.12.1 dari CMake 3.31.6 |
+| ruang disk | PASSED | **PASSED** | 219 GB bebas |
 
-**Ringkas: 3 PASSED, 0 FAILED, 11 BLOCKED.** Tidak ada butir gagal; semuanya
-hanya belum terpasang. Karena itu panduan ini **belum terbukti sampai tuntas** —
-tidak satu pun skenario §8 pernah dijalankan.
+**Dua BLOCKED yang tersisa bukan cacat pemasangan:** keduanya menunggu tindakan
+pemilik — HP fisik dan kredensial OAuth.
 
+**Yang sudah terbukti:** `assembleDebug` berhasil dan APK tersigning.
+**Yang belum terbukti:** pemasangan di HP dan seluruh skenario §8.
 ## 2. JDK 17
 
-Pilih **satu** distribusi. Ketiganya tanpa biaya dan tanpa akun berbayar.
-
-| Pilihan | Perintah (PowerShell, Administrator) |
-|---|---|
-| Eclipse Temurin | `winget install --id EclipseAdoptium.Temurin.17.JDK` |
-| Microsoft OpenJDK | `winget install --id Microsoft.OpenJDK.17` |
-| Chocolatey | `choco install -y microsoft-openjdk17` |
-
-Lalu setel `JAVA_HOME` **permanen** (bukan hanya sesi ini):
+**Jalur yang dipakai dan terbukti (tanpa administrator).** Unduh arsip Temurin 17
+dari API Adoptium lalu ekstrak ke folder pengguna — tidak ada installer, tidak
+ada entri sistem, dan penghapusan cukup dengan menghapus foldernya:
 
 ```powershell
-$jdk = (Get-ChildItem 'C:\Program Files\Eclipse Adoptium' -Directory | Select-Object -First 1).FullName
-[Environment]::SetEnvironmentVariable('JAVA_HOME', $jdk, 'User')
-$env:JAVA_HOME = $jdk
-java -version
+$dest = "$env:LOCALAPPDATA\facelink-toolchain\jdk"
+New-Item -ItemType Directory -Force $dest | Out-Null
+curl.exe -sSL -o "$env:TEMP\jdk17.zip" `
+  "https://api.adoptium.net/v3/binary/latest/17/ga/windows/x64/jdk/hotspot/normal/eclipse?project=jdk"
+tar -xf "$env:TEMP\jdk17.zip" -C $dest
+Get-ChildItem $dest   # jdk-17.0.20.1+1
 ```
 
-Buka terminal baru setelahnya. **JDK yang lebih baru dari 17 tidak
-direkomendasikan** oleh React Native; AGP 9.2 menyatakan minimum 17, dan JDK 26
-pernah dilaporkan memicu kegagalan `JdkImageTransform` (isu AGP #486844145).
+`tar` dipakai, bukan `unzip`: `unzip` gagal pada jalur yang memuat apostrof
+(`Ardian's`), sedangkan `tar` (bawaan Windows 10+) menerimanya.
 
+Setel `JAVA_HOME` pada lingkup **User** (tidak menuntut administrator), lalu buka
+terminal baru:
+
+```powershell
+[Environment]::SetEnvironmentVariable('JAVA_HOME',
+  "$env:LOCALAPPDATA\facelink-toolchain\jdk\jdk-17.0.20.1+1", 'User')
+```
+
+**Alternatif installer** (juga tanpa biaya):
+`winget install --id EclipseAdoptium.Temurin.17.JDK` atau
+`winget install --id Microsoft.OpenJDK.17`; keduanya menulis ke
+`C:\Program Files` sehingga menuntut Administrator.
+
+**JDK yang lebih baru dari 17 tidak direkomendasikan** oleh React Native; AGP 9.2
+menyatakan minimum 17, dan JDK 26 pernah dilaporkan memicu kegagalan
+`JdkImageTransform` (isu AGP #486844145).
 ## 3. Android SDK
 
-Dua jalur; pilih satu.
-
-### 3a. Android Studio (paling sedikit langkah manual)
-
-1. Pasang Android Studio, centang **Android SDK**, **Android SDK Platform**, dan
-   **Android Virtual Device**.
-2. **SDK Manager → SDK Platforms → Show Package Details**, centang
-   **Android SDK Platform 37**.
-3. **SDK Manager → SDK Tools → Show Package Details**, centang:
-   - **Android SDK Build-Tools 37.0.0**
-   - **Android SDK Command-line Tools (latest)**
-   - **Android SDK Platform-Tools** (berisi `adb`)
-   - **NDK (Side by side) 27.1.12297006**
-   - **CMake** (versi bawaan yang ditawarkan SDK Manager; minimum 3.13)
-   - **Android Emulator**
-4. Setel variabel lingkungan:
+### 3a. Command-line saja (jalur yang dipakai, tanpa administrator)
 
 ```powershell
-[Environment]::SetEnvironmentVariable('ANDROID_HOME', "$env:LOCALAPPDATA\Android\Sdk", 'User')
-$env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
-$env:PATH = "$env:ANDROID_HOME\platform-tools;$env:ANDROID_HOME\emulator;$env:PATH"
+$sdk = "$env:LOCALAPPDATA\Android\Sdk"
+New-Item -ItemType Directory -Force "$sdk\cmdline-tools" | Out-Null
+curl.exe -sSL -o "$env:TEMP\cmdline.zip" `
+  "https://dl.google.com/android/repository/commandlinetools-win-13114758_latest.zip"
+tar -xf "$env:TEMP\cmdline.zip" -C "$sdk\cmdline-tools"
+# SDK Manager menuntut folder bernama "latest"
+Move-Item "$sdk\cmdline-tools\cmdline-tools" "$sdk\cmdline-tools\latest"
 ```
 
-### 3b. Command-line saja (tanpa Android Studio)
-
-Unduh **Command-line tools** dari
-<https://developer.android.com/studio#command-line-tools-only>, ekstrak ke
-`%LOCALAPPDATA%\Android\Sdk\cmdline-tools\latest`, lalu:
+Terima lisensi lalu pasang paket yang dituntut repository ini:
 
 ```powershell
-sdkmanager --licenses
-sdkmanager "platform-tools" "platforms;android-37" "build-tools;37.0.0" `
-           "ndk;27.1.12297006" "cmake;3.22.1" "emulator" `
-           "system-images;android-36;google_apis_playstore;x86_64"
+$env:JAVA_HOME = "$env:LOCALAPPDATA\facelink-toolchain\jdk\jdk-17.0.20.1+1"
+& "$sdk\cmdline-tools\latest\bin\sdkmanager.bat" --licenses
+& "$sdk\cmdline-tools\latest\bin\sdkmanager.bat" `
+  "platform-tools" "platforms;android-37.0" "build-tools;37.0.0" `
+  "ndk;27.1.12297006" "cmake;3.31.6"
 ```
 
-`google_apis_playstore` penting: **Credential Manager menuntut Google Play
-Services**, yang hanya ada pada image bertanda *Play Store*, bukan `google_apis`
-atau AOSP. Tanpa itu `checkPlayServices()` gagal dengan
-`PLAY_SERVICES_NOT_AVAILABLE` dan aplikasi menampilkan
-"Google Play Services tidak tersedia".
+**Nama paket platform memakai revisi minor.** Yang benar-benar dipakai adalah
+`platforms;android-37.0`, bukan `platforms;android-37`; nama lama gagal dengan
+"package not available". Gradle tetap memakai `compileSdk 37`, sehingga
+`check:native` menerima folder `android-37.0` sebagai pemenuhan `android-37`.
 
-## 4. Emulator atau perangkat fisik
+**Emulator tidak dipasang.** Pemilik membatasi pemasangan dan target pengujian
+adalah HP fisik; image Play Store sendiri beberapa GB.
 
-**Emulator:**
+Setel variabel lingkungan pada lingkup **User**:
 
 ```powershell
-avdmanager create avd -n facelink -k "system-images;android-36;google_apis_playstore;x86_64" --device pixel_7
-emulator -avd facelink
+[Environment]::SetEnvironmentVariable('ANDROID_HOME', $sdk, 'User')
+$p = [Environment]::GetEnvironmentVariable("PATH", "User")
+[Environment]::SetEnvironmentVariable("PATH",
+  $p + ";" + $env:JAVA_HOME + "\bin;" + $sdk + "\platform-tools;" + $sdk + "\cmdline-tools\latest\bin", "User")
 ```
 
-**Perangkat fisik:** aktifkan *Opsi pengembang* → *USB debugging*, sambungkan,
-lalu `adb devices` harus menampilkan perangkat berstatus `device`.
+### 3b. Android Studio (alternatif)
 
+Pasang Android Studio, lalu **SDK Manager → SDK Platforms → Show Package
+Details**: centang **Android SDK Platform 37.0**. Pada **SDK Tools**:
+**Build-Tools 37.0.0**, **Command-line Tools (latest)**, **Platform-Tools**,
+**NDK (Side by side) 27.1.12297006**, dan **CMake 3.31.6**. Emulator tidak
+diperlukan untuk HP fisik.
+
+### 3c. Batas jalur 260 karakter (kendala nyata, wajib dibaca)
+
+Build pertama **gagal**:
+
+```
+ninja: error: mkdir(CMakeFiles/worklets.dir/C_/visual-studio-code/facelink-ai/
+apps/mobile/node_modules/react-native-worklets/Common/cpp/worklets/SharedItems/
+Serializable): No such file or directory
+```
+
+Sebabnya bukan kode project: `react-native-worklets` mengompilasi C++ di dalam
+`node_modules`, dan jalur objeknya mencapai **268 karakter**. CMake 3.22.1
+membawa **ninja 1.10**, yang gagal membuat folder pada jalur sepanjang itu
+walaupun `LongPathsEnabled=1` sudah aktif. Memperpendek jalur lewat `subst`
+atau junction **tidak menolong**: CMake menormalkan kembali ke jalur asli, dan
+`subst` juga mematahkan autolinking Expo (pencarian `package.json` berhenti di
+akar drive).
+
+**Perbaikan yang terbukti:** pasang **CMake 3.31.6** (membawa ninja 1.12.1) dan
+arahkan Gradle ke sana lewat `android/local.properties` (diabaikan Git):
+
+```
+sdk.dir=C:/Users/<anda>/AppData/Local/Android/Sdk
+cmake.dir=C:/Users/<anda>/AppData/Local/Android/Sdk/cmake/3.31.6
+```
+
+Pakai **garis miring maju**. Garis miring terbalik pada `cmake.dir` membuat
+Gradle gagal lebih awal dengan "The filename, directory name, or volume label
+syntax is incorrect". `check:native` memeriksa hal ini pada baris
+`ninja (jalur panjang)`.
+
+`npx expo prebuild` **menghapus** `local.properties`; buat ulang setiap kali
+prebuild dijalankan.
+## 4. Perangkat fisik (target pengujian)
+
+Emulator **tidak dipasang**: pemilik membatasi pemasangan dan target pengujian
+adalah HP fisik; image Play Store juga beberapa GB.
+
+**Perangkat fisik:**
+
+1. Aktifkan *Opsi pengembang* (ketuk *Nomor bentukan* 7 kali) → *USB debugging*.
+2. Sambungkan kabel USB data, lalu terima dialog otorisasi RSA di HP.
+3. Verifikasi:
+
+```powershell
+adb devices -l      # harus berstatus "device", bukan "unauthorized"
+adb shell getprop ro.product.model
+```
+
+Bila status `unauthorized`: cabut-sambung kabel dan pilih *File transfer*, atau
+hapus otorisasi lama di *Opsi pengembang → Revoke USB debugging authorizations*.
+
+**Koneksi ke backend lokal** memakai `adb reverse` sehingga backend tetap
+mendengarkan `127.0.0.1` dan tidak terbuka ke jaringan:
+
+```powershell
+adb reverse tcp:8080 tcp:8080
+```
+
+`adb reverse` hilang setiap kali kabel dicabut atau server ADB dimulai ulang.
+
+**Emulator (bila kelak dibutuhkan):** pasang
+`"emulator" "system-images;android-36;google_apis_playstore;x86_64"`, lalu
+`avdmanager create avd -n facelink -k "system-images;android-36;google_apis_playstore;x86_64"`.
+Image harus bertanda *Play Store* agar Credential Manager tersedia;
+`google_apis` atau AOSP tidak cukup.
 ## 5. Google Cloud Console — **tindakan manual pemilik**
 
 Bagian ini tidak dapat dikerjakan agent: ia menuntut akun Google pemilik dan
@@ -167,23 +244,42 @@ mungkin berhasil**, sekalipun build berhasil.
    - **Android** → isi *Package name* `ai.facelink.mobile` dan *SHA-1* keystore
      debug.
 
-Ambil SHA-1 keystore debug **setelah JDK terpasang** (pilih salah satu):
+**Nilai nyata mesin ini (20 Oktober 2026, diverifikasi dengan
+`apksigner verify --print-certs` atas APK hasil build):**
+
+| Butir | Nilai |
+|---|---|
+| Application ID | `ai.facelink.mobile` (`android/app/build.gradle` → `applicationId`) |
+| SHA-1 sertifikat debug | `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` |
+| SHA-256 sertifikat debug | `FA:C6:17:45:DC:09:03:78:6F:B9:ED:E6:2A:96:2B:39:9F:73:48:F0:BB:6F:89:9B:83:32:66:75:91:03:3B:9C` |
+
+Daftarkan **SHA-1** itu (bukan SHA-256) pada OAuth client Android. Nilai ini
+berasal dari `android/app/debug.keystore` yang dihasilkan prebuild dan
+**diabaikan Git**. Prebuild ulang pada mesin ini menghasilkan SHA-1 yang sama;
+mesin lain akan berbeda.
+
+Ambil ulang SHA-1 bila perlu (pilih salah satu):
 
 ```powershell
 # A. keytool langsung
 keytool -list -v -keystore apps/mobile/android/app/debug.keystore `
         -alias androiddebugkey -storepass android -keypass android |
   Select-String "SHA1:"
-
-# B. lewat Gradle (wajib setelah build pertama berhasil)
+# B. lewat Gradle
 cd apps/mobile/android; .\gradlew signingReport
+# C. dari APK yang sudah dibangun
+apksigner verify --print-certs app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Nilai SHA-1 keystore bawaan berbeda di setiap mesin dan **tidak boleh
-di-hardcode** di repository. Setelah SHA-1 didaftarkan, Google memerlukan waktu
-beberapa menit sampai client ID Android aktif; kegagalan dengan kode
-`DEVELOPER_ERROR` biasanya berarti SHA-1/package belum cocok.
+Setelah SHA-1 didaftarkan, Google memerlukan beberapa menit sampai client ID
+Android aktif. Kegagalan dengan kode `DEVELOPER_ERROR` biasanya berarti
+SHA-1/package belum cocok.
 
+**Sinkronisasi audience.** Client ID **Web** yang sama dipakai di dua tempat:
+`EXPO_PUBLIC_FACELINK_GOOGLE_WEB_CLIENT_ID` (nilai `aud` pada ID token) dan
+`FACELINK_GOOGLE_CLIENT_IDS` di backend. Client ID **Android** hanya dipakai
+Google untuk memverifikasi paket + SHA-1; ia **bukan** audience backend dan
+**tidak** ditanam di aplikasi.
 ## 6. Berkas `.env` aplikasi
 
 `apps/mobile/.env` (diabaikan Git):
@@ -206,22 +302,41 @@ go run ./cmd/server
 ```powershell
 cd apps/mobile
 npx expo prebuild --platform android   # folder android/ (diabaikan Git)
+# Prebuild menghapus local.properties; buat ulang (garis miring MAJU):
+$base = $env:LOCALAPPDATA.Replace([char]92, "/")
+"sdk.dir=$base/Android/Sdk"                | Set-Content android/local.properties
+"cmake.dir=$base/Android/Sdk/cmake/3.31.6" | Add-Content android/local.properties
+npm run check:native                   # semua prasyarat harus PASSED
 npx expo run:android                   # build debug + pasang ke perangkat
 adb reverse tcp:8080 tcp:8080          # perangkat → backend laptop
-npm start                              # Metro; aplikasi dev build menyambung
 ```
 
-> **Catatan `npm run android`:** skrip itu masih berisi `expo start --android`
-> (Expo Go). **Expo Go tidak dapat dipakai** karena `expo-secure-store` dan
-> `react-native-nitro-google-signin` adalah modul native. Gunakan
-> `npx expo run:android`. Mengubah skrip itu menjadi `expo run:android` adalah
-> keputusan pemilik, bukan perubahan yang dilakukan otomatis oleh dokumen ini.
+**Skrip npm:** `npm run android` kini menunjuk `expo run:android` (dev build),
+bukan Expo Go. Tersedia juga `npm run android:device` (memilih perangkat) dan
+`npm run android:go` (jalur Expo Go lama, **tidak** dapat dipakai untuk login
+Google karena `expo-secure-store` dan `react-native-nitro-google-signin` adalah
+modul native).
 
-Build pertama mengunduh Gradle 9.4.1 + dependency Maven dan mengompilasi C++
-Nitro untuk empat ABI; perkirakan 10–20 menit dan beberapa GB disk. Untuk
-mempercepat, batasi ke satu ABI: `.\gradlew assembleDebug -PreactNativeArchitectures=x86_64`.
+**Mempersingkat build** dengan satu ABI:
 
+```powershell
+cd android
+.\gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a --console=plain
+```
+
+Hasil: `android/app/build/outputs/apk/debug/app-debug.apk`.
+
+**Bukti build pada mesin ini (20 Oktober 2026):** `BUILD SUCCESSFUL`; APK
+`ai.facelink.mobile` versionCode 1, compileSdk 37, targetSdk 36, minSdk 24,
+tersigning sertifikat debug dengan SHA-1 yang cocok dengan §5. Bundel
+JavaScript Android juga diverifikasi terpisah dengan
+`npx expo export --platform android` (3,4 MB, exit 0). **APK belum dipasang ke
+HP mana pun** — `adb devices` kosong.
 ## 8. Urutan pengujian setelah build terpasang
+
+**Status seluruh skenario: BLOCKED** — belum ada HP terhubung (`adb devices`
+kosong) dan kredensial OAuth belum dibuat. Tidak satu pun butir di bawah pernah
+dijalankan.
 
 Semua langkah menuntut akun uji terdaftar (lihat bagian 9).
 
@@ -273,3 +388,9 @@ Backend tidak memiliki pendaftaran mandiri. Urutannya:
   §"Development build" untuk dasar teknisnya dari sumber paket 2.3.0).
 - Tidak ada target iOS. `iosUrlScheme` belum dikonfigurasi dan belum diuji.
 - Tidak ada kredensial, keystore rilis, atau `google-services.json` yang dibuat.
+- `edgeToEdgeEnabled` **dihapus** dari `app.json` pada FL-ANDROID01B: Expo SDK 54+
+  menyatakan properti itu tidak lagi tersedia (Android 16 memaksa edge-to-edge),
+  dan prebuild hanya mencetak peringatan. Verifikasi sebelum/sesudah menunjukkan
+  `AndroidManifest.xml` dan `res/values/styles.xml` **byte-identik**, sehingga
+  penghapusan tidak mengubah tata letak; safe area tetap ditangani
+  `SafeAreaProvider` dan `Screen` (`edges={["top","bottom"]}`).

@@ -28,7 +28,6 @@
     },
     "android": {
       "package": "ai.facelink.mobile",
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
         "backgroundColor": "#000000",

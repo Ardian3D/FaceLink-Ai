@@ -60,8 +60,15 @@ npx expo prebuild        # menghasilkan folder android/
 npx expo run:android     # build + pasang ke perangkat/emulator
 ```
 
-`npm run android` masih menjalankan `expo start --android` (Expo Go) dan **tidak
-dapat** dipakai untuk login Google; gunakan `npx expo run:android`.
+`npm run android` menjalankan `expo run:android` (dev build). `npm run
+android:device` memilih perangkat lebih dahulu; `npm run android:go` adalah
+jalur Expo Go lama yang **tidak** dapat dipakai untuk login Google karena
+`expo-secure-store` dan `react-native-nitro-google-signin` adalah modul native.
+
+**Prasyarat khusus Windows:** `react-native-worklets` mengompilasi C++ pada
+jalur yang dapat melewati 260 karakter. Pasang **CMake 3.31.6** dan setel
+`cmake.dir` di `android/local.properties` (diabaikan Git, dihapus oleh
+`expo prebuild`) — rinciannya di `docs/ANDROID_SETUP.md` §3c.
 
 `adb reverse tcp:8080 tcp:8080` harus dipasang agar perangkat menjangkau backend
 loopback di laptop (lihat bagian konektivitas).
