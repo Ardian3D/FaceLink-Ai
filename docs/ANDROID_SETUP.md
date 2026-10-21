@@ -802,3 +802,117 @@ Folder `emulator/`, `system-images/`, dan AVD **belum ada** di mesin ini.
 
 **Aturan berhenti yang berlaku:** bila setelah optimasi RAM tersedia masih jauh
 di bawah target, rencana instalasi dihentikan dan dilaporkan — bukan dipaksakan.
+
+## 15. FL-ANDROID02C — Uji FaceLink AI di emulator (22 Oktober 2026)
+
+Emulator dipasang **manual oleh pemilik** lewat Android Studio. Agent tidak
+mengubah Windows Hypervisor Platform, tidak melakukan restart, dan tidak
+menghentikan container. Seluruh angka di bawah adalah hasil nyata dari sesi ini.
+
+### 15a. Perangkat dan kondisi host
+
+| Butir | Nilai |
+|---|---|
+| Perangkat | `emulator-5554`, model `sdk_gphone64_x86_64` |
+| Android | **16 / API 36**, x86_64, **Google Play** (`google_apis_playstore`) |
+| AVD | `Medium_Phone`, RAM tamu **2048 MB**, **4 core**, heap 228 MB, `hw.gpu.enabled=yes` |
+| Layar | 1080×2400 @ 420 dpi |
+| RAM host sebelum build | **0,16 GB** tersedia, commit 47,4/61,2 GB |
+| RAM host setelah boot + Metro | **1,26 GB** tersedia, commit 52,6/61,2 GB |
+| Proses emulator (`qemu-system-x86_64`) | **1.084 MB** working set |
+
+RAM host tidak pernah dipulihkan ke 5–6 GB seperti target §14, tetapi emulator
+tetap stabil. Build dijalankan **serial** (`--max-workers=2`) agar tidak
+menambah tekanan memori.
+
+### 15b. Hasil per butir
+
+| # | Pemeriksaan | Hasil | Bukti |
+|---|---|---|---|
+| E1 | Emulator terdeteksi ADB | **PASSED** | `adb devices -l` → `emulator-5554 device` |
+| E2 | Branch dan working tree bersih | **PASSED** | `feat/fl-ui02-google-auth-android`, `git status` kosong |
+| E3 | Build APK debug x86_64 | **PASSED** | `assembleDebug -PreactNativeArchitectures=x86_64` → `BUILD SUCCESSFUL in 9m 56s`, APK **99.792.021 B**, hanya `lib/x86_64/` |
+| E4 | Instalasi tanpa menghapus data | **PASSED** | `adb install -r` → `Success`; tidak ada `uninstall`/`clear` |
+| E5 | ABI yang berjalan | **PASSED** | `dumpsys package` → `primaryCpuAbi=x86_64` |
+| E6 | Metro terjangkau dari emulator | **PASSED** (setelah perbaikan, §15c) | bundel `Android Bundled ... (1616 modules)` di log Metro |
+| E7 | Tidak ada "Problem loading the project" | **PASSED** | layar masuk tampil; tidak ada `DevLauncherErrorActivity` |
+| E8 | Login Screen lengkap | **PASSED** | dump UI: `FaceLink`+`Ai`, tombol `Continue with Google` (`clickable="true"`), teks keterangan, dua label footer |
+| E9 | Background video aktif | **PASSED** | media3 `state=PLAYING`, posisi 2941→5960 ms, buffered 8000 ms; dua tangkapan berjarak 3 dtk berbeda (PSNR 24,1 dB) |
+| E10 | Safe area | **PASSED** | status bar 0–63, nav bar 2337–2400; isi mulai y=1050 dan berakhir y=2274 |
+| E11 | Native module terinisialisasi | **PASSED** | `NitroGoogleSignin C++ library` loaded; `HybridObjectRegistry` mendaftarkan `GoogleSignInButton`; `libexpo-modules-core.so` dan `libexpo-modules-jsi.so` dimuat dari `lib/x86_64/` |
+| E12 | Tanpa crash/ANR | **PASSED** | `FATAL EXCEPTION`/ANR untuk `ai.facelink.mobile` = **0**; proses bertahan setelah `force-stop` + buka ulang |
+| E13 | Tombol masuk menolak tanpa OAuth | **PASSED** | tekan tombol → "Aplikasi belum dikonfigurasi"; **tidak ada** permintaan jaringan ke backend |
+| E14 | Route lintas-peran tanpa sesi | **PASSED** | `facelinkai:///admin` tanpa sesi → tetap layar masuk (tidak ada dashboard) |
+| E15 | Unit test, typecheck, lint | **PASSED** | Vitest **80/80**, `tsc --noEmit` exit 0, `expo lint` exit 0 |
+| E16 | Google Authentication nyata | **BLOCKED** | Web/Android OAuth client belum ada |
+
+### 15c. Dua masalah nyata yang ditemukan dan akar penyebabnya
+
+**1. Video gagal dengan `Source error` — bukan cacat UI.**
+
+Gejala: layar masuk tampil, tetapi panel tengah gelap; logcat berisi
+`ExoPlaybackException: Source error` berulang, dengan rantai penyebab
+`java.net.ConnectException: Failed to connect to /127.0.0.1:8082`.
+
+Akar masalah: **`adb reverse` hilang** ketika ADB melakukan reconnect
+(`transport_id` berubah 3→4→6). Setelah tunnel mati, aset video yang disajikan
+Metro tidak dapat diambil.
+
+Perbaikan yang terbukti: arahkan aplikasi ke alias host emulator
+**`10.0.2.2`** alih-alih `127.0.0.1`:
+
+```bash
+adb shell am start -a android.intent.action.VIEW \
+  -d "exp+facelink-ai://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8082" \
+  ai.facelink.mobile
+```
+
+Setelah itu media3 melaporkan `state=PLAYING` dan tidak ada lagi
+`ExoPlaybackException` pada cold start berikutnya. `10.0.2.2` juga sudah
+diizinkan oleh `src/features/api/config.ts` (alias host emulator), sehingga
+aturan keamanan D-035 tidak dilanggar.
+
+**2. Metro hanya mengikat IPv6 bila dimulai dengan `--localhost`.**
+
+`npx expo start --localhost` membuat listener hanya pada `[::1]:8082`; `curl`
+ke `127.0.0.1:8082` menjawab **200 dengan badan 0 byte** sehingga tampak
+"berhasil" padahal permintaan tidak pernah sampai ke Metro. Tanpa `--localhost`,
+Metro mengikat `0.0.0.0` dan `[::]`, dan manifes berukuran 2.426 B.
+
+### 15d. Peringatan yang bukan kegagalan
+
+| Pesan | Arti |
+|---|---|
+| `ExpoVideo: Current activity does not support picture-in-picture` | aplikasi tidak memakai PiP; tidak memengaruhi pemutaran |
+| `ViewManagerPropertyUpdater: Could not find generated setter ...` | peringatan Fabric untuk view manager pihak ketiga; tidak menghalangi rendering |
+| `uiautomator: could not get idle state` / `null root node` | dump UI gagal saat video beranimasi; diulang setelah jeda dan berhasil |
+| `MediaPlayerWrapper: tried to update with no new data` | siklus media session saat video berganti klip |
+
+### 15e. Cara menjalankan ulang (urutan yang terbukti)
+
+```powershell
+# 1. Metro (JANGAN pakai --localhost; CI harus dihapus)
+cd apps/mobile
+Remove-Item Env:CI -ErrorAction SilentlyContinue
+npx expo start --dev-client --port 8082
+
+# 2. arahkan emulator ke alias host, bukan 127.0.0.1
+adb shell am force-stop ai.facelink.mobile
+adb shell am start -a android.intent.action.VIEW `
+  -d "exp+facelink-ai://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8082" `
+  ai.facelink.mobile
+
+# 3. backend (opsional; hanya bila menguji alur selain login)
+adb reverse tcp:8080 tcp:8080
+```
+
+`adb reverse` untuk port 8082 **tidak diperlukan** bila memakai `10.0.2.2`,
+sehingga emulator tidak terpengaruh saat ADB reconnect.
+
+### 15f. Yang masih BLOCKED
+
+- **Google Sign-In end-to-end**: Web + Android OAuth client belum dibuat (§5).
+  Tombol masuk sengaja berhenti di "Aplikasi belum dikonfigurasi" tanpa memanggil
+  backend.
+- **Keystore perangkat**: belum teruji karena login belum pernah berhasil.
+- **Skenario A1–A12** (§8): seluruhnya menuntut kredensial OAuth.

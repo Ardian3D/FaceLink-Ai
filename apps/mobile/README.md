@@ -93,10 +93,7 @@ Build iOS menuntut tambahan yang belum dikonfigurasi — `iosUrlScheme` berisi
 ID token tidak dapat diterima dan `masukDenganGoogle` akan gagal, jadi jangan
 menganggap iOS sudah siap sebelum plugin itu ditambahkan dan diuji.
 
-**Status pemasangan: PASSED pada HP fisik (21 Oktober 2026).** APK debug
-arm64-v8a terpasang di TECNO LJ7 (Android 16) dan aplikasi terbuka dengan layar
-masuk yang dirender native — bukti dan batasannya di
-`docs/ANDROID_SETUP.md` §12. **Google Sign-In tetap BLOCKED**: Web OAuth client
+**Status: PASSED pada HP fisik dan emulator.** APK debug arm64-v8a berjalan di TECNO LJ7 (Android 16, §12); APK debug **x86_64** berjalan di emulator Android 16 API 36 Google Play (§15) dengan login screen, latar video, safe area, dan modul native terverifikasi. **Google Sign-In tetap BLOCKED**: Web OAuth client
 ID belum ada, sehingga tombol masuk berhenti dengan pesan *"Aplikasi belum
 dikonfigurasi"*. Pemeriksaan config plugin di atas dibaca dari kode sumber paket
 2.3.0, bukan dari hasil login.
@@ -118,6 +115,30 @@ Dua jebakan nyata saat menjalankan dev server di laptop ini:
 Bila aplikasi menampilkan **"There was a problem loading the project."**,
 bundel tidak pernah sampai ke perangkat: periksa port Metro yang benar dan
 `adb reverse` untuk port itu, bukan konfigurasi OAuth.
+
+### Emulator: pakai `10.0.2.2`, dan jangan pakai `--localhost`
+
+Dua jebakan tambahan yang terbukti pada emulator (FL-ANDROID02C):
+
+- **`--localhost` membuat Metro hanya mendengarkan IPv6.** Listener menjadi
+  `[::1]:8082` saja; permintaan ke `127.0.0.1:8082` dijawab `200` dengan badan
+  **0 byte**. Jalankan tanpa `--localhost` supaya Metro mengikat `0.0.0.0`.
+- **`adb reverse` hilang saat ADB reconnect.** Jika tunnel mati, aset video
+  gagal diambil dan logcat menampilkan `ExoPlaybackException: Source error`
+  dengan `Failed to connect to /127.0.0.1:8082` — bukan cacat UI. Untuk emulator
+  lebih baik **tidak memakai `adb reverse` sama sekali** dan mengarahkan bundel
+  ke alias host:
+
+```bash
+adb shell am force-stop ai.facelink.mobile
+adb shell am start -a android.intent.action.VIEW \
+  -d "exp+facelink-ai://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8082" \
+  ai.facelink.mobile
+```
+
+`10.0.2.2` sudah diizinkan `src/features/api/config.ts` sebagai alias host
+emulator, jadi aturan D-035 tetap dipatuhi. Rincian hasil uji emulator ada di
+`docs/ANDROID_SETUP.md` §15.
 
 **Pratinjau web tetap berguna** untuk memeriksa tata letak: `npm run web`. Di
 sana tombol masuk berhenti dengan pesan *"Masuk Google tidak tersedia di sini"* —
