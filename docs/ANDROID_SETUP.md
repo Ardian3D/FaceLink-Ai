@@ -916,3 +916,157 @@ sehingga emulator tidak terpengaruh saat ADB reconnect.
   backend.
 - **Keystore perangkat**: belum teruji karena login belum pernah berhasil.
 - **Skenario A1–A12** (§8): seluruhnya menuntut kredensial OAuth.
+
+## 16. FL-ANDROID02D — Audit kesiapan login nyata (22 Oktober 2026)
+
+Tahap ini **audit kesiapan + verifikasi prasyarat**, bukan pengujian login
+berhasil. Login nyata **BLOCKED** oleh satu sebab yang terukur: emulator tidak
+memiliki akun Google. Tidak ada perubahan kode, UI, atau konfigurasi Windows.
+
+### 16a. Prasyarat konfigurasi
+
+| # | Butir | Hasil | Bukti |
+|---|---|---|---|
+| P1 | `.env` terbaca Expo | **PASSED** | Metro mencetak `env: load .env`; bundel 7.347.239 B memuat client ID dan `http://10.0.2.2:8080` |
+| P2 | `.env` tidak ter-commit | **PASSED** | `git check-ignore -v` → `.gitignore:18:*.env`; `git ls-files apps/mobile/.env` → tidak ada |
+| P3 | `.env.example` tetap generik | **PASSED** | nilai client ID **kosong**; tidak memuat ID nyata; URL tetap contoh |
+| P4 | Client ID mobile = backend | **PASSED** | backend mencetak `google_oauth: "configured (1 client id)"` dan tidak lagi mencetak WARN "belum dikonfigurasi" |
+| P5 | Package Android | **PASSED** | `applicationId 'ai.facelink.mobile'` = yang didaftarkan di OAuth client |
+| P6 | SHA-1 APK = yang terdaftar | **PASSED** | `apksigner` → `5E8F16062EA3CD2C4A0D547876BAA6F38CABF625`, identik dengan catatan §5 |
+| P7 | ABI APK = emulator | **PASSED** | APK hanya `lib/x86_64/`; perangkat x86_64 |
+| P8 | Play Services tersedia | **PASSED** | `com.google.android.gms` 26.40.32 dan `com.android.vending` terpasang |
+
+### 16b. Audit transport (D-035)
+
+| Pemeriksaan | Hasil |
+|---|---|
+| Bypass TLS di aplikasi | **tidak ada** — `InsecureSkipVerify`, `rejectUnauthorized:false`, `NODE_TLS_REJECT_UNAUTHORIZED` = 0 kemunculan |
+| Bypass TLS di backend | **tidak ada** — 0 kemunculan `InsecureSkipVerify` |
+| Pemakaian `http://` | **hanya** untuk `127.0.0.1`, `localhost`, `::1`, dan `10.0.2.2` (daftar putih `config.ts`); `https:` selalu diterima; alamat LAN dengan `http:` **ditolak** |
+| Backend mendengarkan di luar loopback | **ditolak** — `FACELINK_ADDR=0.0.0.0:8080` → `-check-config` exit 1 dengan alasan "di luar loopback; MVP hanya boleh mendengarkan 127.0.0.1 atau localhost" |
+| Client ID tidak sah | **ditolak** — `FACELINK_GOOGLE_CLIENT_IDS=bukan-client-id` → exit 1 "bukan client ID Google yang dikenal" |
+| Token/cookie di log | **bersih** — 0 kemunculan JWT/`id_token`/`access_token`/`refresh_token` di logcat; backend tidak mencatat body maupun header otorisasi |
+| Token tersimpan | `expo-secure-store` (Keystore), belum teruji karena login belum pernah berhasil |
+
+**Kesimpulan transport:** jalur emulator→backend memakai loopback host lewat
+alias `10.0.2.2`, sehingga token tidak pernah melintasi jaringan fisik. Tidak ada
+bypass keamanan yang dipakai.
+
+### 16c. Bukti bahwa aplikasi benar-benar menjangkau backend
+
+`POST /api/v1/auth/nonce` dari aplikasi di emulator **berhasil**:
+
+```
+{"method":"POST","path":"/api/v1/auth/nonce","status":200,"duration_ms":2}
+```
+
+Permintaan ini terjadi pada penekanan tombol masuk di emulator, dengan
+`EXPO_PUBLIC_FACELINK_API_BASE_URL=http://10.0.2.2:8080` dan **tanpa**
+`adb reverse tcp:8080`. Artinya jalur aplikasi→backend sudah berfungsi; yang
+gagal adalah langkah Google berikutnya.
+
+### 16d. BLOCKED: emulator tidak memiliki akun Google
+
+```
+adb shell dumpsys account  →  Accounts: 0
+```
+
+Rantai kejadian yang terbukti:
+
+1. Aplikasi meminta nonce → **200** (backend sehat).
+2. `CredentialManager` memulai `getCredential` untuk `GoogleIdService`.
+3. Status menjadi **`CANCELED`, source `REMOTE_PROVIDER`**, lalu
+   `GetCredentialResponse error returned from framework`.
+4. `signIn()` → tanpa hasil → `createAccount()` → juga tanpa akun.
+5. Aplikasi menampilkan galat.
+
+**Solusi paling sederhana dan aman:** tambahkan akun Google penguji ke emulator
+lewat UI Android, bukan lewat perintah atau bypass:
+
+1. Buka **Settings → Passwords & accounts → Add account → Google**.
+2. Masuk dengan akun penguji yang sudah didaftarkan sebagai *Test users*.
+3. Selesaikan verifikasi 2 langkah bila diminta.
+4. Pastikan `adb shell dumpsys account | grep -c "Account {"` ≥ 1.
+5. Jalankan ulang aplikasi, tekan **Continue with Google**.
+
+Jangan menambahkan akun lewat `adb`, `pm`, atau injeksi database: itu melewati
+persetujuan Google dan tidak sah sebagai bukti login.
+
+### 16e. Temuan nyata: pesan galat menyesatkan
+
+Galat yang tampil:
+
+> **Masuk gagal** — "Backend menjawab dengan keadaan yang belum dikenal aplikasi
+> ini (google_tanpa_id_token)."
+
+Pesan ini **salah menyebut pihak yang gagal**. Kegagalan terjadi **lokal** di
+Credential Manager (tidak ada akun), bukan di backend — backend tidak menerima
+permintaan `/auth/google` sama sekali pada percobaan itu.
+
+Sebabnya: `signIn()` dan `createAccount()` sama-sama tidak menghasilkan
+`success` maupun `cancelled` yang dikenali, sehingga
+`apps/mobile/src/features/auth/googleSignIn.ts:171` mengembalikan
+`{ kind: "unknown", message: "google_tanpa_id_token" }`, lalu
+`apps/mobile/app/index.tsx:259` menampilkan kalimat "Backend menjawab…".
+
+**Rekomendasi perbaikan minimal (belum diterapkan, menunggu persetujuan karena
+mengubah teks yang dilihat pengguna):** petakan kasus "tidak ada akun di
+perangkat" ke keadaan tersendiri dengan teks "Tidak ada akun Google di perangkat
+ini", dan ubah kalimat `kind: "unknown"` agar tidak menyebut backend kecuali
+galat memang berasal dari respons HTTP. Ini perbaikan pesan, bukan desain ulang.
+
+### 16f. Temuan operasional: ANR saat memuat bundel
+
+Saat host hanya menyisakan **0,70 GB** RAM, Android menampilkan "FaceLink Ai
+isn't responding" dengan alasan `failed to complete startup`. Setelah memilih
+**Wait**, aplikasi tetap berjalan normal dan layar masuk tampil. Penyebabnya
+tekanan memori host saat Metro menyajikan bundel dev 7,3 MB, bukan crash
+aplikasi (`ReactNativeJS` tanpa galat; 0 `FATAL EXCEPTION`).
+
+**Tindakan:** tutup Chrome (61–63 proses) sebelum sesi uji panjang. Target
+≥ 3 GB tersedia.
+
+### 16g. Status skenario A1–A12
+
+| Skenario | Status | Penghalang |
+|---|---|---|
+| A1 masuk berhasil | **BLOCKED** | belum ada akun Google di emulator |
+| A2 role dosen | **BLOCKED** | butuh A1 + akun dosen terundang |
+| A3 role mahasiswa | **BLOCKED** | butuh A1 + akun mahasiswa terundang |
+| A4 akun belum terdaftar | **BLOCKED** | butuh akun Google yang tidak diundang |
+| A5 batal | **BLOCKED** | butuh lembar akun tampil (ada akun) |
+| A6 SecureStore | **BLOCKED** | butuh login berhasil |
+| A7 pemulihan sesi | **BLOCKED** | butuh sesi tersimpan |
+| A8 penyegaran | **BLOCKED** | butuh sesi tersimpan |
+| A9 logout | **BLOCKED** | butuh login berhasil |
+| A10 cabut akses | **BLOCKED** | butuh A1 + admin |
+| A11 routing lintas-role | **PASSED (parsial)** | tanpa sesi, `facelinkai:///admin` tetap di layar masuk (§15 butir E14); versi "dengan sesi mahasiswa" butuh login |
+| A12 tidak ada demo | **PASSED** | lembar pengaturan/akun tidak menampilkan tombol ganti role; hanya `Continue with Google` |
+
+**Bootstrap Admin: BELUM dijalankan.** `SELECT count(*) FROM users` → **0 baris**.
+Perintahnya butuh email pemilik:
+
+```powershell
+cd backend
+.\facelink-server.exe -bootstrap-admin -email "<alamat-google-admin>"
+```
+
+Perintah ini **tidak dijalankan** karena menulis data akun ke database dan
+menuntut alamat email nyata pemilik. Tanpa admin, akun dosen/mahasiswa tidak
+dapat diundang (`POST /api/v1/users`), sehingga A2, A3, dan A10 tetap tertutup
+meskipun akun Google sudah ditambahkan ke emulator.
+
+### 16h. Urutan gate berikutnya
+
+| Gate | Isi | Status |
+|---|---|---|
+| G1 | tambahkan akun Google penguji ke emulator (UI Android) | **menunggu pemilik** |
+| G2 | bootstrap admin dengan `-email` nyata | **menunggu pemilik** |
+| G3 | A1: login admin pertama → akun `active` | terkunci G1+G2 |
+| G4 | undang `dosen` + `mahasiswa`, jalankan A2–A12 | terkunci G3 |
+| G5 | A4 dengan akun yang tidak diundang | terkunci G1 |
+
+**Yang sudah siap dan tidak perlu diulang:** `.env`, client ID sinkron,
+package + SHA-1 cocok, APK x86_64 terpasang, Metro stabil di `:8082`,
+transport aman, backend menolak bind non-loopback dan client ID palsu, serta
+aplikasi terbukti menjangkau backend (`nonce` 200).
