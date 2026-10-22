@@ -20,7 +20,8 @@
       ],
       "expo-video",
       "expo-font",
-      "expo-secure-store"
+      "expo-secure-store",
+      "./plugins/with-dev-tls"
     ],
     "ios": {
       "supportsTablet": true,

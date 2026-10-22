@@ -207,8 +207,22 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, db *data
 
 	serveErr := make(chan error, 1)
 	go func() {
-		logger.Info("server mendengarkan", "addr", listener.Addr().String())
-		if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		scheme := "http"
+		if cfg.TLSCertPath != "" {
+			scheme = "https"
+		}
+		logger.Info("server mendengarkan", "addr", listener.Addr().String(), "skema", scheme)
+		// ServeTLS membungkus listener dengan TLS dan memvalidasi sertifikat
+		// serta kuncinya sebelum menerima koneksi. Tidak ada jalur yang
+		// mematikan verifikasi sertifikat klien: server tidak meminta
+		// sertifikat klien sama sekali.
+		var err error
+		if cfg.TLSCertPath != "" {
+			err = srv.ServeTLS(listener, cfg.TLSCertPath, cfg.TLSKeyPath)
+		} else {
+			err = srv.Serve(listener)
+		}
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serveErr <- err
 			return
 		}

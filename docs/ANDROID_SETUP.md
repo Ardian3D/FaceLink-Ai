@@ -395,8 +395,10 @@ pengoperasian aplikasi dibuktikan pada 21 Oktober 2026** (FL-ANDROID01C, §12);
 APK yang berjalan di perangkat terbukti identik dengan artefak ini.
 ## 8. Urutan pengujian setelah build terpasang
 
-**Status skenario A1–A12: BLOCKED** — kredensial OAuth belum dibuat, sehingga
-tidak satu pun butir di bawah pernah dijalankan. **Yang SUDAH diuji pada HP
+**Status skenario A1–A12: sebagian PASSED.** Kredensial OAuth kini tersedia dan
+login nyata sudah diuji; status per butir ada di **§17c** (A1, A6, A7, A9, A12
+lulus; A11 parsial; A8 parsial; A5 belum terbukti; A2/A3/A4/A10 menunggu akun
+tambahan). Butir di bawah tetap menjadi rujukan langkahnya. **Yang SUDAH diuji pada HP
 fisik tanpa kredensial** adalah lapisan perangkat: pemasangan, splash, layar
 masuk, latar video, safe area, dan konektivitas `adb reverse` — hasil nyata di
 **§12**.
@@ -1070,3 +1072,142 @@ meskipun akun Google sudah ditambahkan ke emulator.
 package + SHA-1 cocok, APK x86_64 terpasang, Metro stabil di `:8082`,
 transport aman, backend menolak bind non-loopback dan client ID palsu, serta
 aplikasi terbukti menjangkau backend (`nonce` 200).
+
+## 17. FL-ANDROID02E — Login nyata di atas HTTPS lokal (22 Oktober 2026)
+
+Tahap ini **mengubah kode**: HTTPS loopback di backend, CA development khusus
+build debug, dan perbaikan pesan galat Google. Login Google nyata berhasil
+diuji di emulator untuk pertama kalinya.
+
+### 17a. Transport HTTPS tervalidasi
+
+| # | Pemeriksaan | Hasil | Bukti |
+|---|---|---|---|
+| T1 | Backend dapat menyajikan HTTPS | **PASSED** | `FACELINK_TLS_CERT` + `FACELINK_TLS_KEY` → log `"tls":"on"`, `"skema":"https"` |
+| T2 | Sertifikat tervalidasi terhadap CA | **PASSED** | `openssl s_client -CAfile dev-ca.pem` → **`Verify return code: 0 (ok)`** |
+| T3 | Tanpa CA, handshake ditolak | **PASSED** | `curl` tanpa `--cacert` → exit **60** (sertifikat tidak tepercaya) |
+| T4 | Backend tetap loopback-only | **PASSED** | `validateAddr` tidak diubah; `FACELINK_ADDR=0.0.0.0:8080` tetap **exit 1** |
+| T5 | Tidak ada bypass TLS | **PASSED** | 0 kemunculan `InsecureSkipVerify`/`rejectUnauthorized:false` di TS maupun Go |
+| T6 | CA hanya pada build debug | **PASSED** | `res/raw/dev_ca.pem` + `network_security_config.xml` hanya di `src/debug/`; manifest utama tanpa `networkSecurityConfig` |
+| T7 | Peer certificate cocok dengan kunci | **PASSED** | MD5 public key sertifikat == kunci privat (`838d613b…`) |
+| T8 | SAN mencakup emulator | **PASSED** | `IP:127.0.0.1`, `IP:10.0.2.2`, `DNS:localhost` |
+| T9 | Kunci privat tidak masuk Git | **PASSED** | `.gitignore:22:*.pem` untuk `dev-ca-key.pem`, `server-key.pem`, `server.pem` |
+| T10 | Signing identity APK tidak berubah | **PASSED** | `apksigner` → `5E:8F:16:…:F6:25`, identik setelah prebuild ulang |
+
+**Keputusan desain:** CA lokal + `network_security_config` dipilih alih-alih
+reverse proxy karena tidak menambah proses yang harus diamankan. Rinciannya
+dicatat sebagai jawaban Q-25 di `docs/DECISIONS.md`.
+
+**Kejujuran batas:** sertifikat dev berlaku 397 hari tanpa rotasi otomatis;
+jalur LAN untuk HP nyata **tidak** diuji dan tidak diklaim berfungsi; build
+release memakai kebijakan bawaan Android (tanpa CA dev) dan belum diuji
+terhadap backend HTTPS.
+
+### 17b. Perbaikan pesan galat yang menyesatkan
+
+Sebelumnya kegagalan lokal Credential Manager dilaporkan sebagai
+*"Backend menjawab dengan keadaan yang belum dikenal…"* padahal backend tidak
+pernah menerima permintaan. Sekarang:
+
+- `googleSignIn.ts` mengembalikan `kind: "googleDevice"` ketika Credential
+  Manager tidak menghasilkan kredensial, dan `"unknown"` hanya untuk bentuk
+  respons yang benar-benar tak terduga.
+- `index.tsx` menampilkan **"Tidak ada akun Google"** dengan petunjuk menambah
+  akun lewat Pengaturan Android.
+- Kalimat `kind: "unknown"` diubah menjadi *"Aplikasi menerima keadaan yang
+  belum dikenal"* — tidak lagi menyalahkan backend.
+
+**Terverifikasi di perangkat:** pesan baru muncul saat akun belum siap, dan
+tidak muncul lagi setelah akun aktif.
+
+### 17c. Hasil A1–A12
+
+| # | Skenario | Hasil | Bukti |
+|---|---|---|---|
+| A1 | Masuk berhasil (admin) | **PASSED** | `POST /auth/google` **200** (248 ms); beranda "Beranda sistem" dengan label `Profil Administrator`; `users.status` → **`active`**, `last_login` terisi |
+| A2 | Role dosen | **BLOCKED** | butuh akun Google dosen yang diundang — hanya satu akun penguji |
+| A3 | Role mahasiswa | **BLOCKED** | idem |
+| A4 | Akun belum terdaftar | **BLOCKED** | butuh akun Google kedua yang tidak diundang |
+| A5 | Batal | **NOT VERIFIED** | Percobaan berulang kali berakhir `Remote provider response timed out` (GMS memberi batas ±3 dtk) sebelum lembar akun muncul, sehingga **pembatalan oleh pengguna tidak pernah terjadi**. Tidak diklaim lulus. Layar kembali ke keadaan semula tanpa pesan galat, tetapi itu akibat timeout, bukan pembatalan |
+| A6 | SecureStore (tutup paksa lalu buka) | **PASSED** | `am force-stop` → buka → langsung beranda Administrator tanpa memilih akun |
+| A7 | Pemulihan saat backend mati | **PASSED** | backend dimatikan → "Backend tidak terjangkau" + "Coba lagi"; sesi tidak hilang |
+| A8 | Penyegaran token | **PARTIAL** | backend hidup lagi → `GET /me` **200** (access token masih valid 60 menit). Jalur refresh belum terpicu, jadi `auth.session.refreshed` **belum** teruji |
+| A9 | Logout | **PASSED** | "Keluar" → layar masuk; `session_tokens.revoked_at` terisi dengan `revoked_reason='logout'`; audit `auth.logout` success |
+| A10 | Cabut akses (suspend) | **BLOCKED** | butuh admin kedua/dosen; `PATCH /users/{id}` belum diuji dari UI |
+| A11 | Routing lintas-role | **PASSED (parsial)** | `facelinkai:///admin` tanpa sesi → tetap layar masuk. Versi "sesi mahasiswa dialihkan" butuh akun mahasiswa |
+| A12 | Tidak ada demo | **PASSED** | panel pengaturan: 0 kemunculan `demo`, `ganti role`, `Dosen`, `Mahasiswa` |
+
+**Rantai audit yang terverifikasi di database:**
+
+```
+auth.login.denied      failure  (2× — token palsu sebelum akun siap)
+user.bootstrapped      success  (system)
+auth.google.linked     success  (user) — akun invited → active
+auth.google.succeeded  success  (user)
+auth.logout            success  (user)
+```
+
+Tidak ada token, ID token, atau email di log: `logcat` → **0** kemunculan
+`eyJhbGciOi`/`refresh_token`/`access_token`.
+
+### 17d. Temuan nyata: error lifecycle `expo-video`
+
+LogBox menampilkan (non-fatal, aplikasi tetap berjalan):
+
+```
+Console Error
+Cannot set prop 'player' on view 'class expo.modules.video.TextureVideoView'
+→ Caused by: Cannot use shared object that was already released.
+```
+
+**Penyebab:** `KlipBerulang` membuat dua `useVideoPlayer` yang dilepas saat
+komponen unmount; jika `VideoView` masih menerima prop `player` pada render
+terakhir, shared object sudah dilepas. Ini terjadi saat layar masuk berpindah
+ke beranda (video latar di-unmount).
+
+**Dampak:** kosmetik — video tetap diputar, login tetap berhasil, tidak ada
+crash. **Belum diperbaiki** pada tahap ini karena perbaikannya menyentuh
+lifecycle komponen UI (di luar batas "jangan ubah desain") dan perlu keputusan
+apakah akan memakai satu pemutar dengan `replaceAsync` atau menahan mount
+sampai animasi selesai.
+
+### 17e. Kendala build yang ditemukan dan solusinya
+
+| Gejala | Sebab | Solusi yang dipakai |
+|---|---|---|
+| `ninja: error: mkdir(...): No such file or directory` | Path objek CMake mencapai **260 karakter** (batas MAX_PATH) dengan CMake 3.22.1 + ninja 1.10.2 | Pakai `cmake.dir=…/cmake/3.31.6` (**ninja 1.12.1**, long-path aware) — sesuai §7 yang sudah menetapkan versi itu |
+| `compressDebugAssets … already contains entry` | Sisa build lintas drive (`C:` vs junction) | Hapus `android/app/build` lalu build ulang |
+| `TLS handshake error … EOF` di log | Probe `openssl`/`curl` tanpa CA, bukan aplikasi | Tidak ada tindakan; probe sengaja |
+
+### 17f. Bootstrap Admin (dijalankan sekali)
+
+Dikonfirmasi pemilik sebelum eksekusi. Hasil:
+
+```
+Akun admin pertama dibuat dengan status "invited".
+user_id b5859ea7-e5ee-48a7-9da3-b84f81a91b44
+```
+
+Eksekusi kedua **ditolak** (`exit 1`, "sudah ada akun admin dengan status
+invited atau active") — penjaga `COUNT(*)` di dalam transaksi bekerja.
+Database yang dipakai: `backend/data/facelink.db`.
+
+### 17g. Gate kualitas
+
+| Pemeriksaan | Hasil |
+|---|---|
+| Vitest | **82/82 lulus** (2 tes regresi baru untuk `googleDevice`) |
+| `tsc --noEmit` | exit 0 |
+| `expo lint` | exit 0 |
+| `go test ./...` | **11 paket lulus** (termasuk 4 kasus TLS baru di `internal/config`) |
+
+### 17h. Yang masih terbuka
+
+1. **A2/A3/A4/A10** — butuh 2–3 akun Google tambahan yang diundang sebagai
+   `dosen`/`mahasiswa`, dan satu akun yang **tidak** diundang untuk A4.
+2. **A8 penuh** — butuh access token kedaluwarsa (60 menit) atau jam perangkat
+   yang digeser. Emulator Play Store **tidak** mengizinkan `su`/`adb root`, jadi
+   penggeseran jam **tidak** dapat dilakukan tanpa mengubah image menjadi
+   `google_apis` (tanpa Play) — yang akan mematikan Credential Manager.
+3. **Error lifecycle `expo-video`** — perlu keputusan perbaikan (§17d).
+4. **Rotasi sertifikat dev** — manual, belum otomatis.

@@ -253,10 +253,17 @@ function pesanGalat(
         keterangan: "Akun ini belum terdaftar di FaceLink AI. Hubungi admin.",
         bisaUlangi: false,
       };
+    case "googleDevice":
+      return {
+        judul: "Tidak ada akun Google",
+        keterangan:
+          "Credential Manager tidak menghasilkan akun Google: perangkat belum memiliki akun, lembar akun ditutup sebelum memilih, atau layanan Google tidak merespons tepat waktu. Periksa akun di Pengaturan Android, lalu coba lagi.",
+        bisaUlangi: true,
+      };
     case "unknown":
       return {
         judul: "Masuk gagal",
-        keterangan: `Backend menjawab dengan keadaan yang belum dikenal aplikasi ini (${error.message}).`,
+        keterangan: `Aplikasi menerima keadaan yang belum dikenal (${error.message}).`,
         bisaUlangi: true,
       };
     default: {

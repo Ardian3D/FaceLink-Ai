@@ -187,6 +187,31 @@ describe("jalankanMasukGoogle", () => {
     });
   });
 
+  it("melaporkan kegagalan Credential Manager sebagai masalah perangkat, bukan backend", async () => {
+    // Regresi FL-ANDROID02E: tanpa akun Google di perangkat, baik signIn maupun
+    // createAccount tidak menghasilkan kredensial. Sebelumnya keadaan ini
+    // dilaporkan sebagai "unknown" sehingga UI menyalahkan backend, padahal
+    // backend tidak pernah menerima permintaan /auth/google.
+    const t = modulTiruan();
+    t.signIn.mockResolvedValue({ type: "noSavedCredentialFound" });
+    t.createAccount.mockResolvedValue({ type: "noSavedCredentialFound" });
+
+    expect(await jalankanMasukGoogle(t.modul, OK_KONFIG, "n")).toEqual({
+      ok: false,
+      error: { kind: "googleDevice" },
+    });
+  });
+
+  it("membedakan pembatalan pengguna dari ketiadaan akun", async () => {
+    const t = modulTiruan();
+    t.signIn.mockResolvedValue({ type: "cancelled" });
+
+    expect(await jalankanMasukGoogle(t.modul, OK_KONFIG, "n")).toEqual({
+      ok: false,
+      error: { kind: "cancelled" },
+    });
+  });
+
   it("menolak konfigurasi yang tidak sah tanpa menyentuh modul", async () => {
     const t = modulTiruan();
     const hasil = await jalankanMasukGoogle(

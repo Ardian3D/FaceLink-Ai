@@ -96,5 +96,14 @@ export type SessionError =
   | { kind: "cancelled" }
   /** Google Play Services tidak tersedia atau perlu diperbarui. */
   | { kind: "playServices" }
+  /**
+   * Credential Manager tidak menghasilkan kredensial Google di perangkat ini —
+   * biasanya karena belum ada akun Google yang ditambahkan, atau lembar akun
+   * ditutup tanpa memilih akun. **Bukan** kegagalan backend: permintaan
+   * `/auth/google` tidak pernah dikirim, sehingga tidak ada respons server yang
+   * dapat disalahkan. Dipisahkan dari `unknown` justru agar pesan yang tampil
+   * tidak menyesatkan pengguna.
+   */
+  | { kind: "googleDevice" }
   /** Platform ini tidak mendukung Credential Manager (mis. pratinjau web). */
   | { kind: "unsupported" };

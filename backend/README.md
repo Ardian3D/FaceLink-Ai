@@ -63,6 +63,32 @@ curl.exe http://127.0.0.1:8080/api/v1/readyz
 kosong. Itu **bukan** kegagalan: absensi manual harus tetap berjalan, jadi mesin
 AI yang belum siap tidak menggagalkan kesiapan backend.
 
+### HTTPS lokal (opsional, untuk emulator)
+
+Backend dapat menyajikan HTTPS tanpa meninggalkan loopback. Sertifikat dan
+kuncinya harus diberikan bersamaan; hanya salah satu diisi akan ditolak.
+
+```powershell
+# Sekali saja. Membuat CA dev + sertifikat server dengan SAN
+# 127.0.0.1, 10.0.2.2, dan localhost.
+bash scripts/gen-dev-tls.sh
+
+$env:FACELINK_TLS_CERT = "dev/certs/server.pem"
+$env:FACELINK_TLS_KEY  = "dev/certs/server-key.pem"
+go run ./cmd/server
+```
+
+Log akan mencetak `"tls":"on"` dan `"skema":"https"`. Alamat tetap
+`127.0.0.1:8080`; TLS tidak memperluas jangkauan jaringan.
+
+Berkas `*.pem` diabaikan Git. Kunci privat CA dan server hanya untuk mesin
+pengembang: **jangan** disalin ke perangkat lain atau dipakai di build release.
+Sertifikat dev berlaku 397 hari tanpa rotasi otomatis; bila handshake mulai
+gagal, jalankan ulang skrip setelah menghapus `backend/dev/certs/`.
+
+Aplikasi Android mempercayai CA itu **hanya pada build debug**, lewat
+`apps/mobile/plugins/with-dev-tls.js`. Build release memakai trust store sistem.
+
 ## Tata letak
 
 ```

@@ -168,11 +168,20 @@ export async function jalankanMasukGoogle(
       return { ok: false, error: { kind: "cancelled" } };
     }
     if (jawaban.type !== "success" || jawaban.data === null) {
-      return { ok: false, error: { kind: "unknown", message: "google_tanpa_id_token" } };
+      // Credential Manager tidak menghasilkan kredensial. Ini kegagalan lokal
+      // perangkat (akun Google belum ditambahkan, atau lembar akun ditutup
+      // tanpa memilih); backend tidak pernah dihubungi. Jangan laporkan sebagai
+      // "backend menjawab ..." — lihat SessionError.kind "googleDevice".
+      return { ok: false, error: { kind: "googleDevice" } };
     }
     const { idToken, user } = jawaban.data;
     if (typeof idToken !== "string" || idToken === "") {
-      return { ok: false, error: { kind: "unknown", message: "google_tanpa_id_token" } };
+      // Kredensial ada tetapi tanpa ID token: kondisi tak terduga dari pustaka,
+      // bukan respons backend.
+      return {
+        ok: false,
+        error: { kind: "unknown", message: "google_tanpa_id_token" },
+      };
     }
     return user.email === null || user.email === undefined
       ? { ok: true, idToken }
