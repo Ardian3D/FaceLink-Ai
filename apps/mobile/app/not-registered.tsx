@@ -36,9 +36,11 @@ export default function NotRegisteredScreen() {
   if (status !== "unregistered") return <Redirect href="/" />;
 
   // Email hanya ditampilkan bila memang diketahui; tanpa email, pesan tetap
-  // utuh dan tidak ada baris kosong.
-  const email = error?.kind === "notGranted" || error?.kind === "suspended" ? error.email : undefined;
-  const ditangguhkan = error?.kind === "suspended";
+  // utuh dan tidak ada baris kosong. Status akun **tidak** dibedakan di sini:
+  // kontrak memakai satu jawaban generik untuk "belum diundang", "belum
+  // ditautkan", dan "ditangguhkan" (anti-enumerasi), jadi layar ini tidak
+  // boleh menebak lebih banyak daripada yang diberitahukan backend.
+  const email = error?.kind === "notGranted" ? error.email : undefined;
 
   return (
     <Screen scroll contentStyle={styles.isi}>
@@ -51,12 +53,12 @@ export default function NotRegisteredScreen() {
 
         <View style={styles.teks}>
           <AppText variant="heading" weight="bold" center style={styles.judul}>
-            {ditangguhkan ? "AKUN ANDA DITANGGUHKAN" : "ANDA BELUM TERDAFTAR"}
+            ANDA BELUM TERDAFTAR
           </AppText>
           <AppText variant="body" color={colors.textMuted} center>
-            {ditangguhkan
-              ? "Akun Anda terdaftar tetapi sedang ditangguhkan. Hubungi admin FaceLink AI untuk memulihkannya."
-              : "Wah, akun Anda belum terdaftar nih. Hubungi admin lebih dahulu untuk mendaftarkan Anda, lalu masuk kembali."}
+            Akun Google Anda belum diberi akses ke FaceLink AI, atau aksesnya sedang
+            tidak berlaku. Hubungi admin untuk mendaftarkan atau memulihkan akun,
+            lalu masuk kembali.
           </AppText>
         </View>
 
@@ -78,20 +80,13 @@ export default function NotRegisteredScreen() {
           <AppText variant="caption" weight="semibold" color={colors.textSecondary}>
             Yang bisa Anda lakukan
           </AppText>
-          {(ditangguhkan
-            ? [
-                "Hubungi admin FaceLink AI dan sebutkan akun Anda.",
-                "Tunggu admin memulihkan status akun Anda.",
-                "Masuk kembali dengan akun Google yang sama.",
-              ]
-            : [
-                email
-                  ? "Hubungi admin FaceLink AI dan sebutkan email di atas."
-                  : "Hubungi admin FaceLink AI dan sebutkan akun Google yang Anda pakai.",
-                "Tunggu admin mendaftarkan akun dan menetapkan role Anda.",
-                "Masuk kembali dengan akun Google yang sama.",
-              ]
-          ).map((t, i) => (
+          {[
+            email
+              ? "Hubungi admin FaceLink AI dan sebutkan email di atas."
+              : "Hubungi admin FaceLink AI dan sebutkan akun Google yang Anda pakai.",
+            "Tunggu admin mendaftarkan akun dan menetapkan role Anda.",
+            "Masuk kembali dengan akun Google yang sama.",
+          ].map((t, i) => (
             <View key={t} style={styles.langkahItem}>
               <View style={[styles.nomor, { backgroundColor: colors.surfaceMuted }]}>
                 <AppText variant="micro" weight="bold">
@@ -110,7 +105,7 @@ export default function NotRegisteredScreen() {
         <AppButton
           label="Kembali ke layar masuk"
           onPress={() => {
-            signOut();
+            void signOut();
             router.replace("/");
           }}
         />

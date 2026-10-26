@@ -218,3 +218,48 @@ Pemilik project **menyetujui** rekomendasi FL-010U: **D-032** (lifecycle akun), 
 **Yang tetap terbuka dan tidak boleh dianggap disetujui:** Q-22 (penarikan persetujuan mandiri oleh mahasiswa), Q-24 (prosedur offline saat sesi tidak sah), Q-23 (jadwal akademik penuh), Q-25 (metode sertifikat lokal Android), dan rujukan rusak D-028 → `docs/UX_FLOWS.md` §10 yang tidak dapat dibuktikan targetnya.
 
 **Tidak ada kode yang ditulis pada FL-010V.** Seluruh skenario runtime autentikasi/otorisasi (GA-01..GA-18, TA-01..TA-26) tetap **BELUM TERVERIFIKASI** sampai implementasi Go tersedia.
+
+## Jawaban Q-25 — trust chain sertifikat lokal Android (FL-ANDROID02E, 22 Oktober 2026)
+
+> **Status: DIUSULKAN, menunggu persetujuan pemilik.** Q-25 sebelumnya menyatakan
+> "rincian penyediaan sertifikat lokal dan trust chain Android belum diuji".
+> Berikut desain yang **sudah diimplementasikan dan diuji sebagian**, bukan
+> sekadar usulan di atas kertas. Yang belum diuji adalah login nyata di atas
+> jalur ini (lihat batas di bawah).
+
+**Pilihan: CA lokal + `network_security_config` pada build debug.**
+
+- Sertifikat server diterbitkan CA development lokal (`scripts/gen-dev-tls.sh`),
+  dengan SAN `IP:127.0.0.1`, `IP:10.0.2.2`, `DNS:localhost`. `10.0.2.2` adalah
+  alias host emulator Android, jadi token tidak pernah melintasi jaringan fisik.
+- Backend tetap **loopback-only**: `validateAddr` tidak diubah, dan
+  `FACELINK_ADDR=0.0.0.0:8080` tetap ditolak. HTTPS **tidak** memperluas
+  jangkauan; ia hanya mengenkripsi jalur yang sudah ada.
+- CA dipercaya **hanya pada build debug**, lewat config plugin
+  `apps/mobile/plugins/with-dev-tls.js` → `src/debug/res/raw/dev_ca.pem` +
+  `src/debug/res/xml/network_security_config.xml` + manifest debug. Build
+  **release tidak** memuat CA itu dan tidak memuat pengecualian cleartext.
+- **Tidak ada** `InsecureSkipVerify`, `rejectUnauthorized:false`, atau
+  pemasangan CA ke trust store sistem (yang akan melemahkan perangkat).
+- Pengecualian cleartext hanya untuk `10.0.2.2`, `localhost`, dan `127.0.0.1`
+  pada config debug, karena Metro menyajikan bundel JS lewat HTTP. Ini bukan
+  pelonggaran transport API: base URL API memakai `https://`.
+
+**Mengapa bukan reverse proxy lokal:** reverse proxy di laptop menambah satu
+proses dan satu titik konfigurasi yang harus ikut diamankan, tanpa keuntungan
+bagi skenario emulator yang sudah loopback. CA + NSC lebih sederhana dan
+konsisten dengan D-035.
+
+**Batas yang harus dinyatakan jujur:**
+
+- Sertifikat dev berlaku 397 hari dan **tidak** diputar otomatis; kedaluwarsa
+  akan menggagalkan handshake sampai `scripts/gen-dev-tls.sh` dijalankan ulang.
+- CA development **bukan** mekanisme produksi. Untuk perangkat nyata (HP) di
+  LAN, D-035 menuntut sertifikat yang dipercaya perangkat; jalur itu belum
+  diuji dan tidak diklaim berfungsi.
+- Build release tidak diuji dengan HTTPS backend; yang diuji adalah debug.
+- Kunci privat (`dev-ca-key.pem`, `server-key.pem`) tidak masuk Git
+  (`.gitignore`: `*.pem`), tetapi tetap berada di disk lokal tanpa enkripsi.
+
+**Yang berubah dari Q-25:** pertanyaan "bagaimana trust chain lokal disediakan"
+kini punya jawaban konkret yang dapat diverifikasi ulang, bukan asumsi.

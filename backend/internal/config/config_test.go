@@ -81,6 +81,42 @@ func TestRedactedTidakMembocorkanClientID(t *testing.T) {
 	if !strings.Contains(string(isi), "configured (1 client id)") {
 		t.Errorf("Redacted tidak melaporkan status OAuth: %s", isi)
 	}
+	if !strings.Contains(string(isi), `"tls":"off"`) {
+		t.Errorf("Redacted tidak melaporkan TLS mati secara eksplisit: %s", isi)
+	}
+}
+
+func TestTLSMengaktifkanHTTPSDanTidakMembocorkanJalurKunci(t *testing.T) {
+	dir := t.TempDir()
+	certPath := filepath.Join(dir, "server.pem")
+	keyPath := filepath.Join(dir, "server-key.pem")
+	for _, p := range []string{certPath, keyPath} {
+		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+			t.Fatalf("menyiapkan berkas uji gagal: %v", err)
+		}
+	}
+
+	cfg, err := LoadFrom(envFrom(map[string]string{EnvTLSCert: certPath, EnvTLSKey: keyPath}))
+	if err != nil {
+		t.Fatalf("konfigurasi TLS sah ditolak: %v", err)
+	}
+	if cfg.TLSCertPath != certPath || cfg.TLSKeyPath != keyPath {
+		t.Fatalf("jalur TLS tidak terbaca: %+v", cfg)
+	}
+	if !strings.HasPrefix(cfg.Addr, "127.0.0.1") {
+		t.Errorf("alamat %q tidak loopback meski TLS aktif", cfg.Addr)
+	}
+
+	isi, err := json.Marshal(cfg.Redacted())
+	if err != nil {
+		t.Fatalf("marshal gagal: %v", err)
+	}
+	if strings.Contains(string(isi), "server-key.pem") || strings.Contains(string(isi), dir) {
+		t.Errorf("Redacted memuat jalur sertifikat/kunci: %s", isi)
+	}
+	if !strings.Contains(string(isi), `"tls":"on"`) {
+		t.Errorf("Redacted tidak melaporkan TLS aktif: %s", isi)
+	}
 }
 
 func TestLoadDefaultsMemakaiNilaiAman(t *testing.T) {
@@ -180,6 +216,11 @@ func TestLoadFromMenolakKonfigurasiTidakValid(t *testing.T) {
 		{"durasi bukan angka", map[string]string{EnvReadTimeout: "cepat"}, EnvReadTimeout},
 		{"durasi nol", map[string]string{EnvWriteTimeout: "0"}, EnvWriteTimeout},
 		{"durasi negatif", map[string]string{EnvIdleTimeout: "-5s"}, EnvIdleTimeout},
+		{"sertifikat tanpa kunci", map[string]string{EnvTLSCert: "server.pem"}, "bersamaan"},
+		{"kunci tanpa sertifikat", map[string]string{EnvTLSKey: "server-key.pem"}, "bersamaan"},
+		{"sertifikat tidak ada", map[string]string{
+			EnvTLSCert: "tidak-ada.pem", EnvTLSKey: "tidak-ada-key.pem",
+		}, EnvTLSCert},
 	}
 
 	for _, tc := range cases {

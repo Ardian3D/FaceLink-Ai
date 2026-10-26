@@ -1,18 +1,25 @@
 # FaceLink AI — Aplikasi Mobile (Expo)
 
 Aplikasi klien React Native + Expo untuk tiga role manusia: `admin`, `dosen`, dan
-`mahasiswa`. Target utama **Android**; web dipakai hanya sebagai jalur preview.
+`mahasiswa`. Target utama **Android**; web dipakai hanya sebagai pratinjau tata
+letak dan **tidak** dapat melakukan Google Sign-In.
 
-> **Status: FL-UI01 + FL-NET01.** UI lengkap untuk preview dan diagnostik
-> koneksi ke Go Backend (development saja). Belum ada Google OAuth sungguhan,
-> belum ada sesi yang disimpan, dan belum ada fitur yang memakai API. Seluruh
-> angka di dashboard adalah **data contoh**.
+> **Status: FL-UI02.** Masuk Google sungguhan ke Go Backend sudah terpasang —
+> nonce dari backend, Google Credential Manager, pertukaran ID token, token sesi
+> di penyimpanan kredensial platform, dan pemulihan sesi yang diverifikasi ulang
+> ke backend. Belum ada fitur dashboard yang memakai API; seluruh angka di
+> dashboard masih **data contoh** (`src/features/dashboard/mockData.ts`).
 
 ## Prasyarat
 
 - Node.js 20 atau lebih baru (diuji pada Node 24).
 - npm (proyek ini memakai `npm`, bukan yarn/pnpm).
-- Untuk Android: aplikasi **Expo Go** di HP, atau Android Studio + emulator.
+- Go 1.22+ bila menjalankan backend lokal.
+- Untuk Android: **development build** (lihat bawah). Expo Go **tidak** dapat
+  dipakai lagi: Google Credential Manager adalah modul native.
+- **JDK 17** dan **Android SDK** (`ANDROID_HOME` + `adb`) untuk `expo prebuild`
+  dan build native. Ketiganya **belum ada** di mesin pengembangan ini, jadi
+  langkah itu belum pernah dijalankan.
 - Tidak perlu WSL, Docker, atau layanan berbayar.
 
 ## Menjalankan
@@ -20,24 +27,122 @@ Aplikasi klien React Native + Expo untuk tiga role manusia: `admin`, `dosen`, da
 ```bash
 cd apps/mobile
 npm install
-npm start          # buka Expo dev server
+cp .env.example .env    # isi alamat backend + Web OAuth client ID
+npm start
 ```
-
-Setelah dev server berjalan:
-
-- **HP Android (paling cepat):** pasang Expo Go, sambungkan HP dan laptop ke
-  Wi-Fi yang sama, lalu pindai QR yang muncul di terminal.
-- **Emulator Android:** tekan `a` pada terminal dev server (Android Studio harus
-  terpasang lebih dahulu).
-- **Browser (hanya untuk preview tata letak):** tekan `w`, atau
-  `npm run web` lalu buka `http://localhost:8081`.
 
 Pemeriksaan mutu:
 
 ```bash
 npm run typecheck   # tsc --noEmit, TypeScript strict
 npm run lint        # eslint-config-expo
+npm test            # vitest: pengujian autentikasi (tanpa perangkat Android)
 ```
+
+Pengujian berjalan di Node dan **tidak** memerlukan JDK, Android SDK, maupun
+`adb`. Modul native Google, SecureStore, dan `fetch` diganti tiruan; yang diuji
+adalah perilaku (`src/features/auth/authFlow.ts` dan lapisan API), bukan
+rendering. Rinciannya di `tests/`.
+
+### Development build (wajib untuk masuk Google)
+
+Panduan lengkap Windows (JDK 17, Android SDK, ADB, emulator, OAuth Android,
+urutan pengujian di perangkat): **`docs/ANDROID_SETUP.md`**.
+
+Periksa prasyarat mesin ini kapan saja:
+
+```bash
+npm run check:native   # PASSED / FAILED / BLOCKED per komponen
+```
+
+```bash
+npx expo prebuild        # menghasilkan folder android/
+npx expo run:android     # build + pasang ke perangkat/emulator
+```
+
+`npm run android` menjalankan `expo run:android` (dev build). `npm run
+android:device` memilih perangkat lebih dahulu; `npm run android:go` adalah
+jalur Expo Go lama yang **tidak** dapat dipakai untuk login Google karena
+`expo-secure-store` dan `react-native-nitro-google-signin` adalah modul native.
+
+**Prasyarat khusus Windows:** `react-native-worklets` mengompilasi C++ pada
+jalur yang dapat melewati 260 karakter. Pasang **CMake 3.31.6** dan setel
+`cmake.dir` di `android/local.properties` (diabaikan Git, dihapus oleh
+`expo prebuild`) — rinciannya di `docs/ANDROID_SETUP.md` §3c.
+
+`adb reverse tcp:8080 tcp:8080` harus dipasang agar perangkat menjangkau backend
+loopback di laptop (lihat bagian konektivitas).
+
+**Target native saat ini Android saja.** `react-native-nitro-google-signin`
+tidak didaftarkan sebagai config plugin di `app.json`. Dasar teknisnya, diperiksa
+pada paket versi **2.3.0** yang terpasang:
+
+- `android/build.gradle` menambahkan sendiri `androidx.credentials:credentials`,
+  `credentials-play-services-auth`, dan `play-services-auth`; tidak ada
+  ketergantungan pada berkas `google-services.json`.
+- `GoogleSignInController.kt` memakai `webClientId` yang diberikan lewat
+  `configure()` (`setServerClientId(clientId)`) dan meneruskan nonce dengan
+  `setNonce(resolveNonce())`; nilai `"autoDetect"` hanya dipakai bila kita
+  memintanya, dan di situlah `default_web_client_id` baru diperlukan.
+- Config plugin hanya wajib untuk dua jalur: Firebase/`google-services.json`
+  (menghasilkan `default_web_client_id`) dan iOS (`iosUrlScheme`). Keduanya
+  tidak dipakai build Android dengan `webClientId` eksplisit.
+
+Build iOS menuntut tambahan yang belum dikonfigurasi — `iosUrlScheme` berisi
+*reversed* client ID (`com.googleusercontent.apps.…`) pada opsi plugin. Tanpa itu
+ID token tidak dapat diterima dan `masukDenganGoogle` akan gagal, jadi jangan
+menganggap iOS sudah siap sebelum plugin itu ditambahkan dan diuji.
+
+**Status: PASSED pada HP fisik dan emulator.** APK debug arm64-v8a berjalan di TECNO LJ7 (Android 16, §12); APK debug **x86_64** berjalan di emulator Android 16 API 36 Google Play (§15) dengan login screen, latar video, safe area, dan modul native terverifikasi. **Google Sign-In tetap BLOCKED**: Web OAuth client
+ID belum ada, sehingga tombol masuk berhenti dengan pesan *"Aplikasi belum
+dikonfigurasi"*. Pemeriksaan config plugin di atas dibaca dari kode sumber paket
+2.3.0, bukan dari hasil login.
+
+### Port Metro dan variabel `CI`
+
+Dua jebakan nyata saat menjalankan dev server di laptop ini:
+- **Port 8081 bisa sudah dipakai proses lain.** Di mesin ini `127.0.0.1:8081`
+  dipegang Docker Desktop dan menjawab `200` dengan badan **0 byte**, sehingga
+  `curl` tampak "berhasil" padahal Metro tidak pernah menerima permintaan.
+  Periksa pemilik port sebelum menyalahkan aplikasi:
+  `netstat -ano | findstr :8081`, lalu jalankan Metro di port lain:
+  `npx expo start --dev-client --port 8082` **dan** `adb reverse tcp:8082 tcp:8082`.
+- **`CI=true` mematikan watch mode.** Expo mencetak
+  `Metro is running in CI mode, reloads are disabled`; Fast Refresh berhenti dan
+  perubahan berkas tidak terlihat. Jalankan dengan `CI` dihapus
+  (`env -u CI npx expo start …` di Git Bash, atau `Remove-Item Env:CI` di
+  PowerShell).
+Bila aplikasi menampilkan **"There was a problem loading the project."**,
+bundel tidak pernah sampai ke perangkat: periksa port Metro yang benar dan
+`adb reverse` untuk port itu, bukan konfigurasi OAuth.
+
+### Emulator: pakai `10.0.2.2`, dan jangan pakai `--localhost`
+
+Dua jebakan tambahan yang terbukti pada emulator (FL-ANDROID02C):
+
+- **`--localhost` membuat Metro hanya mendengarkan IPv6.** Listener menjadi
+  `[::1]:8082` saja; permintaan ke `127.0.0.1:8082` dijawab `200` dengan badan
+  **0 byte**. Jalankan tanpa `--localhost` supaya Metro mengikat `0.0.0.0`.
+- **`adb reverse` hilang saat ADB reconnect.** Jika tunnel mati, aset video
+  gagal diambil dan logcat menampilkan `ExoPlaybackException: Source error`
+  dengan `Failed to connect to /127.0.0.1:8082` — bukan cacat UI. Untuk emulator
+  lebih baik **tidak memakai `adb reverse` sama sekali** dan mengarahkan bundel
+  ke alias host:
+
+```bash
+adb shell am force-stop ai.facelink.mobile
+adb shell am start -a android.intent.action.VIEW \
+  -d "exp+facelink-ai://expo-development-client/?url=http%3A%2F%2F10.0.2.2%3A8082" \
+  ai.facelink.mobile
+```
+
+`10.0.2.2` sudah diizinkan `src/features/api/config.ts` sebagai alias host
+emulator, jadi aturan D-035 tetap dipatuhi. Rincian hasil uji emulator ada di
+`docs/ANDROID_SETUP.md` §15.
+
+**Pratinjau web tetap berguna** untuk memeriksa tata letak: `npm run web`. Di
+sana tombol masuk berhenti dengan pesan *"Masuk Google tidak tersedia di sini"* —
+bukan galat jaringan, dan bukan sesi palsu.
 
 Klip latar layar masuk (opsional, lokal saja):
 
@@ -47,52 +152,52 @@ npm run video:off     # hapus salinan lokal; layar masuk memakai latar animasi
 ```
 
 Klip video **tidak** di-commit karena memuat wajah orang yang dapat dikenali.
-Tanpa klip, layar masuk tetap tampil utuh dengan latar animasi yang digambar di
-kode. Rinciannya ada di `assets/video/BACA-SAYA.md`.
 
-## Alur preview saat ini
+## Alur masuk yang berlaku
 
 ```
-Layar masuk  →  Role Checking  →  Beranda role
-                     │
-                     └─ akun belum terdaftar / ditangguhkan  →  Layar penjelasan
+Layar masuk ──(nonce + Google)──→ Layar pemeriksaan peran ──(sesi sah)──→ Beranda role
+     ▲                                        │
+     │                                        └─(403 IDENTITY_NOT_LINKED)─→ Layar penjelasan
+     └────────────────────────────────────────────────────────────────────────┘
+                     (gagal / dibatalkan / sesi berakhir)
 ```
 
-- **Layar masuk:** latar video atau animasi pindai, logo resmi FaceLink Ai, satu
-  tombol **Continue with Google**, dan label kebijakan di dasar layar. Tidak ada
-  tombol "Skip" dan tidak ada jalur masuk lain.
-- **Role Checking:** animasi pemindaian dan teks "Sedang mengecek peran anda…".
-  Penundaan singkat di layar ini **hanya untuk preview** dan bukan mekanisme
-  autentikasi.
-- **Beranda role:** admin (ringkasan, kelas aktif, status perangkat, aktivitas,
-  pintasan pengelolaan), dosen (kerangka), mahasiswa (kerangka baca-sendiri).
-  Perpindahan role saat preview memakai tombol "Ganti role (dev)" di lembar
-  pengaturan, bukan layar pemilih role di tengah alur masuk.
-- **Layar penjelasan akun ditolak:** dipakai bila backend menjawab bahwa akun
-  belum terdaftar (`notGranted`) atau sedang ditangguhkan (`suspended`). Layar
-  ini **tidak** memberi sesi, tidak menawarkan "coba lagi", dan hanya memuat
-  satu langkah keluar: kembali ke layar masuk. Role ditetapkan admin (D-037),
-  jadi mengulang login tidak mengubah keadaan sebelum admin mendaftarkan akun.
-  Kedua keadaan itu dapat dipreview dari `dev-preview` lewat tombol
-  *Preview akun belum terdaftar* dan *Preview akun ditangguhkan*.
+1. **Layar masuk** meminta nonce ke `POST /api/v1/auth/nonce`, lalu membuka
+   Google Credential Manager dengan nonce itu sebagai parameter.
+2. Setelah pengguna memilih akun, **layar pemeriksaan peran** tampil selama ID
+   token ditukar ke `POST /api/v1/auth/google` dan role dibaca dari jawaban
+   backend. Ketiga langkah pada layar itu berasal dari kemajuan nyata
+   (`tahap` pada `SessionProvider`), bukan penundaan buatan.
+3. **Beranda role** dibuka berdasarkan `role` dari backend. Tidak ada pemilih
+   role di aplikasi: satu akun hanya punya satu role utama (D-037).
+4. **Akun ditolak** (`403 IDENTITY_NOT_LINKED`) diarahkan ke layar penjelasan.
+   Kontrak memakai satu jawaban generik untuk "belum diundang", "belum
+   ditautkan", dan "ditangguhkan" (anti-enumerasi), jadi aplikasi **tidak**
+   membedakan ketiganya.
 
-## Menghubungkan aplikasi ke Go Backend (FL-NET01)
+Pada peluncuran berikutnya, sesi tersimpan diverifikasi ulang lewat `GET /me`
+(dengan penyegaran token bila perlu). Token lokal tidak pernah dipercaya sebagai
+bukti identitas. **Kegagalan jaringan tidak menghapus token**: layar masuk
+menawarkan "Coba lagi" tanpa memaksa memilih akun Google lagi.
 
-Alamat backend **tidak** ditanam di kode. Aplikasi membacanya dari
-`EXPO_PUBLIC_FACELINK_API_BASE_URL`, yang di-*inline* saat bundel dibuat:
+Penyegaran token bersifat **satu penerbangan**: permintaan yang datang saat
+penyegaran berjalan menunggu hasil yang sama, bukan memakai token penyegar yang
+sama dua kali. Ini bukan optimasi kinerja — backend mencabut **seluruh** sesi
+pengguna bila token penyegar yang sudah dirotasi dipakai ulang
+(`docs/API_CONTRACT.md` §5.1). Perilakunya diuji di
+`tests/authFlow.test.ts`.
 
-```bash
-cd apps/mobile
-cp .env.example .env          # lalu sesuaikan bila perlu
-npm start
-```
+## Konfigurasi
 
-Nilai bawaan development adalah `http://127.0.0.1:8080` (loopback, port yang
-sama dengan `config.DefaultAddr` backend). Build produksi **tidak** punya nilai
-bawaan: tanpa variabel itu, diagnostik melaporkan alasan dan tidak ada
-permintaan yang dikirim.
+Berkas `.env` di folder ini (diabaikan Git; contohnya `.env.example`):
 
-Aturan yang ditegakkan `src/features/api/config.ts`:
+| Variabel | Wajib | Keterangan |
+|---|---|---|
+| `EXPO_PUBLIC_FACELINK_API_BASE_URL` | build produksi | Alamat Go Backend. Bawaan development: `http://127.0.0.1:8080`. |
+| `EXPO_PUBLIC_FACELINK_GOOGLE_WEB_CLIENT_ID` | ya, untuk masuk | **Web** OAuth client ID, berakhiran `.apps.googleusercontent.com`. Harus sama dengan salah satu entri `FACELINK_GOOGLE_CLIENT_IDS` backend. |
+
+Aturan alamat backend yang ditegakkan `src/features/api/config.ts`:
 
 | Alamat | Hasil |
 |---|---|
@@ -102,15 +207,23 @@ Aturan yang ditegakkan `src/features/api/config.ts`:
 | `http://192.168.x.x:…` | **ditolak** — HTTP polos di LAN dilarang D-035 |
 | `user:pass@host`, query, atau fragmen | ditolak |
 
-### Menjalankan backend
+Client ID Android **tidak** dapat dipakai sebagai nilai ini: `aud` pada ID token
+Android bukan client ID itu, sehingga backend menjawab `IDENTITY_TOKEN_INVALID`.
+Aplikasi memeriksa bentuknya saat modul dimuat dan menolak nilai yang salah
+sebelum satu pun permintaan dikirim.
+
+## Menjalankan backend
 
 ```bash
 cd backend
 go run ./cmd/server        # mendengarkan 127.0.0.1:8080
 ```
 
-Backend sengaja mengikat **loopback**. Jangan mengubahnya menjadi `0.0.0.0`
-hanya agar perangkat Android dapat tersambung; pakai `adb reverse`.
+Agar `POST /auth/google` melayani, backend memerlukan `FACELINK_GOOGLE_CLIENT_IDS`
+(daftar client ID yang diterima sebagai `aud`). Tanpa itu, endpoint menjawab
+`503 GOOGLE_UNAVAILABLE` dan aplikasi menampilkan "Layanan masuk belum siap" —
+bukan "backend tidak terjangkau". Admin pertama dibuat lewat bootstrap lokal
+(`cmd/server -bootstrap-admin`), bukan lewat login Google pertama.
 
 ### Perangkat Android via USB
 
@@ -119,59 +232,47 @@ adb devices                       # pastikan perangkat terdeteksi
 adb reverse tcp:8080 tcp:8080     # port perangkat → port laptop
 ```
 
-Setelah itu `http://127.0.0.1:8080` di dalam aplikasi menunjuk ke backend laptop.
 `adb reverse` hilang setiap perangkat dicabut atau server ADB di-restart; ulangi
 perintahnya. Untuk emulator, `http://10.0.2.2:8080` juga dapat dipakai tanpa
 `adb reverse`.
 
-### Diagnostik koneksi (development saja)
+## Diagnostik (development saja)
 
-Buka `dev-preview` dari lembar pengaturan (tombol "Ganti role (dev)"), lalu
-gulir ke bagian **Koneksi Go Backend**. Komponen
-`src/features/api/ConnectionDiagnostics.tsx` mengirim dua permintaan nyata —
-`GET /api/v1/healthz` dan `GET /api/v1/readyz` — tanpa login, token, atau data
-peserta, dan menyediakan tombol **Periksa ulang**.
+Lembar pengaturan memuat **Diagnostik (dev)** yang menampilkan:
 
-Tiga hasil dibedakan, bukan hanya dari warna:
+- alamat backend yang benar-benar dipakai bundel ini beserta sumbernya;
+- Web OAuth client ID yang terbaca (atau alasan nilainya tidak sah);
+- status sesi saat ini (role dan nama tampilan, **tanpa** token);
+- dua permintaan nyata ke `GET /api/v1/healthz` dan `GET /api/v1/readyz`.
 
-- **tidak terjangkau** — permintaan tidak sampai (backend mati, port salah,
-  `adb reverse` belum dipasang);
-- **menjawab tetapi galat** — status bukan `200`, atau bentuk badan tidak sesuai
-  kontrak;
-- **sukses** — `healthz: ok` dan `readyz: ready`.
+Layar ini tidak menampilkan token dan tidak menawarkan jalur masuk alternatif.
+Pada build rilis (`__DEV__ === false`) tombolnya tidak ada dan rutenya hanya
+menampilkan "Tidak tersedia pada build ini".
 
 `ai_engine: unavailable` **tidak** dianggap kegagalan: mesin AI yang belum siap
-tidak menghalangi absensi manual (D-030 butir 10, `docs/SECURITY_PRIVACY.md`
-§5e). Layar ini tidak dirender pada build produksi; `DEMO_MODE` sudah memaksa
-`dev-preview` menampilkan "Tidak tersedia pada build ini" sebelum komponennya
-tercapai.
+tidak menghalangi absensi manual (D-030 butir 10).
 
 > **Catatan web:** backend belum mengirim header CORS, jadi diagnostik **gagal
-> di browser** (`Failed to fetch`) meskipun backend hidup. Ini bukan kerusakan
-> aplikasi: `fetch` native Android tidak menerapkan CORS. Preview web tetap
-> berguna untuk tata letak, bukan untuk menguji konektivitas.
+> di browser** meskipun backend hidup. Ini bukan kerusakan aplikasi: `fetch`
+> native Android tidak menerapkan CORS.
 
-## Batas keamanan mode demo
+## Batas keamanan
 
-Mode demo hanya aktif pada **development build** (`__DEV__`), lihat
-`src/features/auth/demoMode.ts`.
-
-- Tidak memanggil backend, tidak menerbitkan token, dan tidak menyimpan
-  kredensial apa pun.
-- Build produksi menolak tombol masuk dengan pesan "belum tersedia" dan layar
-  pemilih role tidak menawarkan pilihan apa pun — **tidak ada** jalur yang
-  menaikkan hak akses.
-- Layar **tidak** lagi menampilkan spanduk "DEMO" (dihapus atas permintaan
-  pemilik project, 18 Oktober 2026, agar preview sama dengan tampilan akhir).
-  Karena itu angka pada beranda development build adalah **data contoh** dan
-  tidak boleh dikira data nyata; sumbernya `src/features/dashboard/mockData.ts`.
-- Status `unregistered` **tidak pernah** membawa sesi. Penjaga navigasi
-  mengalihkan ke layar penjelasan, dan layar itu sendiri menolak dibuka langsung
-  tanpa status tersebut — jadi tidak ada jalan masuk ke beranda lewat keadaan
-  akun yang ditolak.
-- Role yang dipilih di preview **tidak pernah** dikirim sebagai klaim ke backend.
-  Setelah integrasi, role hanya berasal dari sesi yang divalidasi Go Backend
-  (lihat `docs/AUTHORIZATION.md` §5).
+- **Tidak ada jalur masuk tanpa verifikasi backend.** Mode demo dan pemilih role
+  sudah dihapus; satu-satunya jalur adalah Google → `POST /auth/google`.
+- **Token** hanya berada di `expo-secure-store` (Android Keystore / iOS
+  Keychain). Tidak ada `AsyncStorage`, tidak ada fallback ke penyimpanan biasa.
+  Bila penyimpanan aman tidak tersedia (mis. pratinjau web), sesi **ditolak**
+  dengan pesan jelas alih-alih disimpan di tempat yang salah.
+- **Google ID token tidak pernah disimpan**, tidak pernah dicatat, dan tidak
+  pernah menjadi token otorisasi API FaceLink AI. Satu nonce untuk satu
+  percobaan; percobaan ulang meminta nonce baru.
+- **Role tidak pernah datang dari klien.** Nilai `role` pada UI berasal dari
+  `POST /auth/google` atau `GET /me`; setiap permintaan tetap diotorisasi ulang
+  oleh backend.
+- **Layar tidak dapat menampilkan token**: `Session` hanya memuat `user`.
+- Status `unregistered` tidak pernah membawa sesi, dan layar penjelasannya
+  menolak dibuka langsung tanpa status itu.
 
 ## Struktur
 
@@ -179,10 +280,10 @@ Mode demo hanya aktif pada **development build** (`__DEV__`), lihat
 apps/mobile/
 ├── app/                     # rute Expo Router
 │   ├── _layout.tsx          # provider sesi, status bar, tumpukan layar
-│   ├── index.tsx            # layar masuk
-│   ├── role-checking.tsx    # layar pemeriksaan peran
-│   ├── not-registered.tsx   # penjelasan akun belum terdaftar / ditangguhkan
-│   ├── dev-preview.tsx      # pemilih role (development saja)
+│   ├── index.tsx            # layar masuk (nonce + Google)
+│   ├── role-checking.tsx    # layar pemeriksaan peran (kemajuan nyata)
+│   ├── not-registered.tsx   # penjelasan akun ditolak
+│   ├── dev-preview.tsx      # diagnostik build (development saja)
 │   ├── +not-found.tsx
 │   └── (app)/               # area terautentikasi
 │       ├── _layout.tsx      # penjaga navigasi: tanpa sesi → layar masuk
@@ -192,8 +293,8 @@ apps/mobile/
 ├── src/
 │   ├── components/          # komponen UI yang dipakai ulang
 │   ├── features/
-│   │   ├── api/             # klien HTTP + diagnostik koneksi backend (dev)
-│   │   ├── auth/            # sesi, mode demo, pemetaan role → rute
+│   │   ├── api/             # transport HTTP, konfigurasi alamat, diagnostik
+│   │   ├── auth/            # sesi, token store, Google Sign-In, klien auth
 │   │   └── dashboard/       # blok dashboard dan data contoh
 │   ├── theme/               # design tokens (satu sumber kebenaran)
 │   └── types/               # tipe bersama
@@ -206,7 +307,7 @@ apps/mobile/
 
 ## Aset brand — logo resmi
 
-`assets/branding/` kini berisi turunan **logo resmi FaceLink AI** yang diberikan
+`assets/branding/` berisi turunan **logo resmi FaceLink AI** yang diberikan
 pemilik project. Mark dan ikon aplikasi berasal dari
 `design-inputs/logo/logo.png` (latar penuh) dan `logo-white-noBg.png` (latar
 dihapus); turunannya di-commit di sini sebagai aset aplikasi:
@@ -218,57 +319,3 @@ dihapus); turunannya di-commit di sini sebagai aset aplikasi:
 | `adaptive-icon-foreground.png` | mark untuk ikon adaptif Android |
 | `adaptive-icon-monochrome.png` | mark satu warna untuk tema Android |
 | `splash-icon.png` | gambar splash |
-| `favicon.png` | ikon tab web |
-
-Latar aplikasi, splash, dan ikon adaptif memakai **hitam pekat** (`#000000`),
-sesuai latar logo resmi. Aksen merah `#FF171B` diambil langsung dari piksel logo
-dan menjadi satu-satunya warna merek di `src/theme/tokens.ts`.
-
-Wordmark "FaceLink Ai" pada layar masuk digambar sebagai teks (bukan bagian dari
-berkas gambar) supaya tajam di semua kerapatan layar. Jenis hurufnya **Poppins**
-(SIL Open Font License, gratis) sesuai pilihan pemilik project, dimuat di
-`app/_layout.tsx` lewat `@expo-google-fonts/poppins`. Yang dibundel hanya lima
-ketebalan yang dipakai (400, 500, 600, 700, 800); impor dari akar paket akan
-membundel seluruh 18 berkas dan menambah ~2 MB tanpa manfaat.
-
-Pemilihan ketebalan memakai `fontFamily` (satu berkas per ketebalan), bukan
-`fontWeight`: pada Android, memaksa `fontWeight` untuk font kustom membuat
-sistem memilih fallback. Bila pemilik memberikan logo wordmark sebagai gambar,
-cukup ganti komponen `BrandLogo`.
-
-### Menaruh bahan referensi dan video
-
-Bahan mentah desain ditaruh di **`design-inputs/`** pada akar repository. Folder
-itu **tidak di-commit** (lihat `.gitignore`): isinya boleh berupa karya pihak
-lain, berkas berukuran besar, atau rekaman yang memuat wajah orang.
-
-| Folder | Isi |
-|---|---|
-| `design-inputs/logo/` | Logo resmi (master) — `.svg`, `.ai`, `.psd`, atau PNG besar |
-| `design-inputs/referensi-ui/` | Mockup, sketsa, moodboard, screenshot acuan |
-| `design-inputs/video/` | Video acuan (`.mp4`/`.mov`/`.webm`) |
-
-**Batas yang tidak boleh dilanggar:** video atau gambar yang memuat wajah orang
-tidak boleh ikut di-commit. Klip latar layar masuk karena itu **tidak** masuk
-repository; lihat `assets/video/BACA-SAYA.md` untuk cara memasangnya di laptop
-sendiri dan konsekuensinya pada mesin lain.
-
-Mengganti aset brand:
-
-1. Timpa `assets/branding/logo-mark.png` (mark di dalam aplikasi, latar
-   transparan, rasio 1:1).
-2. Timpa `icon.png`, `adaptive-icon-foreground.png`,
-   `adaptive-icon-monochrome.png`, `splash-icon.png`, dan `favicon.png` bila
-   ukuran berbeda diperlukan.
-3. Warna brand diatur terpusat di `src/theme/tokens.ts`.
-
-Tidak ada penyesuaian layout yang diperlukan: ukuran logo diambil dari token
-`layout.logoSize`, dan gambar memakai `resizeMode: contain` sehingga proporsi asli
-selalu terjaga.
-
-## Yang belum ada (di luar lingkup FL-UI01/FL-NET01)
-
-Google OAuth sungguhan, penyimpanan sesi/token, login pengguna produksi, CRUD
-admin, API absensi, kamera IoT, pengenalan wajah, enrollment biometrik,
-notifikasi, dan TLS LAN produksi. Diagnostik koneksi hanya membaca status
-layanan; ia bukan lapisan API untuk fitur.

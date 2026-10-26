@@ -19,7 +19,9 @@
         }
       ],
       "expo-video",
-      "expo-font"
+      "expo-font",
+      "expo-secure-store",
+      "./plugins/with-dev-tls"
     ],
     "ios": {
       "supportsTablet": true,
@@ -27,7 +29,6 @@
     },
     "android": {
       "package": "ai.facelink.mobile",
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "adaptiveIcon": {
         "backgroundColor": "#000000",

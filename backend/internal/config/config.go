@@ -41,6 +41,11 @@ const (
 	// GoogleJWKSURL adalah sumber kunci publik Google. Dapat diarahkan ke
 	// penyedia simulasi pada pengujian; bawaannya endpoint resmi Google.
 	EnvGoogleJWKSURL = "FACELINK_GOOGLE_JWKS_URL"
+	// EnvTLSCert dan EnvTLSKey mengaktifkan HTTPS pada backend. Keduanya harus
+	// diisi bersamaan atau dikosongkan bersamaan; hanya satu yang diisi ditolak
+	// agar tidak ada kesan "HTTPS aktif" padahal tidak.
+	EnvTLSCert = "FACELINK_TLS_CERT"
+	EnvTLSKey  = "FACELINK_TLS_KEY"
 )
 
 // Nilai bawaan. Alamat bawaan sengaja loopback: mesin AI lokal dan backend tidak
@@ -85,6 +90,12 @@ type Config struct {
 	GoogleClientIDs []string
 	// GoogleJWKSURL adalah alamat JWKS Google.
 	GoogleJWKSURL string
+	// TLSCertPath dan TLSKeyPath adalah jalur sertifikat dan kunci privat untuk
+	// mengaktifkan HTTPS. Keduanya kosong berarti server memakai HTTP polos
+	// (hanya sah untuk loopback pada build development). Lihat
+	// docs/SECURITY_PRIVACY.md §6.
+	TLSCertPath string
+	TLSKeyPath  string
 	// Timeout server HTTP.
 	ReadTimeout     time.Duration
 	WriteTimeout    time.Duration
@@ -111,8 +122,15 @@ func (c Config) Redacted() map[string]any {
 		// konfigurasi yang dapat berubah.
 		googleState = fmt.Sprintf("configured (%d client id)", len(c.GoogleClientIDs))
 	}
+	// Jalur sertifikat bukan rahasia, tetapi kunci privatnya jelas rahasia;
+	// keduanya diringkas menjadi satu status agar tidak ada jalur yang tercatat.
+	tlsState := "off"
+	if c.TLSCertPath != "" {
+		tlsState = "on"
+	}
 	return map[string]any{
 		"addr":             c.Addr,
+		"tls":              tlsState,
 		"database_path":    c.DatabasePath,
 		"migrations_dir":   c.MigrationsDir,
 		"ai_engine_url":    aiState,
@@ -213,6 +231,25 @@ func LoadFrom(lookup EnvLookup) (Config, error) {
 		problems = append(problems, fmt.Sprintf("%s: %v", EnvGoogleJWKSURL, err))
 	}
 
+	// HTTPS opsional. Kedua jalur harus diisi bersama: sertifikat tanpa kunci
+	// (atau sebaliknya) hampir pasti salah konfigurasi, dan menebak akan
+	// menghasilkan server yang tampak aman tetapi tidak dapat mulai.
+	tlsCert := strings.TrimSpace(getString(lookup, EnvTLSCert, ""))
+	tlsKey := strings.TrimSpace(getString(lookup, EnvTLSKey, ""))
+	switch {
+	case tlsCert == "" && tlsKey == "":
+		// HTTP polos; tetap loopback-only lewat validateAddr.
+	case tlsCert == "" || tlsKey == "":
+		problems = append(problems, fmt.Sprintf("%s dan %s harus diisi bersamaan atau dikosongkan bersamaan", EnvTLSCert, EnvTLSKey))
+	default:
+		if err := validateReadableFile(tlsCert); err != nil {
+			problems = append(problems, fmt.Sprintf("%s: %v", EnvTLSCert, err))
+		}
+		if err := validateReadableFile(tlsKey); err != nil {
+			problems = append(problems, fmt.Sprintf("%s: %v", EnvTLSKey, err))
+		}
+	}
+
 	if len(problems) > 0 {
 		return Config{}, fmt.Errorf("konfigurasi tidak valid:\n  - %s", strings.Join(problems, "\n  - "))
 	}
@@ -224,6 +261,8 @@ func LoadFrom(lookup EnvLookup) (Config, error) {
 		AIEngineURL:     aiURL,
 		GoogleClientIDs: clientIDs,
 		GoogleJWKSURL:   jwksURL,
+		TLSCertPath:     tlsCert,
+		TLSKeyPath:      tlsKey,
 		ReadTimeout:     readTimeout,
 		WriteTimeout:    writeTimeout,
 		IdleTimeout:     idleTimeout,
@@ -341,6 +380,17 @@ func validateLoopbackURL(raw string) error {
 // disinkronkan ke awan (docs/DATA_MODEL.md §7.4). Berkas SQLite pada
 // OneDrive/Dropbox/Google Drive menghasilkan penguncian yang tidak dapat
 // diandalkan dan menyebarkan data biometrik ke luar mesin.
+func validateReadableFile(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return fmt.Errorf("berkas %q tidak dapat dibaca: %w", path, err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("%q adalah direktori, bukan berkas", path)
+	}
+	return nil
+}
+
 func validateLocalPath(path string) error {
 	lower := strings.ToLower(filepath.ToSlash(path))
 	synced := []string{

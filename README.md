@@ -54,8 +54,9 @@ Alur di bawah adalah **rancangan FL-010U (16 Oktober 2026)** untuk tiga role pen
 | 9 | [`docs/UX_FLOWS.md`](docs/UX_FLOWS.md) dan [`docs/TEST_PLAN.md`](docs/TEST_PLAN.md) | Alur aplikasi dan pengujian |
 | 10 | [`docs/ROADMAP.md`](docs/ROADMAP.md) dan [`docs/BACKLOG.md`](docs/BACKLOG.md) | Tahapan dan unit pekerjaan AI coding |
 | 11 | [`docs/DEVICE_HARDWARE.md`](docs/DEVICE_HARDWARE.md) | Rencana perangkat IoT di fase berikutnya |
-| 12 | [`docs/AGENT_BOOTSTRAP.md`](docs/AGENT_BOOTSTRAP.md) dan [`docs/COLLABORATION.md`](docs/COLLABORATION.md) | Mulai sesi agent dan kolaborasi GitHub |
-| 13 | [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md) dan [`docs/REFERENCES.md`](docs/REFERENCES.md) | Keputusan terbuka dan bacaan teknis |
+| 12 | [`docs/ANDROID_SETUP.md`](docs/ANDROID_SETUP.md) | Setup JDK 17, Android SDK, ADB, dev build, dan Google OAuth Android (Windows) |
+| 13 | [`docs/AGENT_BOOTSTRAP.md`](docs/AGENT_BOOTSTRAP.md) dan [`docs/COLLABORATION.md`](docs/COLLABORATION.md) | Mulai sesi agent dan kolaborasi GitHub |
+| 14 | [`docs/OPEN_QUESTIONS.md`](docs/OPEN_QUESTIONS.md) dan [`docs/REFERENCES.md`](docs/REFERENCES.md) | Keputusan terbuka dan bacaan teknis |
 | — | [`research/README.md`](research/README.md) | Tempat terpisah untuk jurnal/riset akademik tim |
 
 ## Kandidat teknologi (stack final MVP setelah FL-003)
@@ -65,7 +66,7 @@ Alur di bawah adalah **rancangan FL-010U (16 Oktober 2026)** untuk tiga role pen
 - **AI lokal:** Python + OpenCV dengan **YuNet** (deteksi) dan **SFace** (pengenalan) sebagai model MVP (D-012); bobot berlisensi non-permisif seperti InsightFace/ArcFace tidak dipakai (D-025). **Ambang kecocokan belum ditetapkan** dan harus dikalibrasi pada peserta uji.
 - **Database:** **SQLite mode WAL** untuk MVP (D-020), dengan skema dan migrasi tetap portabel ke PostgreSQL; PostgreSQL awal ditunda (D-011). Migrasi dijalankan dari sisi Go (D-026).
 - **Perangkat kamera:** webcam selama development; ESP32-S3 CAM setelah software bekerja, sebagai klien pengunggah JPEG (D-023), bukan host model AI.
-- **Autentikasi:** **Google Sign-In** sebagai metode utama bagi tiga role manusia (`admin`, `dosen`, `mahasiswa`) — **sudah diimplementasikan pada backend (FL-011, 16 Oktober 2026)**; aplikasi klien React Native belum ada. Tidak ada login email/kata sandi buatan sendiri; role **hanya** ditetapkan `admin` di backend dan tidak pernah berasal dari Google atau dari aplikasi. Sesi aplikasi memakai token opak (bukan ID token Google) yang disimpan sebagai hash di tabel `session_tokens`. `device` memakai jalur autentikasi mesin yang terpisah.
+- **Autentikasi:** **Google Sign-In** sebagai metode utama bagi tiga role manusia (`admin`, `dosen`, `mahasiswa`) — **sudah diimplementasikan pada backend (FL-011) dan klien React Native-nya sudah memanggil endpoint itu (FL-UI02, belum di-merge)**; login di perangkat Android **belum terverifikasi** karena JDK/Android SDK belum tersedia. Tidak ada login email/kata sandi buatan sendiri; role **hanya** ditetapkan `admin` di backend dan tidak pernah berasal dari Google atau dari aplikasi. Sesi aplikasi memakai token opak (bukan ID token Google) yang disimpan sebagai hash di tabel `session_tokens`. `device` memakai jalur autentikasi mesin yang terpisah.
 
 Kontrak dan skema rinci ada di [`docs/API_CONTRACT.md`](docs/API_CONTRACT.md) dan [`docs/DATA_MODEL.md`](docs/DATA_MODEL.md); matriks peran/izin ada di [`docs/AUTHORIZATION.md`](docs/AUTHORIZATION.md). **Persetujuan stack ini adalah persetujuan arsitektur, bukan izin implementasi.**
 
