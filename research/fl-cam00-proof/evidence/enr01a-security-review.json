@@ -1,0 +1,59 @@
+{
+  "status": "PASSED",
+  "mode": "Two independent read-only source reviewers, followed by fix-specific re-review; not security certification or runtime execution",
+  "initialFindings": [
+    {
+      "area": "NativeCaptureAdapter notification/drain ordering",
+      "severity": "P2",
+      "risk": "Successful READY callback could be delivered after drain acknowledgement/new generation.",
+      "fix": "Track notificationInFlight and cleanupComplete; wipe physical buffers first, defer active-slot release and drain until callbacks return.",
+      "reproduction": "Regression failed before fix: Drain acknowledged before the in-flight READY notification returned.",
+      "verification": "224 pure JVM adapter assertions passed after fix, including cancel+dispose notification ordering.",
+      "review": "Fixed; no additional evidence-backed defect in changed completion code."
+    },
+    {
+      "area": "FaceLinkCaptureModule.consume sandbox watcher",
+      "severity": "P2",
+      "risk": "Old queued consume finally could stop a newer session observer.",
+      "fix": "watchSession identity and generation/idle/synthetic guard under lifecycleLock; generated module synchronized.",
+      "verification": "Independent source re-review confirms fix and generated parity; no Android module race runtime test yet.",
+      "review": "Fixed at source level; no additional evidence-backed defect in requested fix."
+    }
+  ],
+  "caveats": [
+    "Reserved READY callback may race cancel beginning, but cannot outlive drain acknowledgement; consume remains authoritative.",
+    "Parent separately exercised 12/12 actual Android synthetic-codec cases, OS HOME/resume after suite, force-stop/cold-start, and bounded storage observations; reviewers themselves performed source review only.",
+    "No total JVM/native zeroization, whole-process memory cap, zero telemetry, enrollment/PAD/recognition approval."
+  ],
+  "compatibility": {
+    "stackMetadata": "Expo58 / RN0.88 / React19.3 / Nitro0.37.1 matches main package; VC5.2.3 detector2.1.0 NitroImage0.15.2 needed in native build.",
+    "mainAppChanged": false,
+    "expoGo": false,
+    "ios": false,
+    "mainDevelopmentBuildRuntime": "NOT_RUN"
+  },
+  "runtimeEvidence": [
+    "enr01a-native-codec.json",
+    "enr01a-storage-codec.json",
+    "enr01a-lifecycle.json",
+    "enr01a-screenshot-privacy.json"
+  ],
+  "finalGate": {
+    "task": "FL-ENR01A",
+    "implementation": "PASSED",
+    "nativeAdapter": "GO technical limited to documented Android synthetic-fixture/native-consumer scope",
+    "mainFaceLinkIntegration": "NO-GO",
+    "integrationDependencies": "PARTIAL",
+    "realHumanCapture": "NO-GO",
+    "p01ThroughP12ApprovalChanged": false,
+    "unclaimed": [
+      "Enrollment E2E PASS",
+      "Biometric security PASS",
+      "Liveness/PAD PASS",
+      "Recognition accuracy PASS"
+    ],
+    "report": "docs/FL_ENR01A_TECHNICAL_REPORT.md",
+    "contract": "docs/FL_ENR01A_CAPTURE_ADAPTER_CONTRACT.md",
+    "stop": true
+  }
+}

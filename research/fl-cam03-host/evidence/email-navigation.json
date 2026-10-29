@@ -1,0 +1,17 @@
+{
+  "texts": [
+    "",
+    "FaceLink",
+    "Ai",
+    "LANGKAH 1/2",
+    "Masuk dengan FaceLink",
+    "Masukkan email yang telah diundang admin. Role dan akses akun ditentukan server FaceLink AI.",
+    "Alamat email",
+    "nama@facelink.online",
+    "Gunakan alamat yang sudah didaftarkan admin, misalnya nama@facelink.online.",
+    "Kirim kode verifikasi"
+  ],
+  "emailInputVisible": true,
+  "otpRequested": false,
+  "credentialsEntered": false
+}

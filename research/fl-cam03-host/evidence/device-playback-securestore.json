@@ -1,0 +1,47 @@
+[
+  {
+    "host": {
+      "secureStoreAvailable": true,
+      "sessionStatus": "signedOut",
+      "apiConfigurationValid": true,
+      "apiProtocol": "https:",
+      "apiUsesHttps": true
+    }
+  },
+  {
+    "playback": {
+      "scope": "staging_actual_host_player_events_only",
+      "visualAppearanceVerified": false,
+      "maxPlayersRetained": 8,
+      "droppedPlayers": 0,
+      "bothPlayersPlayedAndProgressed": true,
+      "simultaneousPlayingObserved": true,
+      "players": [
+        {
+          "slot": 0,
+          "attached": true,
+          "readyObserved": true,
+          "errorObserved": false,
+          "playing": false,
+          "played": true,
+          "progressed": true,
+          "pairOverlapObserved": true,
+          "timeUpdates": 1843,
+          "maxPositionSeconds": 8.029
+        },
+        {
+          "slot": 1,
+          "attached": true,
+          "readyObserved": true,
+          "errorObserved": false,
+          "playing": false,
+          "played": true,
+          "progressed": true,
+          "pairOverlapObserved": true,
+          "timeUpdates": 1843,
+          "maxPositionSeconds": 8.031
+        }
+      ]
+    }
+  }
+]

@@ -1,0 +1,16 @@
+{
+  "install": "Performing Streamed Install\r\nSuccess",
+  "mainApkBefore": [
+    {
+      "path": "[redacted device installation path]",
+      "sha256": "f4cc2eae08fc95681960e9fbf33808e382125961d6a4304c7b1d2cc60967bf8b",
+      "bytes": 100168685
+    }
+  ],
+  "stage": {
+    "path": "[redacted device installation path]",
+    "sha256": "518acad24c21cbf3a006f96dfa205f6f5bc268eeb9d6ce365bf82798c0417e9f",
+    "bytes": 63965254,
+    "matchesArtifact": true
+  }
+}

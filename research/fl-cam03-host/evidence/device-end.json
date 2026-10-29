@@ -1,0 +1,19 @@
+{
+  "explicitBackToLogin": true,
+  "settings": {
+    "screen_brightness": "3",
+    "screen_brightness_mode": "0",
+    "screen_off_timeout": "1800000",
+    "stay_on_while_plugged_in": "15",
+    "accelerometer_rotation": "1",
+    "user_rotation": "0"
+  },
+  "settingsUnchanged": true,
+  "mainApkUnchanged": true,
+  "mainPid": "",
+  "stageStopped": true,
+  "crashBufferEntries": [],
+  "cameraOpened": false,
+  "otpRequested": false,
+  "screenshotSaved": false
+}

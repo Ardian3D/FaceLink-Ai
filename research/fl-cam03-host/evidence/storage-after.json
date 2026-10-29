@@ -1,0 +1,632 @@
+[
+  {
+    "host": {
+      "secureStoreAvailable": true,
+      "sessionStatus": "signedOut",
+      "apiConfigurationValid": true,
+      "apiProtocol": "https:",
+      "apiUsesHttps": true
+    }
+  },
+  {
+    "status": {
+      "peakOwnedBytes": 0,
+      "lastError": null,
+      "limits": {
+        "consumeTimeoutMs": 5000,
+        "readyTtlMs": 5000,
+        "encodeTimeoutMs": 5000,
+        "maxJpegBytes": 4194304,
+        "freshnessMs": 400,
+        "maxOwnedBytes": 16777216,
+        "maxPixels": 2073600
+      },
+      "adapterPhase": null,
+      "ownedFrames": 0,
+      "ownedBytes": 0,
+      "busy": false,
+      "ownershipKnown": true,
+      "foreground": true,
+      "suiteDrained": true,
+      "disposed": false,
+      "phase": "IDLE"
+    }
+  },
+  {
+    "report": {
+      "cases": [
+        {
+          "assertions": {
+            "cleanupAcknowledged": true,
+            "releaseExactlyOnce": true,
+            "framesZero": true,
+            "doubleConsumeRejected": true,
+            "realCodecUsed": true,
+            "oneCompletion": true,
+            "exactLengthDecoded": true,
+            "readOnly": true,
+            "readyArrived": true,
+            "buffersZero": true,
+            "accepted": true
+          },
+          "observations": {
+            "ownedFramesAfter": 0,
+            "peakOwnedBytes": 4194688,
+            "ownedBytesAfter": 0,
+            "callbacks": 1,
+            "validatedBytes": 709,
+            "firstWriteOnCodecStack": true,
+            "codecWrites": 1,
+            "jpegBytes": 709,
+            "inputCloseCount": 1,
+            "source": "synthetic_yuv_android_codec"
+          },
+          "status": "PASSED",
+          "passed": true,
+          "name": "consume_once_and_double_reject"
+        },
+        {
+          "assertions": {
+            "releaseExactlyOnce": true,
+            "framesZero": true,
+            "cleanupAcknowledged": true,
+            "rejectedCallerOwnsInput": true,
+            "buffersZero": true,
+            "concurrentCaptureRejected": true,
+            "oneCompletion": true,
+            "staleGenerationRejected": true,
+            "readyArrived": true
+          },
+          "observations": {
+            "ownedFramesAfter": 0,
+            "peakOwnedBytes": 4194688,
+            "ownedBytesAfter": 0,
+            "callbacks": 1,
+            "source": "synthetic_yuv_android_codec",
+            "inputCloseCount": 1,
+            "firstWriteOnCodecStack": true,
+            "codecWrites": 1,
+            "stage": "ready_claim"
+          },
+          "status": "PASSED",
+          "passed": true,
+          "name": "stale_generation_and_concurrent_capture"
+        },
+        {
+          "assertions": {
+            "releaseExactlyOnce": true,
+            "framesZero": true,
+            "oneCompletion": true,
+            "secondConsumerRejected": true,
+            "cleanupAcknowledged": true,
+            "firstConsumerEntered": true,
+            "buffersZero": true,
+            "oneWinner": true,
+            "consumerFinished": true,
+            "readyArrived": true
+          },
+          "observations": {
+            "ownedFramesAfter": 0,
+            "peakOwnedBytes": 4194688,
+            "ownedBytesAfter": 0,
+            "callbacks": 1,
+            "source": "synthetic_yuv_android_codec",
+            "inputCloseCount": 1,
+            "firstWriteOnCodecStack": true,
+            "codecWrites": 1,
+            "successfulConsumers": 1
+          },
+          "status": "PASSED",
+          "passed": true,
+          "name": "concurrent_consume_single_winner"
+        },
+        {
+          "assertions": {
+            "oneCompletion": true,
+            "buffersZero": true,
+            "cleanupAcknowledged": true,
+            "injectedInsideActualCodecWrite": true,
+            "eventualRelease": true,
+            "noHandleOrSuccess": true,
+            "releaseExactlyOnce": true,
+            "framesZero": true,
+            "completionArrived": true
+          },
+          "observations": {
+            "ownedFramesAfter": 0,
+            "callbacks": 1,
+            "firstWriteOnCodecStack": true,
+            "codecWrites": 1,
+            "error": "E_CAPTURE_CANCELLED",
+            "peakOwnedBytes": 4194688,
+            "ownedBytesAfter": 0,
+            "injection": "cancel",
+            "stage": "YuvImage.compressToJpeg.OutputStream.firstWrite",
+            "inputCloseCount": 1,
+            "source": "synthetic_yuv_android_codec"
+          },
+          "status": "PASSED",
+          "passed": true,
+          "name": "codec_first_write_cancel"
+        },
+        {
+          "assertions": {
+            "oneCompletion": true,
+            "buffersZero": true,
+            "cleanupAcknowledged": true,
+            "injectedInsideActualCodecWrite": true,
+            "eventualRelease": true,
+            "noHandleOrSuccess": true,
+            "releaseExactlyOnce": true,
+            "framesZero": true,
+            "completionArrived": true
+          },
+          "observations": {
+            "ownedFramesAfter": 0,
+            "callbacks": 1,
+            "firstWriteOnCodecStack": true,
+            "codecWrites": 1,
+            "error": "E_CAPTURE_BACKGROUND",
+            "peakOwnedBytes": 4194688,
+            "ownedBytesAfter": 0,
+            "injection": "native_lifecycle_boundary_injection_not_OS_background",
+            "stage": "YuvImage.compressToJpeg.OutputStream.firstWrite",
+            "inputCloseCount": 1,
+            "source": "synthetic_yuv_android_codec"
+          },
+          "status": "PASSED",
+          "passed": true,
+          "name": "codec_first_write_lifecycle_boundary"
+        },
+        {
+          "assertions": {
+            "oneCompletion": true,
+            "buffersZero": true,
+            "cleanupAcknowledged": true,
+            "injectedInsideActualCodecWrite": true,
+            "eventualRelease": true,
+            "noHandleOrSuccess": true,
+            "releaseExactlyOnce": true,
+            "framesZero": true,
+            "completionArrived": true
+          },
+          "observations": {
+            "ownedFramesAfter": 0,
+            "callbacks": 1,
+            "firstWriteOnCodecStack": true,
+            "codecWrites": 1,
+            "error": "E_CAM02_JPEG_FORMAT",
+            "peakOwnedBytes": 4194688,
+            "ownedBytesAfter": 0,
+            "injection": "output_exception",
+            "stage": "YuvImage.compressToJpeg.OutputStream.firstWrite",
+            "inputCloseCount": 1,
+            "source": "synthetic_yuv_android_codec"
+          },
+          "status": "PASSED",
+          "passed": true,
+          "name": "codec_first_write_output_exception"
+        },
+        {
+          "assertions": {
+            "oneCompletion": true,
+            "releaseExactlyOnce": true,
+            "framesZero": true,
+            "buffersZero": true,
+            "codecNeverEnteredAfterExpiry": true,
+            "noLateHandle": true,
+            "cleanupAcknowledged": true,
+            "timeoutCompletion": true
+          },
+          "observations": {
+            "ownedFramesAfter": 0,
+            "peakOwnedBytes": 0,
+            "ownedBytesAfter": 0,
+            "callbacks": 1,
+            "source": "synthetic_yuv_android_codec",
+            "inputCloseCount": 1,
+            "firstWriteOnCodecStack": false,
+            "codecWrites": 0,
+            "stage": "queued_before_codec"
+          },
+          "status": "PASSED",
+          "passed": true,
+          "name": "queued_input_timeout"
+        },
+        {
+          "assertions": {
+            "oneCompletion": true,
+            "releaseExactlyOnce": true,
+            "framesZero": true,
+            "cleanupAcknowledged": true,
+            "ttlReleased": true,
+            "expiredHandleRejected": true,
+            "buffersZero": true,
+            "readyArrived": true
+          },
+          "observations": {
+            "ownedFramesAfter": 0,
+            "peakOwnedBytes": 4194688,
+            "ownedBytesAfter": 0,
+            "callbacks": 1,
+            "source": "synthetic_yuv_android_codec",
+            "inputCloseCount": 1,
+            "firstWriteOnCodecStack": true,
+            "codecWrites": 1,
+            "stage": "ready_deadline"
+          },
+          "status": "PASSED",
+          "passed": true,
+          "name": "ready_ttl_expiry"
+        },
+        {
+          "assertions": {
+            "oneCompletion": true,
+            "releaseExactlyOnce": true,
+            "framesZero": true,
+            "cleanupAcknowledged": true,
+            "exceptionIsSafeFailure": true,
+            "buffersZero": true,
+            "failedConsumeNotReusable": true,
+            "readyArrived": true
+          },
+          "observations": {
+            "ownedFramesAfter": 0,
+            "peakOwnedBytes": 4194688,
+            "ownedBytesAfter": 0,
+            "callbacks": 1,
+            "source": "synthetic_yuv_android_codec",
+            "inputCloseCount": 1,
+            "firstWriteOnCodecStack": true,
+            "codecWrites": 1,
+            "stage": "native_consumer_callback"
+          },
+          "status": "PASSED",
+          "passed": true,
+          "name": "consumer_exception_cleanup"
+        },
+        {
+          "assertions": {
+            "releaseExactlyOnce": true,
+            "oneCompletion": true,
+            "framesZero": true,
+            "buffersZero": true,
+            "cleanupAcknowledged": true,
+            "timedOutHandleRejected": true,
+            "consumerEntered": true,
+            "bufferHeldWhileCallbackReads": true,
+            "consumerReturned": true,
+            "logicalTimeoutObserved": true,
+            "noLateConsumeSuccess": true,
+            "readyArrived": true
+          },
+          "observations": {
+            "ownedFramesAfter": 0,
+            "peakOwnedBytes": 4194688,
+            "ownedBytesAfter": 0,
+            "callbacks": 1,
+            "firstWriteOnCodecStack": true,
+            "codecWrites": 1,
+            "error": "E_CAPTURE_CONSUME_TIMEOUT",
+            "stage": "native_consumer_logical_deadline",
+            "inputCloseCount": 1,
+            "source": "synthetic_yuv_android_codec"
+          },
+          "status": "PASSED",
+          "passed": true,
+          "name": "consumer_timeout_cooperative_release"
+        },
+        {
+          "assertions": {
+            "oneCompletion": true,
+            "releaseExactlyOnce": true,
+            "framesZero": true,
+            "buffersZero": true,
+            "failureCompletion": true,
+            "peakWithinBudget": true,
+            "cleanupAcknowledged": true,
+            "budgetRejectedWithoutHandle": true
+          },
+          "observations": {
+            "ownedFramesAfter": 0,
+            "peakOwnedBytes": 0,
+            "ownedBytesAfter": 0,
+            "callbacks": 1,
+            "firstWriteOnCodecStack": false,
+            "codecWrites": 0,
+            "error": "E_CAPTURE_OWNED_CAP",
+            "stage": "production_adapter_allocation_budget",
+            "inputCloseCount": 1,
+            "source": "synthetic_yuv_android_codec"
+          },
+          "status": "PASSED",
+          "passed": true,
+          "name": "owned_buffer_budget"
+        },
+        {
+          "assertions": {
+            "oneCompletion": true,
+            "releaseExactlyOnce": true,
+            "framesZero": true,
+            "cleanupAcknowledged": true,
+            "outputFailureWithoutHandle": true,
+            "buffersZero": true,
+            "realCodecEntered": true,
+            "failureCompletion": true
+          },
+          "observations": {
+            "ownedFramesAfter": 0,
+            "peakOwnedBytes": 448,
+            "ownedBytesAfter": 0,
+            "callbacks": 1,
+            "firstWriteOnCodecStack": true,
+            "codecWrites": 1,
+            "error": "E_CAM02_JPEG_FORMAT",
+            "stage": "YuvImage.compressToJpeg.capped_output",
+            "inputCloseCount": 1,
+            "source": "synthetic_yuv_android_codec"
+          },
+          "status": "PASSED",
+          "passed": true,
+          "name": "real_codec_output_budget_failure"
+        },
+        {
+          "assertions": {
+            "peakWithinCoreBudget": true,
+            "fixtureArraysWipedBestEffort": true,
+            "framesZero": true,
+            "secondPhysicallyReleasedBeforeNextGeneration": true,
+            "secondDoubleConsumeRejected": true,
+            "secondJpegFormatAndBoundsValidated": true,
+            "firstJpegFormatAndBoundsValidated": true,
+            "secondConsumerImageInfoExact": true,
+            "twoDistinctFixtureContents": true,
+            "secondReceiptMatchesInputAndReady": true,
+            "firstReadyMatchesSelectedInput": true,
+            "secondReadOnlyExactLengthScope": true,
+            "buffersZero": true,
+            "cleanupAcknowledged": true,
+            "secondReadyDimensionsExact": true,
+            "firstDoubleConsumeRejected": true,
+            "secondReadyMatchesSelectedInput": true,
+            "firstPhysicallyReleasedBeforeNextGeneration": true,
+            "stalePriorGenerationRejected": true,
+            "firstReadyDimensionsExact": true,
+            "priorHandleRejectedInNewGeneration": true,
+            "firstReceiptMatchesInputAndReady": true,
+            "firstReadOnlyExactLengthScope": true,
+            "staleGenerationCannotRearm": true,
+            "firstConsumerImageInfoExact": true,
+            "bothInputsReleasedExactlyOnce": true,
+            "strictlyIncreasingGeneration": true
+          },
+          "observations": {
+            "ownedFramesAfter": 0,
+            "nativeContentDifferent": true,
+            "secondJpegBytes": 718,
+            "secondGeneration": 2,
+            "format": "image/jpeg",
+            "peakOwnedBytes": 4194688,
+            "height": 16,
+            "firstFrameId": "host-synthetic-a",
+            "inputCloseCount": 2,
+            "width": 16,
+            "fixtureCount": 2,
+            "ownedBytesAfter": 0,
+            "secondFrameId": "host-synthetic-b",
+            "firstJpegBytes": 706,
+            "firstGeneration": 1,
+            "source": "synthetic_yuv_android_codec"
+          },
+          "status": "PASSED",
+          "passed": true,
+          "name": "native_identity_content_two_generations"
+        }
+      ],
+      "status": "PASSED",
+      "passed": true,
+      "source": "synthetic_native_host",
+      "suite": "FL-CAM03"
+    }
+  },
+  {
+    "inventory": {
+      "warnings": [
+        "E_INVENTORY_ROOT_UNAVAILABLE_no_backup"
+      ],
+      "entries": [
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953510000,
+          "name": ".",
+          "bytes": 3452,
+          "kind": "directory",
+          "root": "files"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953510000,
+          "name": "profileInstalled",
+          "bytes": 24,
+          "kind": "file",
+          "root": "files"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953509000,
+          "name": ".",
+          "bytes": 3452,
+          "kind": "directory",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "ExpoVideoCache",
+          "bytes": 3452,
+          "kind": "directory",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "ExpoVideoCache/41afcc03-7522-4833-971d-6497598dfbcb",
+          "bytes": 3452,
+          "kind": "directory",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "ExpoVideoCache/41afcc03-7522-4833-971d-6497598dfbcb/e42587d9ffd91cc.uid",
+          "bytes": 0,
+          "kind": "file",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "ExponentAsset-093ee89be9ede30383f39a899c485a82.ttf",
+          "bytes": 158240,
+          "kind": "file",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "ExponentAsset-bf59c687bc6d3a70204d3944082c5cc0.ttf",
+          "bytes": 156520,
+          "kind": "file",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "ExponentAsset-6f1520d107205975713ba09df778f93f.ttf",
+          "bytes": 155232,
+          "kind": "file",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "ExponentAsset-08c20a487911694291bd8c5de41315ad.ttf",
+          "bytes": 153944,
+          "kind": "file",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "ExponentAsset-d45bdbc2d4a98c1ecb17821a1dbbd3a4.ttf",
+          "bytes": 152764,
+          "kind": "file",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953509000,
+          "name": "oat_primary",
+          "bytes": 3452,
+          "kind": "directory",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953509000,
+          "name": "oat_primary/arm64",
+          "bytes": 3452,
+          "kind": "directory",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953509000,
+          "name": "oat_primary/arm64/base.art",
+          "bytes": 1214400,
+          "kind": "file",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953442000,
+          "name": ".",
+          "bytes": 3452,
+          "kind": "directory",
+          "root": "code_cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": ".",
+          "bytes": 3452,
+          "kind": "directory",
+          "root": "databases"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "exoplayer_internal.db",
+          "bytes": 32768,
+          "kind": "file",
+          "root": "databases"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "exoplayer_internal.db-journal",
+          "bytes": 0,
+          "kind": "file",
+          "root": "databases"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "RKStorage",
+          "bytes": 20480,
+          "kind": "file",
+          "root": "databases"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "RKStorage-journal",
+          "bytes": 0,
+          "kind": "file",
+          "root": "databases"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": ".",
+          "bytes": 3452,
+          "kind": "directory",
+          "root": "shared_prefs"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "expo.modules.kotlin.PersistentDataManager.xml",
+          "bytes": 65,
+          "kind": "file",
+          "root": "shared_prefs"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "ExpoVideoCache.xml",
+          "bytes": 144,
+          "kind": "file",
+          "root": "shared_prefs"
+        }
+      ],
+      "truncated": false,
+      "signatureBytesRead": 0,
+      "capturedAtMs": 72559989,
+      "maxSignatureBytes": 16,
+      "maxDepth": 4,
+      "maxEntries": 256,
+      "scope": "app_private_metadata_only"
+    }
+  }
+]

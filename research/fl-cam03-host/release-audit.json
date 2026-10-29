@@ -1,0 +1,70 @@
+{
+  "status": "PASSED",
+  "build": {
+    "variant": "release",
+    "architecture": "arm64-v8a",
+    "r8": true,
+    "lintVital": true,
+    "workspace": "[redacted local build workspace]",
+    "command": "gradlew.bat assembleRelease -PreactNativeArchitectures=arm64-v8a --offline --console=plain",
+    "success": true,
+    "duration": "7m59s"
+  },
+  "apk": {
+    "name": "cam03-host-arm64-release.apk",
+    "bytes": 63965254,
+    "sha256": "518acad24c21cbf3a006f96dfa205f6f5bc268eeb9d6ce365bf82798c0417e9f"
+  },
+  "packageLine": "package: name='ai.facelink.cam03host' versionCode='1' versionName='0.1.0' platformBuildVersionName='17' platformBuildVersionCode='37' compileSdkVersion='37' compileSdkVersionCodename='17'",
+  "nativeCode": "native-code: 'arm64-v8a'",
+  "sdk": {
+    "min": "24",
+    "target": "36"
+  },
+  "permissions": [
+    "uses-permission: name='android.permission.INTERNET'",
+    "uses-permission: name='android.permission.VIBRATE'",
+    "uses-permission: name='android.permission.ACCESS_NETWORK_STATE'",
+    "uses-permission: name='android.permission.WAKE_LOCK'",
+    "uses-permission: name='android.permission.USE_BIOMETRIC'",
+    "uses-permission: name='android.permission.USE_FINGERPRINT'",
+    "uses-permission: name='ai.facelink.cam03host.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'"
+  ],
+  "forbiddenPermissions": [],
+  "applicationDebuggable": false,
+  "manifestFlags": [
+    "A: http://schemas.android.com/apk/res/android:label(0x01010001)=@0x7f12001f",
+    "A: http://schemas.android.com/apk/res/android:allowBackup(0x01010280)=true",
+    "A: http://schemas.android.com/apk/res/android:extractNativeLibs(0x010104ea)=false",
+    "A: http://schemas.android.com/apk/res/android:screenOrientation(0x0101001e)=1"
+  ],
+  "schemes": [
+    "https",
+    "facelinkcam03",
+    "exp+facelink-cam03-host"
+  ],
+  "activityComponents": [
+    "A: http://schemas.android.com/apk/res/android:name(0x01010003)=\"ai.facelink.mobile.MainApplication\" (Raw: \"ai.facelink.mobile.MainApplication\")",
+    "A: http://schemas.android.com/apk/res/android:name(0x01010003)=\"ai.facelink.mobile.MainActivity\" (Raw: \"ai.facelink.mobile.MainActivity\")"
+  ],
+  "embeddedBundle": {
+    "bytes": 2846340
+  },
+  "nativeLibraries": 33,
+  "arm64Only": true,
+  "zipAlignPassed": true,
+  "nativeZip16kAligned": true,
+  "signing": {
+    "verified": true,
+    "certificate": "c35025080015a041e58a87185154d7a0b0edfa61ae99a349ef9eca2c28f28a18",
+    "debugCertificate": false,
+    "productionDistribution": false
+  },
+  "cameraPermission": false,
+  "limitations": [
+    "No camera opened and no real device execution at this point.",
+    "No visual appearance claim for the login video; only native SDK event metadata will be used.",
+    "Debug vs release permission/TLS differences are source-reviewed; release APK is audited.",
+    "Main app data and APK unchanged; stage has a separate applicationId."
+  ]
+}

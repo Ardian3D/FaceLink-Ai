@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "FaceLink CAM01 Proof",
+    "slug": "facelink-cam00-proof",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "plugins": [
+      "./plugins/withCam01Privacy"
+    ],
+    "android": {
+      "package": "ai.facelink.cam00proof",
+      "allowBackup": false,
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.MANAGE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO"
+      ],
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
+    }
+  }
+}

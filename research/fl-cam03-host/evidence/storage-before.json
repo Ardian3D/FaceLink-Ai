@@ -1,0 +1,202 @@
+[
+  {
+    "inventory": {
+      "warnings": [
+        "E_INVENTORY_ROOT_UNAVAILABLE_no_backup"
+      ],
+      "entries": [
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953510000,
+          "name": ".",
+          "bytes": 3452,
+          "kind": "directory",
+          "root": "files"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953510000,
+          "name": "profileInstalled",
+          "bytes": 24,
+          "kind": "file",
+          "root": "files"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953509000,
+          "name": ".",
+          "bytes": 3452,
+          "kind": "directory",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "ExpoVideoCache",
+          "bytes": 3452,
+          "kind": "directory",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "ExpoVideoCache/41afcc03-7522-4833-971d-6497598dfbcb",
+          "bytes": 3452,
+          "kind": "directory",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "ExpoVideoCache/41afcc03-7522-4833-971d-6497598dfbcb/e42587d9ffd91cc.uid",
+          "bytes": 0,
+          "kind": "file",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "ExponentAsset-093ee89be9ede30383f39a899c485a82.ttf",
+          "bytes": 158240,
+          "kind": "file",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "ExponentAsset-bf59c687bc6d3a70204d3944082c5cc0.ttf",
+          "bytes": 156520,
+          "kind": "file",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "ExponentAsset-6f1520d107205975713ba09df778f93f.ttf",
+          "bytes": 155232,
+          "kind": "file",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "ExponentAsset-08c20a487911694291bd8c5de41315ad.ttf",
+          "bytes": 153944,
+          "kind": "file",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "ExponentAsset-d45bdbc2d4a98c1ecb17821a1dbbd3a4.ttf",
+          "bytes": 152764,
+          "kind": "file",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953509000,
+          "name": "oat_primary",
+          "bytes": 3452,
+          "kind": "directory",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953509000,
+          "name": "oat_primary/arm64",
+          "bytes": 3452,
+          "kind": "directory",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953509000,
+          "name": "oat_primary/arm64/base.art",
+          "bytes": 1214400,
+          "kind": "file",
+          "root": "cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953442000,
+          "name": ".",
+          "bytes": 3452,
+          "kind": "directory",
+          "root": "code_cache"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": ".",
+          "bytes": 3452,
+          "kind": "directory",
+          "root": "databases"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "exoplayer_internal.db",
+          "bytes": 32768,
+          "kind": "file",
+          "root": "databases"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "exoplayer_internal.db-journal",
+          "bytes": 0,
+          "kind": "file",
+          "root": "databases"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "RKStorage",
+          "bytes": 20480,
+          "kind": "file",
+          "root": "databases"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "RKStorage-journal",
+          "bytes": 0,
+          "kind": "file",
+          "root": "databases"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": ".",
+          "bytes": 3452,
+          "kind": "directory",
+          "root": "shared_prefs"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "expo.modules.kotlin.PersistentDataManager.xml",
+          "bytes": 65,
+          "kind": "file",
+          "root": "shared_prefs"
+        },
+        {
+          "signature": null,
+          "modifiedAtMs": 1792953505000,
+          "name": "ExpoVideoCache.xml",
+          "bytes": 144,
+          "kind": "file",
+          "root": "shared_prefs"
+        }
+      ],
+      "truncated": false,
+      "signatureBytesRead": 0,
+      "capturedAtMs": 72480533,
+      "maxSignatureBytes": 16,
+      "maxDepth": 4,
+      "maxEntries": 256,
+      "scope": "app_private_metadata_only"
+    }
+  }
+]

@@ -1,0 +1,31 @@
+{
+  "branch": "feat/fl-otp01-email-auth",
+  "head": "87bac5e96602e9ff5568069d1c6b1bd1d96913b7",
+  "staged": 0,
+  "unstaged": 26,
+  "untracked": 27,
+  "adbUsed": false,
+  "protected": [
+    { "path": "package.json", "bytes": 1687, "sha256": "741e17b3839b2e8ad1e447a769920c0f9f7801766dafd96d56b4218a565d238e" },
+    { "path": "package-lock.json", "bytes": 453508, "sha256": "3b8d5e577300fe347fcc398102ed1ab2a0b4e335927ee911c7dc1f35d4ff6b90" },
+    { "path": "app.json", "bytes": 1123, "sha256": "3808f9d34d381e2d851a026f16078587a2e7899dbeceadeeb853c5db16a6bf3a" },
+    { "path": "metro.config.js", "bytes": 2342, "sha256": "fdc814bf0a2752836743330fde1b9e4a4b5070b585e88a0dd7fe65d66d726a27" },
+    { "path": "vitest.config.mts", "bytes": 1509, "sha256": "730af3c871011bbfe1709b9394971bb02d096f5f911ff4fd522fe6260420b369" },
+    { "path": "app/_layout.tsx", "bytes": 2787, "sha256": "c4dc422b3616f0213269c9610ff11006a7c18c3fb587425879fdc7f00161e1e3" },
+    { "path": "app/index.tsx", "bytes": 12363, "sha256": "7217015bdd88023775c0ed56b2d29d24fde8c96a308abf78e81b5b8fa9beac4c" },
+    { "path": "app/email-login.tsx", "bytes": 14240, "sha256": "648bd194fccaf86db385c99ce5f9078e1a637f5f463d754d3867a0e148d93619" },
+    { "path": "app/role-checking.tsx", "bytes": 5415, "sha256": "55d8fbb0d77ee61deb3b7c9150db549f0752e138d3497061cc188f4f83f21180" },
+    { "path": "src/features/auth/authFlow.ts", "bytes": 15656, "sha256": "9abf1be65ed99c7e12c6cd5cd7674e0d9dd74f82fcfd58b4ae3ff139539e54a4" },
+    { "path": "src/features/auth/emailOtpFlow.ts", "bytes": 5979, "sha256": "3a9eb7c53e327f8071eb276681365d815fc8d585ab160513c783ee921f131f63" },
+    { "path": "src/features/auth/SessionProvider.tsx", "bytes": 3848, "sha256": "f1a848d7b53b5eb95825cdab2a980a0a556158732714e3ca6aa208cee597f5bb" },
+    { "path": "src/features/auth/tokenStore.ts", "bytes": 5840, "sha256": "f3ea0b46c7c56ba7a76b6dae4eef540eb796f797193ad1e448de63611dc3e79d" },
+    { "path": "src/features/api/config.ts", "bytes": 4158, "sha256": "0c951affb2cd23bc766de0f2583ff6a1245aad6f74a74ba2f382764fad865192" },
+    { "path": "src/components/VideoBackground.tsx", "bytes": 8776, "sha256": "a8828dff0bc3ec675edaecf4addf45de3437f8d739226bc68dd48a59eeb59548" },
+    { "path": "assets/video/video1.mp4", "bytes": 2080600, "sha256": "6bb00d5bcb3c9df068cd16da32b53a0069f0784ab8906acc7e9ecfe85ccd6ef3" },
+    { "path": "assets/video/video2.mp4", "bytes": 1819238, "sha256": "12e169fbf412640a205e79defbf9e82101c8b45bfabd58cbffdcef871cb7dac4" },
+    { "path": "android/app/build.gradle", "bytes": 8207, "sha256": "030c4cf135ee5b6d687ef6ee1271454808c1755ec688ef40841ce27a2f9ece1c" },
+    { "path": "android/gradle.properties", "bytes": 3353, "sha256": "41d98fe06dbaf94eba443646a22989eb5cbde71e8e87f0d3c5414c2d63e0f04c" },
+    { "path": "android/app/src/main/AndroidManifest.xml", "bytes": 2527, "sha256": "f643ad248fe1a48339c63fb9febf24d2f4faaefa651f99e4f0b2c3999968b390" },
+    { "path": "android/app/build/outputs/apk/debug/app-debug.apk", "bytes": 100168685, "sha256": "f4cc2eae08fc95681960e9fbf33808e382125961d6a4304c7b1d2cc60967bf8b" }
+  ]
+}

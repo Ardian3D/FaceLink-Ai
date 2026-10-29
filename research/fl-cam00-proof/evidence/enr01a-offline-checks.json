@@ -1,0 +1,47 @@
+{
+  "status": "PASSED",
+  "scope": "Offline checks plus separately authorized Android fixture verification; scopes distinguished per evidence.",
+  "kotlin": {
+    "pixelBoundaryAssertions": 35,
+    "adapterAssertions": 224,
+    "encoder": "Controlled JVM encoders, not Android YuvImage"
+  },
+  "javascript": {
+    "tests": 31,
+    "passed": 31,
+    "failed": 0
+  },
+  "typescript": {
+    "command": "npm run typecheck",
+    "exit": 0,
+    "initialFailure": "TS2345 nullable result; fixed control-flow terminator before final success"
+  },
+  "regression": {
+    "notificationDrainRace": {
+      "before": "FAILED: Drain acknowledged before the in-flight READY notification returned",
+      "after": "PASSED: cancel and dispose wait for notification; physical buffers clean independently"
+    }
+  },
+  "hostSmoke": "enr01a-host-smoke.json",
+  "releaseAudit": "enr01a-release-audit.json",
+  "androidCodecFaultInjection": {
+    "status": "PASSED",
+    "cases": 12,
+    "evidence": "enr01a-native-codec.json",
+    "scope": "Actual Android YuvImage synthetic fixtures; lifecycle-boundary injection inside codec, separate OS HOME/resume after suite."
+  },
+  "warnings": [
+    "Node MODULE_TYPELESS_PACKAGE_JSON runtime warning retained; package type not changed because native plugin uses existing CommonJS convention.",
+    "Deprecated Cam01PrivacyPackage override / Gradle features and upstream warnings; app lintVital and R8 succeeded."
+  ],
+  "dependencies": {
+    "expo": "58.0.19",
+    "react": "19.3.0",
+    "reactNative": "0.88.0",
+    "nitroModules": "0.37.1",
+    "nitroImage": "0.15.2",
+    "visionCamera": "5.2.3",
+    "faceDetector": "2.1.0",
+    "typescript": "6.0.3"
+  }
+}

@@ -1,0 +1,103 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+// FL-ENR02B: this library carries two bridges.
+//
+//  * FaceLinkCaptureHost  — synthetic FL-CAM03 verification. It compiles the audited CAM00
+//    core files below and has no CameraX/ML Kit dependency.
+//  * FaceLinkCaptureLive  — the live CAM00 capture bridge. It compiles only when the installed
+//    react-native-vision-camera-face-detector carries the patched CAM02 source set, which
+//    research/fl-enr02a-host/apply-detector-live.cjs writes (marker comment "FL-ENR02B") and
+//    which supplies Cam02FrameStore, NativeCaptureAdapter, HybridFaceSpec, CameraX and ML Kit.
+//
+// Exactly one bridge registration variant is compiled, because the core classes must have a
+// single owner: the detector project in live mode, this library in synthetic-only mode.
+def liveProperty = findProperty('facelinkCaptureLive')
+def liveOption = (liveProperty != null ? liveProperty.toString() : (System.getenv('FACELINK_CAPTURE_LIVE') ?: '')).trim().toLowerCase()
+def detectorProject = rootProject.findProject(':react-native-vision-camera-face-detector')
+// Fall back to the consuming app's node_modules when autolinking has not registered the project
+// yet: the marker is what decides compilation, the project dependency itself is declared below.
+def detectorBuildFile = detectorProject != null
+    ? new File(detectorProject.projectDir, 'build.gradle')
+    : new File(rootProject.projectDir.parentFile, 'node_modules/react-native-vision-camera-face-detector/android/build.gradle')
+// Configuration-time read: the patched detector is the staging opt-in; an explicit property wins.
+def detectorPatched = detectorBuildFile.isFile() && detectorBuildFile.getText('UTF-8').contains('FL-ENR02B')
+def liveEnabled = liveOption.isEmpty() ? detectorPatched : (liveOption in ['1', 'true', 'yes', 'on'])
+if (liveEnabled && detectorProject == null) {
+    throw new GradleException('FaceLinkCaptureLive requires the autolinked :react-native-vision-camera-face-detector project')
+}
+
+def captureSources = [
+    'ai/facelink/capturehost/**',
+    'com/margelo/nitro/camera/facedetector/NativeCaptureAdapter.kt',
+    'com/margelo/nitro/camera/facedetector/Cam02Pixels.kt',
+    'com/margelo/nitro/camera/facedetector/AndroidCaptureEncoder.kt',
+    'com/margelo/nitro/camera/facedetector/NativeJpegValidationConsumer.kt',
+    'com/margelo/nitro/camera/facedetector/CaptureSyntheticVerification.kt',
+]
+
+def sourceDirectories = ['src/main/java', liveEnabled ? 'src/live/java' : 'src/synthetic/java']
+def includes = liveEnabled ? ['ai/facelink/capturehost/**'] : captureSources
+def coreDirectory = null
+
+if (!liveEnabled) {
+    // Resolve the repository, including file: installs copied into the isolated host's node_modules.
+    // A short build workspace may live outside the repository; CI can pass the canonical root.
+    // The historical implementation stays single-source; no detector patch or generated copy exists.
+    def coreRelative = 'research/fl-cam00-proof/plugins/detector/src/main/kotlin'
+    def explicitRepository = System.getenv('FACELINK_CAPTURE_CORE_REPOSITORY')
+    def repository = explicitRepository ? new File(explicitRepository).canonicalFile : projectDir.canonicalFile
+    while (repository != null && !new File(repository, "${coreRelative}/com/margelo/nitro/camera/facedetector/NativeCaptureAdapter.kt").isFile()) {
+        if (explicitRepository) throw new GradleException('FACELINK_CAPTURE_CORE_REPOSITORY does not contain the capture core')
+        repository = repository.parentFile
+    }
+    if (repository == null) {
+        throw new GradleException('FaceLinkCaptureHost requires the repository-owned capture core sources')
+    }
+    coreDirectory = new File(repository, coreRelative)
+    sourceDirectories += coreDirectory
+}
+
+android {
+    namespace 'ai.facelink.capturehost'
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+    }
+    sourceSets.main.java {
+        setSrcDirs(sourceDirectories)
+        setIncludes(includes)
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+}
+
+// Apply the same exact whitelist to Kotlin's own source collection, not only Android's Java set.
+kotlin.sourceSets.named('main') {
+    kotlin.setSrcDirs(sourceDirectories)
+    kotlin.setIncludes(includes)
+}
+
+// Kotlin Android ignores include patterns for externally rooted source dirs;
+// exclude the historical camera bridge explicitly, so only the five contract
+// core files are compiled and no CameraX dependency is pulled into a synthetic-only host.
+if (!liveEnabled) {
+    tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+        exclude('**/Cam02FrameStore.kt')
+    }
+}
+
+dependencies {
+    implementation 'com.facebook.react:react-android'
+    if (liveEnabled) {
+        // Patched CAM02 detector owns the frame store, the generated HybridFaceSpec types,
+        // CameraX ImageAnalysis and ML Kit face detection used by the live bridge.
+        implementation project(':react-native-vision-camera-face-detector')
+    }
+}

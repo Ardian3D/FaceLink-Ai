@@ -1,0 +1,17 @@
+{
+  "source": "synthetic_host_adapter_real_jdk_jpeg_not_android",
+  "status": "PASSED",
+  "generation": 4,
+  "frameId": "17",
+  "jpegBytes": 730,
+  "sameFramePixels": true,
+  "duplicateRejected": true,
+  "ownedBytesAfter": 0,
+  "ownedFramesAfter": 0,
+  "inputCloseCount": 1,
+  "imageIoCacheFiles": 0,
+  "limitations": [
+    "Codec JDK ImageIO, not Android YuvImage or a live camera.",
+    "Only adapter-owned resources and the dedicated ImageIO cache directory observed; not total runtime zeroization or all OS/SDK caches."
+  ]
+}

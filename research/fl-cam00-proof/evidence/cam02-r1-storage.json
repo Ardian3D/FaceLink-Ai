@@ -1,0 +1,153 @@
+{
+  "baselineGit": {
+    "branch": "feat/fl-otp01-email-auth",
+    "head": "87bac5e96602e9ff5568069d1c6b1bd1d96913b7",
+    "unstaged": 26,
+    "untracked": 24,
+    "staged": 0
+  },
+  "settingsBefore": {
+    "screen_brightness": "4",
+    "screen_brightness_mode": "0",
+    "screen_off_timeout": "1800000",
+    "stay_on_while_plugged_in": "15",
+    "accelerometer_rotation": "0",
+    "user_rotation": "0"
+  },
+  "apkBaseline": [
+    {
+      "path": "cam00-arm64-debug.apk",
+      "bytes": 77049870,
+      "sha256": "5fcecf9af04945769217f31019c4affe8eaf1251bb451b295f92c0c3c3dadf35"
+    },
+    {
+      "path": "cam01-arm64-release.apk",
+      "bytes": 44718542,
+      "sha256": "221b5a5ea4d0ef08b9f7af82344547d694890855926e046d7d56ae2394518d59"
+    },
+    {
+      "path": "cam01-arm64-release-r2.apk",
+      "bytes": 44718542,
+      "sha256": "d29092015bd779962b68b103bb370d726e721866fadd6d9375b002387349a955"
+    },
+    {
+      "path": "android/app/build/outputs/apk/release/app-release.apk",
+      "bytes": 44718542,
+      "sha256": "d29092015bd779962b68b103bb370d726e721866fadd6d9375b002387349a955"
+    }
+  ],
+  "preInstallInventory": [
+    "11 file · 4871132 byte · halaman 1/2",
+    "files/BridgelessReactNativeDevBundle.js · 4116651 B · modifiedAt 1792886948000 · signature not-image / unknown",
+    "files/profileInstalled · 24 B · modifiedAt 1792904673000 · signature not-image / unknown",
+    "cache/oat_primary/arm64/base.art · 688128 B · modifiedAt 1792903533000 · signature not-image / unknown",
+    "cache/http-cache/journal · 36 B · modifiedAt 1792886525000 · signature not-image / unknown",
+    "cache/image_cache/v2.ols100.1/8.0/vmYuN2Tf2zQJBNPh_9xpXzOkGlo.cnt · 187 B · modifiedAt 1792886949000 · signature png",
+    "databases/com.google.android.datatransport.events-journal · 0 B · modifiedAt 1792886524000 · signature not-image / unknown",
+    "databases/com.google.android.datatransport.events · 65536 B · modifiedAt 1792887045000 · signature not-image / unknown",
+    "sharedPrefs/visioncamera.permissions.xml · 224 B · modifiedAt 1792903766000 · signature not-image / unknown",
+    "sharedPrefs/com.google.mlkit.internal.xml · 154 B · modifiedAt 1792886525000 · signature not-image / unknown",
+    "sharedPrefs/WebViewChromiumPrefs.xml · 127 B · modifiedAt 1792886524000 · signature not-image / unknown",
+    "sharedPrefs/expo.modules.kotlin.PersistentDataManager.xml · 65 B · modifiedAt 1792903529000 · signature not-image / unknown"
+  ],
+  "preCaptureInventory": [
+    "files/BridgelessReactNativeDevBundle.js · 4116651 B · modifiedAt 1792886948000 · signature not-image / unknown",
+    "files/profileInstalled · 24 B · modifiedAt 1792909174000 · signature not-image / unknown",
+    "cache/oat_primary/arm64/base.art · 704784 B · modifiedAt 1792909173000 · signature not-image / unknown",
+    "cache/http-cache/journal · 36 B · modifiedAt 1792886525000 · signature not-image / unknown",
+    "cache/image_cache/v2.ols100.1/8.0/vmYuN2Tf2zQJBNPh_9xpXzOkGlo.cnt · 187 B · modifiedAt 1792886949000 · signature png",
+    "databases/com.google.android.datatransport.events-journal · 0 B · modifiedAt 1792886524000 · signature not-image / unknown",
+    "databases/com.google.android.datatransport.events · 65536 B · modifiedAt 1792887045000 · signature not-image / unknown",
+    "sharedPrefs/visioncamera.permissions.xml · 224 B · modifiedAt 1792903766000 · signature not-image / unknown",
+    "sharedPrefs/com.google.mlkit.internal.xml · 154 B · modifiedAt 1792886525000 · signature not-image / unknown",
+    "sharedPrefs/WebViewChromiumPrefs.xml · 127 B · modifiedAt 1792886524000 · signature not-image / unknown",
+    "sharedPrefs/expo.modules.kotlin.PersistentDataManager.xml · 65 B · modifiedAt 1792903529000 · signature not-image / unknown"
+  ],
+  "preCaptureNative": {
+    "sandboxWatch": {
+      "paths": [],
+      "coverage": "bounded_private_directory_events_not_forensic_guarantee",
+      "directoriesTruncated": false,
+      "baselineTruncated": false,
+      "deleteCount": 0,
+      "watchedDirectories": 0,
+      "registrationErrors": 0,
+      "overflowCount": 0,
+      "createCount": 0,
+      "baselineEntries": 0,
+      "pathsTruncated": false,
+      "moveCount": 0,
+      "closeWriteCount": 0,
+      "stoppedAtMs": 0,
+      "startedAtMs": 0,
+      "active": false
+    },
+    "lastResult": "IDLE",
+    "busy": false,
+    "uidTraffic": {
+      "txPackets": 2014,
+      "scope": "uid_lifetime_including_historical_debug",
+      "uid": 10002,
+      "rxBytes": 8470177,
+      "txBytes": 399794,
+      "rxPackets": 2698
+    },
+    "ownedBytes": 0,
+    "peakOwnedBytes": 0,
+    "foreground": true,
+    "displayed": false,
+    "heldFrames": 0,
+    "caps": {
+      "previewTtlMs": 15000,
+      "freshnessMs": 400,
+      "maxOwnedBytes": 16777216,
+      "maxJpegBytes": 4194304,
+      "maxPixels": 2073600
+    },
+    "generation": null
+  },
+  "afterCropErrorNative": {
+    "sandboxWatch": {
+      "paths": [],
+      "coverage": "bounded_private_directory_events_not_forensic_guarantee",
+      "directoriesTruncated": false,
+      "baselineTruncated": false,
+      "deleteCount": 0,
+      "watchedDirectories": 15,
+      "registrationErrors": 0,
+      "overflowCount": 0,
+      "createCount": 0,
+      "baselineEntries": 25,
+      "pathsTruncated": false,
+      "moveCount": 0,
+      "closeWriteCount": 0,
+      "stoppedAtMs": 28276216,
+      "startedAtMs": 27856980,
+      "active": false
+    },
+    "lastResult": "CANCELLED",
+    "busy": false,
+    "uidTraffic": {
+      "txPackets": 2014,
+      "scope": "uid_lifetime_including_historical_debug",
+      "uid": 10002,
+      "rxBytes": 8470177,
+      "txBytes": 399794,
+      "rxPackets": 2698
+    },
+    "ownedBytes": 0,
+    "peakOwnedBytes": 0,
+    "foreground": true,
+    "displayed": false,
+    "heldFrames": 0,
+    "caps": {
+      "previewTtlMs": 15000,
+      "freshnessMs": 400,
+      "maxOwnedBytes": 16777216,
+      "maxJpegBytes": 4194304,
+      "maxPixels": 2073600
+    },
+    "generation": null
+  },
+  "errorCode": "E_CAM02_PREVIEW_NOT_CONTAINED"
+}
