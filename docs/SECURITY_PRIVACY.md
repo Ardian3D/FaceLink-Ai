@@ -8,6 +8,106 @@
 
 **Revisi FL-010V (16 Oktober 2026).** Dokumen ini diselaraskan dengan keputusan final FL-010V: **D-032 (lifecycle akun), D-033 (sesi token opak + rotasi + batas absolut 30 hari), D-034 (hak akses `dosen`), D-035 (LAN privat + HTTPS tepercaya — tingkat kebijakan), D-036 (perluasan daftar audit keamanan — sekarang BERLAKU), dan D-037 (satu role utama per akun)**. Yang berubah: §2 (baris hash nonce `auth_nonces`), §5g (satu kalimat penegas Q-22, tanpa mengubah paragraf FL-010U), §6 (daftar audit berlaku, larangan isi audit, aturan transport LAN, aturan penyimpanan token React Native), §8 (butir uji baru), dan §9 (tabel keselarasan). **D-030, §5a–§5f, Q-07, matriks 53 endpoint, nama peran, dan kode kesalahan tidak diubah.** Seluruh skenario runtime tetap **BELUM TERVERIFIKASI**.
 
+**FL-OTP01 / D-038:** Email OTP utama mengikuti [`EMAIL_OTP.md`](EMAIL_OTP.md):
+8 digit CSPRNG, 5 menit, verifier HMAC key server terlindungi, consume atomik,
+limit persisten dan respons request anti-enumeration. SMTP TLS tervalidasi,
+From terotorisasi; kode/token/SMTP secret dilarang di log/Git. Email OTP bukan
+MFA tahan phishing: passkey atau TOTP direkomendasikan sebelum produksi/data
+sensitif. Admin lama tidak dihapus atau diganti emailnya selama transisi.
+
+**FL-STAB01 (27 Oktober 2026):** logout memakai refresh credential dalam JSON
+melalui HTTPS, bukan access token expired atau ID sesi dari client. Current/
+immediately previous hash hanya mencabut satu sesi dengan audit atomik; logout
+tidak memicu aturan refresh-reuse lintas perangkat. Rotasi/replay dan batas
+absolut 30 hari tetap. Credential tidak masuk URL/log. SecureStore load/save
+difence terhadap logout; pending acceptance/refresh writes diselesaikan sebelum
+penghapusan akhir. Jaringan gagal berarti revocation remote belum terkonfirmasi,
+bukan logout server sukses; kegagalan penghapusan lokal juga ditampilkan.
+Lifecycle video menghentikan animasi dengan ownership invalidation sebelum Expo
+melepas player; tanpa suppression/catch-all. Bukti dan residual:
+[`FL_STAB01_TECHNICAL_REPORT.md`](FL_STAB01_TECHNICAL_REPORT.md).
+
+**FL-ENR04 (27 Oktober 2026):** model nyata hanya untuk data sintetis dan
+staging disposable. Pipe privat HMAC memakai secret acak per child dalam
+environment minimal, UUID/digest/manifest terikat, request/response bounded,
+timeout10detik dan kill/reap. JPEG dibatasi sebelum decode; dua checksum
+diverifikasi sebelum model load. Python tidak menerima key enkripsi/DB dan
+tidak memutuskan ACTIVE. Tidak ada image/vector temp file atau payload log.
+Ini bukan sandbox OS: operator/source/interpreter/model directory dipercaya,
+tidak ada hard memory cap atau jaminan zeroization, dan marker synthetic_only
+bukan klasifikasi asal gambar. Tidak mengubah D-030 atau izin manusia/production.
+Bukti: [`FL_ENR04_TECHNICAL_REPORT.md`](FL_ENR04_TECHNICAL_REPORT.md).
+
+**FL-SEC01 — kontrak remediasi yang disetujui pemilik:** template envelope/AADv2
+mengikat domain/purpose/version FaceLink, template UUID, submission UUID, person,
+immutable consent grant UUID, model ID/version, stable model/pipeline fingerprint
+dan key version. ID template dibuat sebelum encryption; expected binding
+direkonstruksi dari relasi target tervalidasi. Format exact DATA_MODEL §4.12.
+Withdrawal tidak mengganti grant identity; authorization tetap diperiksa dan
+payload dihapus sesuai kontrak. Pending-photo v1 tidak berubah.
+
+Template v1/unknown ditolak tanpa fallback; tidak ditulis lagi, tidak ready,
+dan dipertahankan sebagai quarantine. Migration terpisah00008 hanya disposable,
+tidak mengonversi ciphertext v1. Data non-disposable tidak dibaca/dimigrasi/
+dihapus oleh tugas ini; jika ditemukan perlu containment dan rencana kompatibilitas
+yang diotorisasi terpisah. KeyProvider/purpose separation/AES256GCM tetap.
+Bindingv2 menolak transfer envelope ke target identity/metadata berbeda; **tidak**
+mengklaim anti-rollback seluruh DB/state atau perlindungan bila key dikuasai.
+SQL guard, consent/reviewer eligibility, lease dan audit tetap kontrol tambahan.
+D-030 recovery timer/irreversible deletion tetap BLOCKED.
+
+**FL-ENR05 — GO Synthetic Integrated E2E:** normalOTP dan verifiedHTTPS actual
+TS clients→Go→real YuNet/SFace→AADv2→ACTIVE→withdraw/REVOKED/cleanup0 pada satu
+SQLite WAL disposable. Tidak mengaktifkan enrollment pada command produk.
+Staging controls/safe snapshot/OTP delivery barrier bounded hanya stdin;
+tidak membaca verifier, kunci atau token untuk output dan tidak mengubah auth.
+Evidence hanya hash/scalar/UUID sintetis/aksi audit; tanpa JPEG/vector/OTP/key.
+Client token-null membuat cached ACTIVE stale sampai backend dibaca ulang.
+Real commit dengan response hilang tetap uncertain; exact replay tidak
+menggandakan approval/audit. Snapshot cleanup dijalankan setelah reconciliation.
+Independent review menutup temuan freshness, readiness OTP dan timing test;
+bukan bukti Android rendering, zeroization, forensic erase, antirollback,
+physical network-disconnect atau OS-process-kill recovery. D-030, backup/
+insiden, native cache/PAD/kalibrasi/F3 tetap residual. Tidak ada human/camera/
+ADB/productionDB atau perubahan SMTP/role/session policy.
+Laporan lengkap: [`FL_ENR05_TECHNICAL_REPORT.md`](FL_ENR05_TECHNICAL_REPORT.md).
+
+Paragraf R2 berikut adalah temuan historis sebelum remediasi FL-SEC01.
+
+**FL-ENR04-R2:** positive pipeline sintetis dan encrypted ACTIVE→withdraw terbukti
+melalui HTTPS disposable. **Celah binding AAD v1 terkonfirmasi:** template AAD
+mengikat person/model/model-version/key-version, bukan template/submission ID.
+Pada dua snapshot SQLite terisolasi, pertukaran seluruh envelope dengan metadata
+target tetap menghasilkan payload record lain (2/2). UNIQUE(person_id) dan trigger
+immutability menolak coexistence/UPDATE normal; diagnostik memodelkan penulis DB
+offline yang dapat melewati guard, **bukan exploit endpoint**. AAD/key provider/
+ciphertext existing tidak diubah. Usulan AADv2 mengikat immutable template_id,
+dengan keputusan eksplisit mengenai submission/consent/fingerprint dan penolakan
+v1 pada consumer baru. **NO-GO FL-ENR05** sampai keputusan/remediasi yang disetujui.
+Bukti: [`FL_ENR04_R2_TECHNICAL_REPORT.md`](FL_ENR04_R2_TECHNICAL_REPORT.md).
+
+
+**Cutover FL-ENR01B (26 Oktober 2026): DESIGN APPROVED / SYNTHETIC IMPLEMENTATION AUTHORIZED.** Pengecualian terbatas pending-photo persistence: satu JPEG canonical sintetis/submission dalam AES-256-GCM private file di luar repo/static/public directory; purpose `pending-photo` terpisah dari `template`/OTP. TTL72jam sejak penerimaan pertama backend, tidak diperpanjang retry/preview. Mahasiswa self-consent/withdraw; Admin review/assisted withdrawal; Dosen tidak. Consent bukan syarat absensi manual. Tidak ada izin manusia/production/migration Product Owner; notice1 draft sintetis, metadata retention/recovery irreversible D-030 belum final. Payload tidak masuk backup rutin.
+
+**FL-ENR03 Admin review UI (27 Oktober 2026):** staging Admin hanya memakai fixture sintetis, default-off di main, dan endpoint enrollment existing. Preview mengambil JPEG dengan `Authorization` header, `Cache-Control: no-store`, `credentials: omit`, `redirect: error`, batas 1 MiB, serta validasi MIME/magic byte; tidak ada token di URL, path file, gallery, AsyncStorage, analytics, atau log payload. Web memakai Blob URL yang direvoke saat unmount; native memakai data URI tanpa API filesystem. Menurut source RN/Fresco, data URI tidak membuat entry disk-cache, tetapi bitmap dapat tetap berada di bitmap memory cache Fresco dan tidak ada API JS untuk evict satu gambar; ini **bukan klaim zeroization**. Riwayat review dibatasi50 event terpilih dan metadata mentah dibuang. Login OTP web tetap tidak didukung karena SecureStore; jangan menambah bypass hanya untuk smoke test.
+
+**FL-ENR02A staging UI (26 Oktober 2026):** aplikasi `research/fl-enr02a-host/stage` memakai package terpisah `ai.facelink.enr02host`, menu utama default-off, dan route enrollment hanya ada di staging. Alur consent → scan → submission memakai JPEG pola sintetis di memori; tidak ada permission kamera, preview gambar, gallery, file capture, AsyncStorage, analytics, atau log JPEG/base64/token. Consent dan status berasal dari backend; label “Wajah terdaftar” hanya muncul untuk snapshot ACTIVE + `template_ready` + consent ACTIVE yang masih segar. Build utama, SecureStore, database Product Owner, dan migrasi production tidak diubah. Ini bukan bukti capture manusia, akurasi, atau kesiapan production.
+
+**Batas operasional implementasi sintetis:** normalisasi ≤1 MiB/2.073.600 pixel
+dengan slot decode terbatas; EXIF tidak normal/berbahaya ditolak dan output
+di-encode ulang tanpa metadata. Preview Admin memerlukan pemeriksaan sebelum
+decrypt dan pemeriksaan ulang + audit sebelum respons; URL bukan public,
+`no-store`/`nosniff`, tanpa Range. Byte yang sudah diotorisasi/in-flight tidak
+dapat ditarik kembali oleh withdrawal; permintaan berikutnya ditolak.
+Kegagalan key/integritas tidak menjadi izin penghapusan otomatis. Foto retained
+pada `FAILED_PROCESSING / BIOMETRIC_UNAVAILABLE` hanya boleh di-retry setelah
+guard/hash/decrypt pulih, sebelum TTL dan tanpa memperpanjangnya. Withdrawal
+eksplisit dan expiry foto tetap menjalankan logical revoke serta cleanup durable.
+Default discovery `migrations/` tidak memuat migrasi enrollment sintetis;
+`synthetic-migrations/00007_synthetic_enrollment.sql` hanya digabung oleh harness
+ke direktori disposable baru. Server biasa tidak menginjeksi layanan enrollment.
+
+
 ## 1. Mengapa penting
 
 Data wajah dan template biometrik bersifat sangat sensitif. Di Indonesia, **UU Nomor 27 Tahun 2022 tentang Pelindungan Data Pribadi** menggolongkan data biometrik sebagai data pribadi bersifat spesifik. Walaupun project hanya tugas kampus, peserta tetap perlu mendapat penjelasan, pilihan yang adil, dan perlindungan data.
@@ -61,7 +161,7 @@ Catatan FL-010U: **Google ID token bukan data yang disimpan.** Ia hanya bukti ya
 
 - Tentukan umur simpan **sebelum** pengambilan data asli. Prinsip awal: simpan seminimal mungkin, hapus sesegera mungkin setelah presentasi dan evaluasi selesai.
 - Template biometrik disimpan **terenkripsi AES-256-GCM per baris** (D-022): nonce acak kriptografis per baris, tag autentikasi diverifikasi sebelum dekripsi, dan dekripsi yang gagal **tidak** diganti dengan tebakan. Satu-satunya lokasi penyimpanan biometrik adalah tabel `face_templates` (`docs/DATA_MODEL.md` §4.12).
-- Kunci enkripsi **tidak** boleh berada di dalam database, di dalam commit, atau di berkas konfigurasi yang ikut ter-commit. Bentuk penyimpanan final (AES-256-GCM per baris, D-022); kebijakan pengelolaannya ditetapkan pada **D-030 (DISETUJUI pada FL-004S dengan dua klarifikasi wajib)** dan dirinci pada §5a–§5f di bawah. Q-16 **DIPUTUSKAN** untuk rancangan MVP, tetapi **implementasi penyimpanan biometrik dan seluruh pengujiannya masih tertunda** dan menunggu tugas implementasi tersendiri.
+- Kunci enkripsi **tidak** boleh berada di database, commit, atau konfigurasi yang ikut ter-commit. D-022/D-030 dan §5a–§5f tetap kebijakan mengikat. FL-ENR01B mengimplementasikan AES-256-GCM dan KeyProvider hanya untuk fixture sintetis/disposable dengan provisioning eksplisit; bukan izin menyimpan biometrik manusia atau klaim production security.
 - Enkripsi template bukan enkripsi seluruh berkas database: rekap kehadiran dan nama peserta tetap terbaca bagi siapa pun yang memegang berkas SQLite. Jangan mengklaim sebaliknya.
 - Cadangan data, jika benar-benar dibutuhkan, harus tunduk pada retensi/penghapusan yang sama; jangan menyisakan template yang sudah dicabut di backup tanpa kebijakan.
 - **Pencabutan persetujuan tetap merupakan penghapusan, bukan penonaktifan.** Kunci tidak menyimpan salinan template, sehingga penghapusan pada `face_templates` (`docs/DATA_MODEL.md` §5.3) bersifat final dan tidak dapat dibatalkan dengan memulihkan kunci (D-030 butir 7).
@@ -69,7 +169,7 @@ Catatan FL-010U: **Google ID token bukan data yang disimpan.** Ia hanya bukti ya
 
 ### 5a. Kebijakan kunci yang berlaku (D-030)
 
-Bagian ini memuat **kebijakan yang menjawab Q-16**. D-030 **DISETUJUI pemilik project pada 15 Oktober 2026 (FL-004S)** dengan dua klarifikasi wajib, yang ketentuannya ada pada §5e dan §5f. **Disetujui bukan berarti diimplementasikan:** belum ada kode yang ditulis dan belum ada pengujian yang dijalankan.
+Bagian ini memuat **kebijakan yang menjawab Q-16**. D-030 **DISETUJUI pemilik project pada 15 Oktober 2026 (FL-004S)** dengan dua klarifikasi wajib pada §5e dan §5f. FL-ENR01B mengimplementasikan batas key/photo/template pada lingkungan sintetis saja. Konflik timer recovery 30 hari versus larangan menjadikan key-loss pemicu deletion otomatis tidak diselesaikan dengan TTL foto 72 jam; irreversible production deletion tetap **BLOCKED**.
 
 1. **Pemilik kunci adalah backend Go.** Python tidak memegang kunci, tidak menerima kunci, dan tidak mendekripsi template. Ini memperluas D-027 dan `docs/API_CONTRACT.md` §6.8.
 2. **Lokasi penyimpanan:** berkas kunci terlindungi di `%LOCALAPPDATA%\FaceLink\keys\` pada akun Windows yang menjalankan backend, dengan ACL yang hanya mengizinkan akun itu. Jangan memakai folder yang disinkronkan ke penyimpanan awan.
@@ -198,6 +298,20 @@ Menonaktifkan komponen keamanan agar layanan "tetap hidup" adalah pelanggaran, b
 
 **5. Urutan pemulihan layanan.** Setelah gangguan, **absensi manual dipulihkan lebih dahulu**, baru layanan biometrik (§5d.3 langkah 8). Kegiatan kelas tidak boleh menunggu penyelesaian insiden kunci.
 
+**Bukti parsial availability D-030 pada FL-CORE02 (25 Oktober 2026):** sesi dan
+fallback manual terautentikasi berjalan dengan biometrik belum diimplementasikan.
+Readiness memisahkan `manual_attendance` dari `biometrics`; komponen biometrik
+tetap unavailable dengan kode BIOMETRIC_NOT_IMPLEMENTED, tanpa menghalangi core
+yang sehat. Person roster terverifikasi tetap wajib, consent biometrik tidak
+menjadi prasyarat manual. Alasan fallback/koreksi tersimpan pada record dan
+audit.reason; metadata status/waktu/source/actor tidak memuat nama/NIM/alasan
+bebas, dan log tidak memuat payload. Audit gagal menyebabkan rollback.
+Uji dan smoke hanya disposable/sintetis, tidak menjalankan engine production.
+**Ini bukan penutupan acceptance KeyProvider/key-loss/enkripsi/deletion D-030:**
+komponen tersebut belum diimplementasikan. Perlindungan auth, scope dan integritas
+tetap diwajibkan; tidak ada jalur biometrik atau keberhasilan biometrik palsu.
+
+
 ### 5f. Retensi, pembersihan, dan keterbatasan jaminan penghapusan (klarifikasi wajib pemilik, FL-004S)
 
 Klarifikasi ini menetapkan bahwa kebijakan penghapusan **mengakui keterbatasan jaminan** pada SQLite WAL, salinan cadangan, dan media penyimpanan. Dokumen ini **tidak** boleh menyatakan data biometrik pasti lenyap dari disk. Rujukan keputusan: `docs/DECISIONS.md` D-030 butir 11.
@@ -303,7 +417,7 @@ Klarifikasi ini menetapkan bahwa kebijakan penghapusan **mengakui keterbatasan j
 - [ ] Foto mentah tidak ditahan tanpa alasan/izin.
 - [ ] Penghapusan template teruji pada disk, **cache**, **berkas `-wal`/`-shm`, dan salinan cadangan** (§5c, `docs/DATA_MODEL.md` §5.3).
 - [ ] Berkas kunci tersedia, terlindungi DPAPI, dan **tidak** berada di dalam folder yang disinkronkan ke awan.
-- [ ] Backend menolak menyala dengan pesan jelas bila kunci tidak ada, dan **tidak** membuat kunci baru sendiri (D-030 butir 6).
+- [ ] Subsystem biometrik menolak operasi bila key tidak siap; **tidak** membuat replacement key otomatis. Core/auth/audit/manual tetap berjalan jika sehat (D-030 butir10/§5e; rekonsiliasi FL-ENR01B).
 - [ ] Penyalinan berkas kunci ke mesin lain (simulasi penggantian perangkat) diuji dan hasilnya dicatat apa adanya, termasuk bila gagal.
 - [ ] **Ketiga kondisi §5d.1 dapat dibedakan pada mesin nyata:** kunci sementara tidak tersedia, kunci ada tetapi tidak dapat dipakai, dan kunci dipastikan tidak dapat dipulihkan.
 - [ ] **Kesiapan kedua layanan terbukti terpisah (§5e):** dengan kunci sengaja dirusak, absensi manual, kelola peserta, autentikasi, dan pencatatan audit tetap berjalan, sementara endpoint biometrik menolak dengan alasan yang jelas.

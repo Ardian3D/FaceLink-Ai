@@ -322,7 +322,7 @@ func TestLogDanAuditTidakMembocorkanRahasia(t *testing.T) {
 	tolakPeran := h.kirim(http.MethodGet, "/api/v1/users", nil, sesiBaru.Access)
 	h.harapGalat(tolakPeran, http.StatusForbidden, codeForbiddenRole)
 
-	logout := h.kirim(http.MethodPost, "/api/v1/auth/logout", nil, sesiBaru.Access)
+	logout := h.kirim(http.MethodPost, "/api/v1/auth/logout", map[string]any{"refresh_token": sesiBaru.Refresh}, "")
 	if logout.Status != http.StatusNoContent {
 		t.Fatalf("logout = %d, ingin 204; badan: %s", logout.Status, logout.Rec.Body.String())
 	}

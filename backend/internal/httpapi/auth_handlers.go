@@ -334,32 +334,33 @@ func (s Server) sisaAkses(pair session.Pair) int {
 	return sisa
 }
 
-// handleAuthLogout mencabut sesi yang sedang dipakai. Panggilan kedua tetap
-// 204: sesi yang sudah tercabut diperlakukan sebagai sudah logout (kontrak §5.1).
+// handleAuthLogout memakai kredensial penyegar, bukan access yang mungkin sudah
+// kedaluwarsa. Store mencabut satu sesi dan mencatat audit secara atomik.
 func (s Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
-	if _, dicabut := r.Context().Value(sesiDicabutKey{}).(bool); dicabut {
-		w.WriteHeader(http.StatusNoContent)
+	if !s.authSiap() {
+		writeErrorCode(w, r, http.StatusServiceUnavailable, codeAuthUnavailable, "Layanan autentikasi belum dikonfigurasi pada backend ini.")
 		return
 	}
-	sess, ok := SesiFrom(r.Context())
-	if !ok {
-		writeErrorCode(w, r, http.StatusUnauthorized, codeUnauthenticated, pesanGalatAuth(codeUnauthenticated))
+	var req struct {
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeErrorCode(w, r, http.StatusBadRequest, codeValidationFailed, "Badan permintaan tidak dapat dibaca.")
 		return
 	}
-	// Sesi dicabut hanya bila memang milik pemanggil: pencabutan sesi orang lain
-	// bukan wewenang endpoint ini (itu jalur admin), dan batas kepemilikan itu
-	// ditegakkan di lapisan store, bukan hanya oleh token yang dikirim.
-	if _, err := s.Sessions.RevokeOwned(r.Context(), sess.ID, sess.UserID, s.waktuSekarang(), "logout"); err != nil {
+	if strings.TrimSpace(req.RefreshToken) == "" {
+		writeErrorCode(w, r, http.StatusBadRequest, codeMissingField, "refresh_token wajib diisi.")
+		return
+	}
+	if err := s.Sessions.Logout(r.Context(), req.RefreshToken, reqID(r)); err != nil {
+		if errors.Is(err, session.ErrRefreshInvalid) {
+			writeErrorCode(w, r, http.StatusUnauthorized, codeUnauthenticated, pesanGalatAuth(codeUnauthenticated))
+			return
+		}
 		s.logger().Error("gagal mencabut sesi", "request_id", reqID(r), "error", logging.Redact(err.Error()))
 		writeErrorCode(w, r, http.StatusInternalServerError, codeInternalError, "Terjadi kesalahan internal.")
 		return
 	}
-	principal, _ := PrincipalFrom(r.Context())
-	s.catatAudit(r, audit.Event{
-		ActorType: audit.ActorUser, ActorID: principal.UserID, Action: "auth.logout",
-		EntityType: "session_token", EntityID: sess.ID, Result: audit.ResultSuccess,
-		Metadata: map[string]string{"session_id": sess.ID},
-	})
 	w.WriteHeader(http.StatusNoContent)
 }
 

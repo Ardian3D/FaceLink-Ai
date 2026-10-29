@@ -844,6 +844,7 @@ func TestAssignLecturerDanCakupan(t *testing.T) {
 	s, db, _ := bukaStore(t)
 	ctx := context.Background()
 	admin := undangAdmin(t, s)
+	aktifkanAdmin(t, s, db, admin.ID)
 
 	dosen, err := s.InviteUser(ctx, "dosen@example.com", "Dosen Satu", RoleDosen, admin.ID)
 	if err != nil {
@@ -944,13 +945,13 @@ func TestAssignLecturerDanCakupan(t *testing.T) {
 		t.Errorf("ClassesForLecturer() mahasiswa = (%v, %v), ingin kosong tanpa galat", kosong, err)
 	}
 
-	if err := s.RemoveLecturer(ctx, "kelas-2", dosen.ID); err != nil {
+	if err := s.RemoveLecturer(ctx, admin.ID, "kelas-2", dosen.ID); err != nil {
 		t.Fatalf("RemoveLecturer() gagal: %v", err)
 	}
-	if err := s.RemoveLecturer(ctx, "kelas-2", dosen.ID); !errors.Is(err, ErrNotFound) {
+	if err := s.RemoveLecturer(ctx, admin.ID, "kelas-2", dosen.ID); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("RemoveLecturer() ulang = %v, ingin ErrNotFound", err)
 	}
-	if err := s.RemoveLecturer(ctx, "kelas-1", dosen.ID); err != nil {
+	if err := s.RemoveLecturer(ctx, admin.ID, "kelas-1", dosen.ID); err != nil {
 		t.Fatalf("RemoveLecturer() gagal: %v", err)
 	}
 	if terassign, err := s.IsLecturerAssigned(ctx, dosen.ID, "kelas-1"); err != nil || terassign {
@@ -962,6 +963,7 @@ func TestLinkPersonAccountHanyaMahasiswaDanTolakGanda(t *testing.T) {
 	s, db, _ := bukaStore(t)
 	ctx := context.Background()
 	admin := undangAdmin(t, s)
+	aktifkanAdmin(t, s, db, admin.ID)
 
 	mahasiswa, err := s.InviteUser(ctx, "mhs@example.com", "Mhs Satu", RoleMahasiswa, admin.ID)
 	if err != nil {
@@ -977,6 +979,15 @@ func TestLinkPersonAccountHanyaMahasiswaDanTolakGanda(t *testing.T) {
 	}
 	buatPeserta(t, db, "orang-1", "2026001", "Peserta Satu")
 	buatPeserta(t, db, "orang-2", "2026002", "Peserta Dua")
+	for _, userID := range []string{mahasiswa.ID, mahasiswa2.ID} {
+		aktifkanAdmin(t, s, db, userID)
+	}
+	for _, personID := range []string{"orang-1", "orang-2"} {
+		ref := "synthetic-campus-" + personID
+		if _, err := s.UpdatePerson(ctx, admin.ID, personID, PersonUpdate{IdentityReference: &ref}); err != nil {
+			t.Fatalf("attestation roster gagal: %v", err)
+		}
+	}
 
 	if _, ada, err := s.PersonForUser(ctx, mahasiswa.ID); err != nil || ada {
 		t.Fatalf("PersonForUser() sebelum pengaitan = (%v, %v), ingin (false, nil)", ada, err)
@@ -1192,13 +1203,19 @@ func TestClassesForPersonMengabaikanKeanggotaanBerakhir(t *testing.T) {
 	s, db, _ := bukaStore(t)
 	ctx := context.Background()
 	admin := undangAdmin(t, s)
+	aktifkanAdmin(t, s, db, admin.ID)
 
 	mahasiswa, err := s.InviteUser(ctx, "mhs@example.com", "Mhs Satu", RoleMahasiswa, admin.ID)
 	if err != nil {
 		t.Fatalf("InviteUser() gagal: %v", err)
 	}
+	aktifkanAdmin(t, s, db, mahasiswa.ID)
 	buatPeserta(t, db, "orang-1", "2026001", "Peserta Satu")
 	buatPeserta(t, db, "orang-2", "2026002", "Peserta Dua")
+	ref := "synthetic-campus-orang-1"
+	if _, err := s.UpdatePerson(ctx, admin.ID, "orang-1", PersonUpdate{IdentityReference: &ref}); err != nil {
+		t.Fatalf("attestation roster gagal: %v", err)
+	}
 	buatKelas(t, db, "kelas-1", "IF101", "Pengantar Informatika")
 	buatKelas(t, db, "kelas-2", "IF102", "Struktur Data")
 	buatKelas(t, db, "kelas-3", "IF103", "Basis Data")

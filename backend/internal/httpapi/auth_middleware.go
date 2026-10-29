@@ -109,46 +109,6 @@ func requireAuth(s Server) func(http.Handler) http.Handler {
 	}
 }
 
-// requireAuthIdempoten sama seperti requireAuth, tetapi sesi yang sudah dicabut
-// diteruskan sebagai principal kosong supaya operasi yang memang idempoten
-// (logout) tetap dapat menjawab 204 sesuai kontrak §5.1.
-func requireAuthIdempoten(s Server) func(http.Handler) http.Handler {
-	return func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if !s.authSiap() {
-				writeErrorCode(w, r, http.StatusServiceUnavailable, codeAuthUnavailable, "Layanan autentikasi belum dikonfigurasi pada backend ini.")
-				return
-			}
-			principal, sess, err := s.authenticate(r.Context(), r)
-			if err != nil {
-				var ea errAuth
-				if errors.As(err, &ea) && ea.code == codeSessionRevoked {
-					next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), sesiDicabutKey{}, true)))
-					return
-				}
-				writeAuthFailure(w, r, err)
-				return
-			}
-			ctx := withPrincipal(r.Context(), principal)
-			ctx = context.WithValue(ctx, sesiKey{}, sess)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-	}
-}
-
-// sesiKey adalah kunci context untuk sesi yang sedang dipakai.
-type sesiKey struct{}
-
-// sesiDicabutKey menandai bahwa permintaan datang dengan sesi yang sudah
-// dicabut (dipakai logout idempoten).
-type sesiDicabutKey struct{}
-
-// SesiFrom mengambil sesi aktif dari context.
-func SesiFrom(ctx context.Context) (session.Session, bool) {
-	sess, ok := ctx.Value(sesiKey{}).(session.Session)
-	return sess, ok
-}
-
 // requireRole membatasi endpoint pada peran tertentu. Deny-by-default: peran di
 // luar daftar ditolak dengan 403 FORBIDDEN_ROLE, dan penolakan pada jalur
 // administratif dicatat ke audit (D-036: `authz.denied`).
@@ -187,6 +147,12 @@ func requireRole(s Server, roles ...auth.Role) func(http.Handler) http.Handler {
 // DenganPeranAdmin adalah pintasan middleware untuk endpoint khusus admin.
 func DenganPeranAdmin(s Server) func(http.Handler) http.Handler {
 	return requireRole(s, auth.RoleAdmin)
+}
+
+// DenganPeranAdminDosen membatasi endpoint pada admin atau dosen. Cakupan
+// dosen tetap diperiksa di handler (mis. kelas yang ditugaskan).
+func DenganPeranAdminDosen(s Server) func(http.Handler) http.Handler {
+	return requireRole(s, auth.RoleAdmin, auth.RoleDosen)
 }
 
 // catatPenolakan menulis audit penolakan otentikasi/otorisasi. Jalur ini tidak

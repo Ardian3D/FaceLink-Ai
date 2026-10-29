@@ -26,11 +26,13 @@ import (
 	"github.com/Ardian3D/FaceLink-Ai/backend/internal/clock"
 	"github.com/Ardian3D/FaceLink-Ai/backend/internal/config"
 	"github.com/Ardian3D/FaceLink-Ai/backend/internal/database"
+	"github.com/Ardian3D/FaceLink-Ai/backend/internal/emailotp"
 	"github.com/Ardian3D/FaceLink-Ai/backend/internal/httpapi"
 	"github.com/Ardian3D/FaceLink-Ai/backend/internal/logging"
 	"github.com/Ardian3D/FaceLink-Ai/backend/internal/migrations"
 	"github.com/Ardian3D/FaceLink-Ai/backend/internal/oidc"
 	"github.com/Ardian3D/FaceLink-Ai/backend/internal/session"
+	"github.com/Ardian3D/FaceLink-Ai/backend/internal/smtpemail"
 )
 
 func main() {
@@ -148,6 +150,19 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, db *data
 	penulisAudit := audit.NewWriter(db, clk)
 	lingkup := authz.NewSQLDirectory(db)
 
+	var emailOTP *emailotp.Service
+	if len(cfg.OTPHMACKey) > 0 {
+		sender, err := smtpemail.New(cfg.SMTP)
+		if err != nil {
+			return err
+		}
+		emailOTP, err = emailotp.New(db, clk, cfg.OTPHMACKey, sender)
+		if err != nil {
+			return errors.New("Email OTP tidak dapat disiapkan")
+		}
+		defer emailOTP.Close()
+	}
+
 	// Verifier OIDC hanya disiapkan bila audience dikonfigurasi. Tanpa client
 	// ID, endpoint autentikasi menolak melayani dengan pesan jelas, sementara
 	// operasi lokal lain tetap berjalan (SECURITY_PRIVACY §5e).
@@ -185,6 +200,7 @@ func serve(ctx context.Context, cfg config.Config, logger *slog.Logger, db *data
 		Accounts:   akun,
 		Sessions:   sesi,
 		Google:     google,
+		EmailOTP:   emailOTP,
 		Audit:      penulisAudit,
 		Scope:      lingkup,
 		Clock:      clk,

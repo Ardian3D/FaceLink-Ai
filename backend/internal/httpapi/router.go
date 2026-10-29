@@ -28,26 +28,36 @@ func NewRouter(s Server) http.Handler {
 		// Pertukaran identitas Google bersifat publik dengan batas laju pada
 		// tahap berikutnya; bukti identitasnya adalah ID token Google.
 		r.Post("/auth/google", s.handleAuthGoogle)
+		r.Post("/auth/email/request", s.handleEmailRequest)
+		r.Post("/auth/email/verify", s.handleEmailVerify)
 		// Penyegaran diautentikasi oleh token penyegar itu sendiri.
 		r.Post("/auth/refresh", s.handleAuthRefresh)
 
-		// Logout idempoten: panggilan kedua dengan sesi yang sudah dicabut
-		// tetap menjawab 204 (docs/API_CONTRACT.md §5.1).
-		r.Group(func(r chi.Router) {
-			r.Use(requireAuthIdempoten(s))
-			r.Post("/auth/logout", s.handleAuthLogout)
-		})
+		// Logout diautentikasi oleh penyegar saat ini/sebelumnya, tanpa access.
+		r.Post("/auth/logout", s.handleAuthLogout)
 
 		r.Group(func(r chi.Router) {
 			r.Use(requireAuth(s))
 			r.Get("/me", s.handleMe)
 			r.Get("/me/classes", s.handleMeClasses)
+			s.registerCore02Routes(r)
+			s.registerEnrollmentRoutes(r)
+
+			// --- Roster nonbiometrik: baca admin/dosen -------------------
+			// Cakupan dosen diperiksa di handler (kelas yang ditugaskan).
+			r.Group(func(r chi.Router) {
+				r.Use(DenganPeranAdminDosen(s))
+				r.Get("/people", s.handleListPeople)
+				r.Get("/people/{person_id}", s.handleGetPerson)
+				r.Get("/classes", s.handleListClasses)
+				r.Get("/classes/{class_id}/members", s.handleListClassMembers)
+			})
 
 			// Penugasan dosen dapat dibaca admin dan dosen yang ditugaskan;
 			// kebijakan cakupan diperiksa di handler.
 			r.Get("/classes/{class_id}/dosen", s.handleListClassLecturers)
 
-			// --- Administrasi akun, sesi, dan peserta: khusus admin --------
+			// --- Administrasi akun, sesi, peserta, dan roster: admin ------
 			r.Group(func(r chi.Router) {
 				r.Use(DenganPeranAdmin(s))
 				r.Get("/users", s.handleListUsers)
@@ -55,8 +65,17 @@ func NewRouter(s Server) http.Handler {
 				r.Patch("/users/{user_id}", s.handlePatchUser)
 				r.Get("/auth/sessions", s.handleListSessions)
 				r.Delete("/auth/sessions/{session_id}", s.handleRevokeSession)
+
+				r.Post("/people", s.handleCreatePerson)
+				r.Patch("/people/{person_id}", s.handlePatchPerson)
+				r.Delete("/people/{person_id}", s.handleDeletePerson)
 				r.Put("/people/{person_id}/account-link", s.handleLinkPersonAccount)
 				r.Delete("/people/{person_id}/account-link", s.handleUnlinkPersonAccount)
+
+				r.Post("/classes", s.handleCreateClass)
+				r.Put("/classes/{class_id}/members/{person_id}", s.handleAddClassMember)
+				r.Delete("/classes/{class_id}/members/{person_id}", s.handleRemoveClassMember)
+
 				r.Put("/classes/{class_id}/dosen/{user_id}", s.handleAssignLecturer)
 				r.Delete("/classes/{class_id}/dosen/{user_id}", s.handleRemoveLecturer)
 			})
@@ -279,10 +298,12 @@ func (s Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	payload := readyzPayload{
-		Database:   "unavailable",
-		AIEngine:   "unavailable",
-		Migrations: "unknown",
-		WAL:        walPayload{JournalMode: "unknown"},
+		Database:         "unavailable",
+		AIEngine:         "unavailable",
+		Migrations:       "unknown",
+		WAL:              walPayload{JournalMode: "unknown"},
+		ManualAttendance: serviceReadiness{Status: "unavailable", Reason: "CORE_UNAVAILABLE"},
+		Biometrics:       serviceReadiness{Status: "unavailable", Reason: "BIOMETRIC_NOT_IMPLEMENTED"},
 	}
 
 	code := http.StatusServiceUnavailable
@@ -331,6 +352,11 @@ func (s Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 
 	if payload.Database == "ok" && !s.Migrations.AppliedPending() {
 		code = http.StatusOK
+		if s.authSiap() && s.Migrations.CurrentVersion >= 6 {
+			payload.ManualAttendance = serviceReadiness{Status: "ready", Reason: "CORE_DEPENDENCIES_READY"}
+		} else {
+			payload.ManualAttendance.Reason = "AUTH_OR_SCHEMA_UNAVAILABLE"
+		}
 	}
 
 	if code != http.StatusOK {
@@ -345,13 +371,8 @@ func (s Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusOK, readyzPayload{
-		Status:     "ready",
-		Database:   payload.Database,
-		AIEngine:   payload.AIEngine,
-		Migrations: payload.Migrations,
-		WAL:        payload.WAL,
-	})
+	payload.Status = "ready"
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func readinessMessage(code string) string {

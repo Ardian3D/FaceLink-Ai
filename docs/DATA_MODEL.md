@@ -8,6 +8,11 @@
 
 Dokumen ini melengkapi `docs/API_CONTRACT.md` dan tidak menggantikan `docs/PRD.md`. Setiap perubahan skema setelah dokumen ini harus melalui berkas migrasi baru, bukan dengan mengubah migrasi yang sudah pernah dijalankan.
 
+**FL-OTP01 (D-038):** migrasi additive `00004` menambahkan challenge OTP, identitas
+email terverifikasi, dan bucket rate limit persisten; spesifikasi
+[`EMAIL_OTP.md`](EMAIL_OTP.md). Tidak mengubah `users.email`, role, identitas
+Google, atau mengisi akun resmi otomatis. Kode mentah tidak disimpan.
+
 ## 1. Ruang lingkup dan asumsi
 
 1. MVP melayani **satu kelas dan satu terminal**, dipakai oleh **tiga peran manusia** (`admin`, `dosen`, `mahasiswa`) yang masuk lewat Google Sign-In, ditambah **`device`** yang bukan peran manusia melainkan identitas mesin terpisah (batasan AGENTS.md §2; rujukan peran: `docs/AUTHORIZATION.md` §2). Skema tetap tidak boleh mengunci diri sehingga organisasi lain mustahil ditambahkan (D-020 catatan portabilitas).
@@ -174,6 +179,9 @@ Peserta absensi. Identitas biometrik **tidak** ada di tabel ini.
 - **Indeks:** `idx_people_status`, `idx_people_display_name`, `idx_people_account_user`.
 - **Penautan akun mahasiswa:** `account_user_id` diisi oleh `admin` pada tindakan penautan eksplisit, **bukan** otomatis saat login. Kandidat yang sah hanyalah akun berperan `mahasiswa`; akun `admin`/`dosen` tidak ditautkan ke baris peserta. Penautan dan pelepasan penautan dicatat di audit (`person.account_linked`, `person.account_unlinked`). Selama `account_user_id` kosong, endpoint `/me/*` milik akun itu ditolak `409 ACCOUNT_NOT_LINKED`.
 - **Penegasan biometrik (FL-010U):** `account_user_id` **hanya** menghubungkan akun manusia ke baris peserta. Kolom ini **tidak** membuka akses ke `face_templates`, tidak menambah kolom biometrik, dan tidak memberi mahasiswa akses ke data peserta lain. Aturan kunci dan biometrik (D-030) tetap berlaku apa adanya (§11).
+- **Implementasi nonbiometrik FL-CORE01 (25 Oktober 2026):** migration forward-only `00005` menambah `note` (nullable, ≤200), `identity_reference` (nullable, 1–120 setelah trim), dan `identity_verified_at` (nullable, hanya sah bersama referensi). Referensi opaque menunjuk roster kampus yang diperiksa Admin; bukan email, berkas kartu identitas, atau biometrik. Timestamp ditetapkan server dalam transaksi audit `person.identity_verified`; seluruh baris lama tetap tidak terverifikasi. Referensi hanya dapat diubah/dihapus setelah unlink; NIM immutable melalui API dan trigger database. Indeks unik global mencakup soft-deleted person. Migrasi gagal atomik bila ada NIM lama duplikat; tidak memilih/menghapus data.
+- **Binding FL-CORE01:** Admin aktif, person aktif terverifikasi, akun mahasiswa aktif; relasi satu-ke-satu dan audit ditegakkan transaksi + indeks existing. `/me/classes` memakai resolver produksi dengan syarat aktif/terverifikasi yang sama. Status inactive tidak mencabut sesi akun atau menghapus riwayat; hanya menutup akses kepemilikan person.
+- **Batas delete FL-CORE01:** data attendance/enrollment/template menahan soft-delete dengan `409 POLICY_CONFLICT`; tidak ada implementasi penghapusan biometrik dalam tugas ini. Migration hanya diterapkan pada database disposable/test, bukan database Product Owner.
 - **Penghapusan:** `DELETE /people/{id}` menghapus `face_templates` terkait pada transaksi yang sama (D-015), lalu mengisi `deleted_at`. Baris tidak hilang agar `attendance_records` historis tetap dapat dibaca. Penghapusan akun `users` **tidak** menghapus baris peserta; `ON DELETE SET NULL` hanya mengosongkan penautan.
 
 ### 4.5 `classes`
@@ -201,6 +209,7 @@ Peserta absensi. Identitas biometrik **tidak** ada di tabel ini.
 - **Primary key gabungan:** `(class_id, person_id)` — mencegah keanggotaan ganda tanpa perlu kolom `id`.
 - **Indeks:** `idx_class_memberships_person`.
 - **Penghapusan:** baris keanggotaan dihapus keras (bukan lunak) karena tidak memiliki makna historis sendiri; riwayat kehadiran tetap ada di `attendance_records`.
+- **Skema existing yang dipertahankan FL-CORE01:** implementasi `00001` memakai `joined_at`, `left_at`, dan `created_by`, bukan kolom target `created_at` pada tabel rancangan di atas. PUT membuat/mengaktifkan membership, DELETE menghapus keras sesuai kontrak dengan guard attendance pada sesi terbuka; daftar hanya person aktif yang belum dihapus. Tidak ada migrasi destructive untuk menyamakan nama kolom.
 
 ### 4.7 `attendance_sessions`
 
@@ -227,6 +236,7 @@ Peserta absensi. Identitas biometrik **tidak** ada di tabel ini.
 - **Aturan satu sesi terbuka per perangkat:** `CREATE UNIQUE INDEX uq_sessions_one_open_per_device ON attendance_sessions(device_id) WHERE status = 'open' AND device_id IS NOT NULL;`
 - **Penghapusan:** sesi tidak dihapus keras bila sudah memiliki `attendance_records`; gunakan pembatalan di lapisan aplikasi (di luar MVP) atau biarkan tersimpan sebagai riwayat.
 - **Retensi:** sesi dan rekapnya disimpan sesuai kebijakan retensi akademik kampus (belum diputuskan — lihat §13).
+- **Implementasi FL-CORE02 (25 Oktober 2026):** migration forward-only `00006_class_sessions_manual.sql` mengganti kolom status memakai pola ALTER 00002, **tanpa menjatuhkan tabel induk atau mematikan foreign key**. Data status lama termasuk `cancelled` tetap dipertahankan; API baru hanya membuat `draft → open → closed`. Kolom `title`, `started_at`, `close_reason` ditambahkan; `started_at` historis hanya diisi dari `opens_at`, bukan ditebak dari created_at. Indeks satu open per kelas/perangkat dipertahankan. Upgrade dan rollback diuji pada disposable schema 5 berisi data attendance; ledger/checksum lama tetap utuh. Database Product Owner tidak dimigrasikan.
 
 ### 4.8 `attendance_records`
 
@@ -255,97 +265,104 @@ Tabel keputusan domain absensi. **Hanya ditulis oleh backend Go** (D-027).
 - **Indeks:** `idx_attendance_records_session_status`, `idx_attendance_records_person_created`.
 - **Aturan `absent`:** status `absent` **tidak pernah** ditulis ke tabel ini. Nilai itu dihitung dari daftar anggota kelas dikurangi catatan yang ada, dan hanya bermakna setelah sesi `closed`. Karena tidak ada baris `absent`, penghapusan peserta yang tidak pernah hadir tidak menghasilkan catatan hantu.
 - **Retensi:** selama masa retensi akademik; tidak ada kolom biometrik di sini sehingga ekspor relatif aman.
+- **Batas implementasi FL-CORE02:** jalur aktif hanya menulis `source='manual'` dan status `present`/`late`/`excused`. Skema existing 00001 masih memuat enum legacy (`recognition`/`import`, status `absent`, kolom `confidence`, FK sesi CASCADE), berbeda dari model target di tabel di atas; migrasi 00006 tidak mengubah atau menghapus data legacy tersebut. Vocabulary/constraint jalur recognition perlu diselaraskan dalam tugas otomatisasi terpisah sebelum diaktifkan, bukan dianggap sudah mendukung `source='face'`.
+- **Histori dan audit:** rekap menggabungkan roster aktif dengan catatan nyata yang sudah ada; pelepasan membership tidak menghilangkan catatan lama. `GET /manual-checkins` menampilkan keadaan catatan manual saat ini; histori perubahan tersimpan di audit transaksional (alasan manusia, metadata aman sebelum/sesudah). Tanpa account binding tetap boleh manual jika roster terverifikasi; tanpa consent tetap boleh. Tidak ada foto/template baru.
 
-### 4.9 `consent_records`
+### 4.9 `consent_records` — FL-ENR01B
 
-| Kolom | Tipe | Null | Aturan |
-|---|---|---|---|
-| `id` | TEXT | tidak | PK |
-| `person_id` | TEXT | tidak | FK → `people.id` `ON DELETE CASCADE` |
-| `purpose` | TEXT | tidak | Misal `attendance_face_recognition` |
-| `version` | TEXT | tidak | Versi teks persetujuan yang ditandatangani |
-| `capture_method` | TEXT | tidak | `CHECK (capture_method IN ('written_form','digital_form'))` |
-| `granted_at` | TEXT | tidak | — |
-| `withdrawn_at` | TEXT | ya | Diisi saat pencabutan |
-| `withdraw_reason` | TEXT | ya | Wajib bila `withdrawn_at` diisi |
-| `recorded_by` | TEXT | tidak | FK → `users.id` `ON DELETE RESTRICT` |
-| `created_at` | TEXT | tidak | — |
+**Synthetic/disposable only, schema00007; migration lama tidak diubah.** Baris lama dipertahankan, tidak otomatis menjadi consent V1. Kolom nyata existing: purpose `face_enrollment|attendance_photo|data_retention`, status `granted|withdrawn`, method `written|digital_signature|verbal_witnessed`;00007 menambah `digital_explicit` tanpa mengklaim signature kriptografis.
 
-- **Aturan persetujuan aktif:** didefinisikan sebagai baris dengan `withdrawn_at IS NULL` dan `purpose = 'attendance_face_recognition'` untuk peserta tersebut.
-- **Indeks unik parsial:** memastikan hanya satu persetujuan aktif per tujuan dan peserta:
-  `CREATE UNIQUE INDEX uq_consent_active_per_purpose ON consent_records(person_id, purpose) WHERE withdrawn_at IS NULL;`
-- **CHECK:** `ck_consent_withdraw_fields`: `withdrawn_at IS NULL OR withdraw_reason IS NOT NULL`.
-- **Penghapusan:** tidak ada penghapusan keras lewat API. Persetujuan dicabut, bukan dihapus, karena jejak persetujuan adalah bukti kepatuhan.
-- **Retensi:** wajib disimpan selama sistem menyimpan template terkait; setelah peserta dihapus, baris ikut terhapus melalui `ON DELETE CASCADE`.
+Migration `synthetic-migrations/00007_synthetic_enrollment.sql` berada di luar
+discovery startup normal; `migrations/` produk tetap versi 6. Harness menyusun
+direktori gabungan disposable sebelum menjalankan runner/checksum existing.
 
-### 4.10 `face_enrollments`
 
-Sesi pendaftaran wajah berjangka waktu. Tidak menyimpan gambar.
+Tambahan: notice_version,notice_digest,subject_user_id,withdrawn_by,withdraw_reason_code,policy_version. Grant mencatat actor=subject, notice/policy `synthetic-v1`, digest immutable dan waktu server UTC. Composite unique `(id,person_id,subject_user_id)` adalah target FK submission; unique grant/person/purpose tetap berlaku. Trigger melarang perubahan bukti grant dan reaktivasi withdrawn. API memetakan NOT_GIVEN/ACTIVE/WITHDRAWN. Withdrawal bukan penghapusan histori; automatic metadata retention90hari tidak diaktifkan.
 
-| Kolom | Tipe | Null | Aturan |
-|---|---|---|---|
-| `id` | TEXT | tidak | PK |
-| `person_id` | TEXT | tidak | FK → `people.id` `ON DELETE CASCADE` |
-| `status` | TEXT | tidak | `CHECK (status IN ('pending','completed','cancelled','expired'))` |
-| `accepted_samples` | INTEGER | tidak | Bawaan 0 |
-| `samples_required_min` | INTEGER | tidak | Bawaan 3 |
-| `expires_at` | TEXT | tidak | Bawaan `created_at + 10 menit` |
-| `model_hint` | TEXT | ya | Saran model, boleh diabaikan |
-| `started_by` | TEXT | tidak | FK → `users.id` `ON DELETE RESTRICT` |
-| `created_at` | TEXT | tidak | — |
-| `updated_at` | TEXT | ya | — |
+### 4.10 `face_enrollments` dan submission V1
 
-- **Indeks:** `idx_face_enrollments_person_status`, `idx_face_enrollments_expires`.
-- **CHECK:** `ck_enrollments_sample_count`: `accepted_samples >= 0`.
-- **Penghapusan:** enrollment selesai dapat dihapus keras setelah template dibuat, karena datanya hanya bersifat proses.
+Tabel activation nyata dipertahankan: enum legacy pending|active|revoked|failed, model_name/version/checksum, sample_count,enrolled_at/revoked_at/revoked_reason,created_by dan timestamps. Jalur baru membuat active hanya setelah processing sukses; sample_count1, threshold NULL, bukan threshold demo. Withdrawal revoke activation dan hapus encrypted template atomik.
 
-### 4.11 `face_enrollment_samples`
+Review terpisah pada `face_enrollment_submissions`:
 
-Menyimpan **metadata kualitas**, bukan gambar dan bukan embedding.
+| Grup | Invariant |
+|---|---|
+| Identity | UUID id,person_id,subject_user_id,consent_id; composite FK mengikat consent/person/subject; immutable |
+| Lifecycle | PENDING_APPROVAL,APPROVED_PROCESSING,FAILED_PROCESSING,ACTIVE,REJECTED,EXPIRED,REVOKED; NOT_ENROLLED proyeksi tanpa row |
+| Deadline | submitted_at,photo_expires_at=submitted_at+72h UTC, immutable; replay/preview tidak memperpanjang |
+| Fences | revision CAS,captured_epoch, upload session metadata; access expiry token upload bukan deadline review asinkron |
+| Review | Decision/reviewer/reviewer_epoch/time bersama; attestation sintetis version/reference; immutable setelah keputusan |
+| Activation | activated_enrollment_id unique; ACTIVE memerlukan approved+activation reference |
+| Integrity | canonical SHA256 internal mengikat review/processing; bukan fingerprint wajah dan tidak ke log/API |
+| Uniqueness | Satu live attempt/person dan subject pada pending/processing/failed/active |
 
-| Kolom | Tipe | Null | Aturan |
-|---|---|---|---|
-| `id` | TEXT | tidak | PK |
-| `enrollment_id` | TEXT | tidak | FK → `face_enrollments.id` `ON DELETE CASCADE` |
-| `sample_index` | INTEGER | tidak | Dimulai dari 1 |
-| `quality_status` | TEXT | tidak | `CHECK (quality_status IN ('accepted','rejected'))` |
-| `quality_score` | REAL | ya | Skor kualitas dari mesin AI |
-| `reject_reason` | TEXT | ya | Wajib bila ditolak: `NO_FACE`, `MULTIPLE_FACES`, `LOW_QUALITY`, `FACE_TOO_SMALL` |
-| `created_at` | TEXT | tidak | — |
+people.biometric_epoch/consent_revision,users.enrollment_auth_epoch,session_tokens.enrollment_epoch adalah monotonic fences, bukan perubahan assignment role atau algoritme OTP/session. Trigger perubahan status/link/identitas/roster/reviewer/revocation session mencegah stale work hidup kembali. Perubahan role/status tidak menghapus template otomatis; readiness ditutup.
 
-- **Unik:** `uq_enrollment_sample_index` pada `(enrollment_id, sample_index)`.
-- **CHECK:** `ck_samples_reject_reason`: `quality_status <> 'rejected' OR reject_reason IS NOT NULL`.
-- **Retensi:** dihapus saat enrollment selesai atau dibatalkan. **Tidak ada** kolom `image_blob` dan tidak boleh ditambahkan tanpa keputusan baru.
+### 4.11 Foto pending, processing dan deletion jobs
 
-### 4.12 `face_templates`
+Multi-sample/quality contract lama digantikan satu JPEG immutable; `face_enrollment_samples` tidak dibuat.
 
-Satu-satunya tempat data biometrik disimpan, dan hanya dalam bentuk terenkripsi (D-022).
+`face_enrollment_photos`: submission_id PK/FK,key_version,nonce12byte unique/version,storage_state STAGED|READY,MIME/dimensi/panjang/expiry bounded sesuai submission dan hash canonical. **Ciphertext pada private file**, bukan SQLite/repo/static/public directory. UUID submission sebagai opaque reference, tidak ada path API.
 
-| Kolom | Tipe | Null | Aturan |
-|---|---|---|---|
-| `id` | TEXT | tidak | PK |
-| `person_id` | TEXT | tidak | FK → `people.id` `ON DELETE CASCADE` |
-| `ciphertext` | BLOB | tidak | Embedding terenkripsi AES-256-GCM |
-| `nonce` | BLOB | tidak | 12 byte, dari sumber acak kriptografis, **unik per baris** |
-| `auth_tag` | BLOB | tidak | 16 byte tag autentikasi |
-| `aad` | TEXT | tidak | Nilai AAD yang dipakai, untuk pemeriksaan ulang |
-| `algorithm` | TEXT | tidak | `CHECK (algorithm = 'AES-256-GCM')` |
-| `key_version` | TEXT | tidak | Menunjuk kunci enkripsi aktif saat baris ditulis. Versi pertama bernilai teks `'1'`; nilainya masuk ke AAD |
-| `embedding_dim` | INTEGER | tidak | Dimensi vektor asli, untuk verifikasi setelah dekripsi |
-| `model_id` | TEXT | tidak | Misal `sface` |
-| `model_version` | TEXT | tidak | Versi bobot; template hanya dicocokkan dengan versi yang sama |
-| `detector_id` | TEXT | tidak | Misal `yunet` |
-| `created_at` | TEXT | tidak | — |
-| `revoked_at` | TEXT | ya | Bila template dinonaktifkan tanpa penghapusan |
+Protocol: encrypt memory → durable `.stage` → SQLite submission/photo metadata/audit/receipt atomic → rename `.enc` → READY. STAGED tidak dapat preview/approve. Reconciliation finalisasi aman atau fail-closed; `.tmp`/stage/final orphan dan missing/corrupt files ditangani eksplisit. DB commit bukan bukti file commit.
 
-- **Unik:** `uq_face_templates_person_model` pada `(person_id, model_id, model_version)` — mencegah template ganda untuk model yang sama.
-- **Indeks:** `idx_face_templates_person`, `idx_face_templates_key_version`.
-- **AAD yang diikat (ditulis apa adanya pada kolom `aad` agar dapat diverifikasi ulang):** gabungan berurutan tanpa pemisah ambigu, misalnya `person_id || '|' || model_id || '|' || model_version || '|' || key_version`. Mengikat AAD ke identitas dan versi model membuat ciphertext tidak dapat dipindahkan ke orang lain atau dipakai dengan model lain tanpa gagal verifikasi.
-- **Perilaku saat dekripsi gagal:** baris **tidak** dipakai dan **tidak** diganti dengan tebakan. Backend menandai kegagalan, menulis audit, dan mengembalikan hasil “tidak dapat diverifikasi” kepada pemanggil. Tidak ada kunci pengganti otomatis dan tidak ada pembuatan template baru secara diam-diam. Kunci yang hilang tidak menghasilkan template baru; peserta harus mendaftar ulang dengan persetujuan baru (`docs/SECURITY_PRIVACY.md` §5d). **Kegagalan dekripsi bukan alasan menghapus baris.** Tiga kondisi dibedakan (`docs/SECURITY_PRIVACY.md` §5d.1–§5d.2): kunci **sementara tidak tersedia** dan kunci **ada tetapi tidak dapat dipakai** **dilarang** memicu penghapusan; baris pada kondisi kedua dikarantina (tidak ditampilkan, tidak dihitung cocok) tetapi tetap ada. Penghapusan hanya dijalankan oleh manusia berwenang setelah kunci **dipastikan tidak dapat dipulihkan**, dan tidak pernah oleh tugas terjadwal otomatis.
-- **Penghapusan:** pencabutan persetujuan dan penghapusan peserta **menghapus baris ini** (bukan menandai). Template tidak dapat dipulihkan setelah dihapus karena kunci terpisah tidak menyimpan salinan. Penghapusan biometrik **belum selesai** bila jejaknya masih ada di berkas `-wal`/`-shm`, salinan cadangan, atau lapisan cache (`docs/SECURITY_PRIVACY.md` §5c, D-030 konsekuensi butir 5).
-- **Retensi:** selama persetujuan aktif. Bila persetujuan dicabut, baris harus terhapus pada transaksi yang sama.
-- **Pengelolaan kunci (D-030, DISETUJUI pada FL-004S):** `key_version` diisi kunci aktif saat penulisan; versi pertama bernilai teks `'1'`. Kunci disimpan di luar database dan di luar Git, dibungkus DPAPI cakupan pengguna, dan hanya diakses lewat antarmuka `KeyProvider` di Go. Indeks `idx_face_templates_key_version` ada agar penghapusan kunci lama setelah rotasi dapat diperiksa terhadap baris yang menunjuk versinya. Kebijakan penuh: `docs/SECURITY_PRIVACY.md` §5a–§5f.
-- **Peringatan lisensi model:** pemilihan `model_id`/`model_version` dibatasi pada bobot dengan ketentuan penggunaan yang sesuai (D-025). Jangan menambahkan model tanpa memeriksa lisensi.
+`enrollment_processing_jobs`: submission unique,attempt_id unique,attempt count,expected revision/epoch/hash,QUEUED|RUNNING|FINISHED,lease dan safe error. Processor tidak memegang KeyProvider/DB; late output difence.
+
+Kegagalan inference biasa mem-purge foto. Kegagalan key/integritas mempertahankan
+ciphertext dengan `FAILED_PROCESSING / BIOMETRIC_UNAVAILABLE`; retry terbatas
+memerlukan pemulihan decrypt/hash dan semua guard approval/consent/TTL/attempt.
+Tidak ada pemulihan otomatis atau perpanjangan deadline.
+
+
+`biometric_deletion_jobs`/`enrollment_file_deletions`: logical revoke/payload removal dan retry file cleanup durable. COMPLETE memerlukan bukti langkah terkontrol; gagal tetap FAILED/PENDING. Tidak menghapus attendance/audit/identitas. SQLite encrypted-template WAL dan salinan eksternal memerlukan prosedur D-030 terpisah; bukan forensic erase.
+
+`enrollment_rate_buckets` terpisah dari OTP; actor/action/window counter durable. `idempotency_records` existing menyimpan fingerprint dan minimal receipt tanpa foto/template/NIM; replay current state.
+
+### 4.12 `face_templates` — synthetic-only FL-SEC01
+
+| Field/invariant | Kontrak FL-SEC01; migration disposable00008 setelah00007 |
+|---|---|
+| Identity | id,person_id unique,activation_enrollment_id unique,consent_id,submission_id unique; FK+trigger binding |
+| Ciphertext | AES256GCM512byte float32-le +16byte tag digabung528byte ciphertext; nonce12byte, envelope_version2 untuk seluruh write template baru; key_version TEXT |
+| AAD | Hex canonical uint32BE byte-length-prefixed UTF-8 fixed tuple `("FaceLink","2","template",template_id,submission_id,person_id,consent_id,model_id,model_version,model_fingerprint,key_version)` dari metadata record tervalidasi |
+| Provenance | model/detector id/version/checksum,pipeline_revision;128 finite L2 float32 dan exact manifest |
+| Scope | synthetic_only=1 CHECK; tidak ada production processor/default atau template-read API |
+| Mutation | Immutable; withdrawal menghapus payload+revoke activation audited |
+
+`consent_id` adalah UUID grant historis pada `consent_records`, **bukan** status,
+revision atau nilai withdrawn_at. Trigger evidence existing melindungi ID,
+person/subject dan bukti grant; withdrawal mengubah status/metadata penarikan
+tanpa mengganti identitas grant. Tidak memerlukan consent-grant table baru.
+Template UUID dibangkitkan sebelum Seal dan ID yang sama disimpan. Relasi
+template→submission→person→consent grant serta activation divalidasi sebelum
+decrypt; identitas yang hanya dinyatakan envelope tidak dipercaya.
+
+`model_fingerprint` adalah lowercase SHA256 atas tuple yang setiap field-nya
+uint32BE byte-length-prefixed:
+`("FaceLink:model-pipeline:1",synthetic_only_as_"true"_or_"false",model_id,model_version,lowercase(model_checksum),detector_id,detector_version,lowercase(detector_checksum),pipeline_revision)`.
+Fingerprint direkonstruksi dari metadata provenance immutable; tidak bergantung
+pada waktu/status/revision atau hasil pemrosesan. Seluruh field AAD wajib,
+UUID canonical nonzero dan fingerprint lowercase hex64.
+
+Migration00007/checksum tetap. Migration00008 hanya digabung harness disposable:
+mempertahankan envelope/row v1 untuk quarantine tanpa konversi payload, menolak
+INSERT template v1 baru, dan menjaga constraint/trigger/FK. Template v1/unknown
+ditolak sebelum decrypt tanpa fallback; unsupported/key-loss/corruption bukan
+izin penghapusan otomatis. Readiness false/BIOMETRIC_UNAVAILABLE menjaga kontrak
+API existing. Tidak ada migrasi atau pembacaan database non-disposable untuk
+menemukan/mengonversi data. Bila ditemukan data asli v1: isolasi akses biometrik,
+pertahankan data/evidence, laporkan metadata versi tanpa payload, dan minta
+otorisasi rencana kompatibilitas terpisah sebelum migrasi/re-enrollment.
+
+V2 mencegah envelope dipindah ke identitas/metadata target berbeda tanpa key.
+V2 **bukan anti-rollback database**: replay envelope beserta seluruh metadata dan
+state lama yang konsisten, atau attacker yang menguasai key, memerlukan kontrol
+di luar AEAD. SQL guard/consent/reviewer/lease/audit adalah kontrol tambahan,
+bukan bukti semua manipulasi offline dicegah.
+
+
+Key purpose pending-photo/template terpisah; DPAPI CurrentUser user-only protected DACL, tanpa SACL/owner manipulation. Explicit provisioning menolak existing/partial keyset. Missing key/tag/AAD salah menutup operasi/readiness, tidak membuat replacement/menghapus template sebagai diagnosis key-loss. Timer recovery D-030 yang konflik tetap BLOCKED untuk irreversible production deletion;72jam hanya TTL foto. Same-user compromise,paging,SSD remanence tidak dijamin.
+
 
 ### 4.13 `devices`
 

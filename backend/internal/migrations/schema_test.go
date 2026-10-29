@@ -30,8 +30,8 @@ func TestSkemaNyataMenerapkanSeluruhTabelNonbiometrik(t *testing.T) {
 	if err != nil {
 		t.Fatalf("penerapan skema nyata gagal: %v", err)
 	}
-	if status.CurrentVersion != 3 {
-		t.Errorf("CurrentVersion = %d, ingin 3", status.CurrentVersion)
+	if status.CurrentVersion != 6 {
+		t.Errorf("CurrentVersion = %d, ingin 6", status.CurrentVersion)
 	}
 
 	want := []string{
@@ -39,7 +39,8 @@ func TestSkemaNyataMenerapkanSeluruhTabelNonbiometrik(t *testing.T) {
 		"class_memberships", "attendance_sessions", "attendance_records",
 		"consent_records", "face_enrollments", "devices", "audit_events",
 		"idempotency_records", "user_identities", "auth_nonces", "class_lecturers",
-		"session_token_history",
+		"session_token_history", "email_otp_challenges",
+		"email_verified_identities", "email_otp_rate_buckets",
 	}
 	for _, name := range want {
 		var found int
@@ -72,8 +73,8 @@ func TestSkemaNyataTidakMembuatTabelBiometrik(t *testing.T) {
 		t.Fatalf("penerapan skema nyata gagal: %v", err)
 	}
 
-	// Tabel ini bergantung pada rancangan manajemen kunci (D-030) dan sengaja
-	// ditunda sampai tugas tersebut disetujui.
+	// Migrasi enrollment sintetis berada di luar discovery default dan tidak
+	// boleh diaktifkan oleh startup server biasa.
 	for _, name := range []string{"face_templates", "face_enrollment_samples"} {
 		var found int
 		if err := db.QueryRowContext(ctx,
@@ -81,7 +82,7 @@ func TestSkemaNyataTidakMembuatTabelBiometrik(t *testing.T) {
 			t.Fatalf("pembacaan sqlite_master untuk %s gagal: %v", name, err)
 		}
 		if found != 0 {
-			t.Errorf("tabel %s dibuat padahal menunggu rancangan D-030", name)
+			t.Errorf("tabel %s dibuat padahal migrasi enrollment hanya untuk fixture disposable", name)
 		}
 	}
 }
@@ -318,8 +319,8 @@ func TestSkemaNyataMigrasiDatabaseLamaDenganData(t *testing.T) {
 	if err != nil {
 		t.Fatalf("migrasi di atas database lama gagal: %v", err)
 	}
-	if statusBaru.CurrentVersion != 3 || statusBaru.Applied != 2 {
-		t.Fatalf("status migrasi = %+v, ingin versi 3 dengan 2 migrasi diterapkan", statusBaru)
+	if statusBaru.CurrentVersion != 6 || statusBaru.Applied != 5 {
+		t.Fatalf("status migrasi = %+v, ingin versi 6 dengan 5 migrasi diterapkan", statusBaru)
 	}
 
 	// 3. Data domain tetap ada.

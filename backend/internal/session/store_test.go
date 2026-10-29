@@ -389,21 +389,8 @@ func TestRevokeIdempotenDanRevokeAllForUser(t *testing.T) {
 		t.Errorf("pencabutan ulang menimpa catatan pertama: %v / %q", revokedAt, reason.String)
 	}
 
-	// Jalur logout pemilik sesi tetap idempoten: pencabutan kedua dilaporkan
-	// "tidak ada yang dicabut" tanpa galat, sehingga `POST /auth/logout` yang
-	// diulang tetap 204.
-	tercabut, err := store.RevokeOwned(ctx, pertama.SessionID, "u-1", store.clk.Now().UTC(), "logout")
-	harusBerhasil(t, err, "RevokeOwned sesi yang sudah tercabut")
-	if tercabut {
-		t.Error("RevokeOwned sesi yang sudah tercabut = true, ingin false")
-	}
-
-	// Sesi milik pengguna lain tidak dapat dicabut lewat jalur pemilik.
-	tercabut, err = store.RevokeOwned(ctx, orangLain.SessionID, "u-1", store.clk.Now().UTC(), "logout")
-	harusBerhasil(t, err, "RevokeOwned sesi milik pengguna lain")
-	if tercabut {
-		t.Error("sesi milik pengguna lain tercabut lewat jalur pemilik")
-	}
+	// Jalur logout kredensial tetap idempoten setelah pencabutan admin.
+	harusBerhasil(t, store.Logout(ctx, pertama.RefreshToken, ""), "Logout sesi yang sudah tercabut")
 	if _, err := store.Authenticate(ctx, orangLain.AccessToken); err != nil {
 		t.Errorf("sesi pengguna lain ikut tercabut: %v", err)
 	}
@@ -461,23 +448,25 @@ func TestRefreshKonkurenHanyaSatuYangBerhasil(t *testing.T) {
 			wg    sync.WaitGroup
 			mulai = make(chan struct{})
 			hasil = make([]error, percobaan)
+			token = make([]Pair, percobaan)
 		)
 		for i := range percobaan {
 			wg.Add(1)
 			go func(i int) {
 				defer wg.Done()
 				<-mulai
-				_, err := store.Refresh(ctx, pair.RefreshToken)
-				hasil[i] = err
+				token[i], hasil[i] = store.Refresh(ctx, pair.RefreshToken)
 			}(i)
 		}
 		close(mulai)
 		wg.Wait()
 
 		sukses, gagal := 0, 0
-		for _, err := range hasil {
+		var pemenang Pair
+		for i, err := range hasil {
 			if err == nil {
 				sukses++
+				pemenang = token[i]
 				continue
 			}
 			gagal++
@@ -499,6 +488,13 @@ func TestRefreshKonkurenHanyaSatuYangBerhasil(t *testing.T) {
 		if reason.String != alasanRefreshReuse {
 			t.Errorf("putaran %d: revoked_reason = %q, ingin %q", putaran, reason.String, alasanRefreshReuse)
 		}
+
+		// Respons sukses yang terbit bersamaan bukan sesi yang tetap aman:
+		// replay harus mematikan kedua token pemenang juga.
+		_, err := store.Authenticate(ctx, pemenang.AccessToken)
+		harusGalat(t, err, ErrSessionRevoked)
+		_, err = store.Refresh(ctx, pemenang.RefreshToken)
+		harusGalat(t, err, ErrRefreshInvalid)
 	}
 }
 
@@ -671,5 +667,363 @@ func TestIssuePenggunaTidakDikenalDitolak(t *testing.T) {
 
 	if _, err := store.Issue(context.Background(), "u-tidak-ada", agenUji); err == nil {
 		t.Fatal("Issue untuk pengguna yang tidak ada berhasil, ingin ditolak foreign key")
+	}
+}
+
+func jumlahAuditLogout(t *testing.T, db *database.DB) int {
+	t.Helper()
+	var jumlah int
+	if err := db.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM audit_events WHERE action = 'auth.logout'`).Scan(&jumlah); err != nil {
+		t.Fatal(err)
+	}
+	return jumlah
+}
+
+func TestLogoutCredentialsAndIsolation(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		rotations int
+		token     string
+		valid     bool
+	}{
+		{"current", 0, "current", true},
+		{"previous", 1, "original", true},
+		{"current_after_two_rotations", 2, "current", true},
+		{"older_history", 2, "original", false},
+		{"unknown", 0, "unknown", false},
+		{"empty", 0, "", false},
+		{"access_is_not_refresh", 0, "access", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			store, db, _ := bukaStore(t, Config{})
+			siapkanPengguna(t, db, "u-1")
+			siapkanPengguna(t, db, "u-2")
+			ctx := context.Background()
+			original := terbitkan(t, store, "u-1")
+			current := original
+			otherDevice := terbitkan(t, store, "u-1")
+			otherUser := terbitkan(t, store, "u-2")
+			for range tc.rotations {
+				var err error
+				current, err = store.Refresh(ctx, current.RefreshToken)
+				harusBerhasil(t, err, "rotasi sebelum logout")
+			}
+			token := tc.token
+			switch token {
+			case "current":
+				token = current.RefreshToken
+			case "original":
+				token = original.RefreshToken
+			case "access":
+				token = current.AccessToken
+			}
+			err := store.Logout(ctx, token, "req-logout")
+			if tc.valid {
+				harusBerhasil(t, err, "Logout")
+				firstAt, firstReason := bacaPencabutan(t, db, original.SessionID)
+				harusBerhasil(t, store.Logout(ctx, token, "req-repeat"), "Logout berulang")
+				harusBerhasil(t, store.Logout(ctx, current.RefreshToken, ""), "Logout current setelah previous")
+				at, reason := bacaPencabutan(t, db, original.SessionID)
+				if !at.Valid || reason.String != "logout" || at != firstAt || reason != firstReason {
+					t.Fatalf("catatan pencabutan berubah: %v/%v -> %v/%v", firstAt, firstReason, at, reason)
+				}
+				_, err = store.Authenticate(ctx, current.AccessToken)
+				harusGalat(t, err, ErrSessionRevoked)
+				_, err = store.Refresh(ctx, original.RefreshToken)
+				harusGalat(t, err, ErrRefreshInvalid)
+				_, err = store.Refresh(ctx, current.RefreshToken)
+				harusGalat(t, err, ErrRefreshInvalid)
+				if n := jumlahAuditLogout(t, db); n != 1 {
+					t.Fatalf("audit logout = %d, ingin 1", n)
+				}
+				var actor, entity, requestID string
+				harusBerhasil(t, db.QueryRowContext(ctx,
+					`SELECT actor_id, entity_id, request_id FROM audit_events WHERE action = 'auth.logout'`).
+					Scan(&actor, &entity, &requestID), "baca audit logout")
+				if actor != "u-1" || entity != original.SessionID || requestID != "req-logout" {
+					t.Fatalf("audit salah: actor=%s entity=%s request=%s", actor, entity, requestID)
+				}
+			} else {
+				harusGalat(t, err, ErrRefreshInvalid)
+				_, err = store.Authenticate(ctx, current.AccessToken)
+				harusBerhasil(t, err, "sesi tetap aktif setelah kredensial salah")
+				if n := jumlahAuditLogout(t, db); n != 0 {
+					t.Fatalf("audit kredensial salah = %d", n)
+				}
+			}
+			for _, pair := range []Pair{otherDevice, otherUser} {
+				_, err := store.Authenticate(ctx, pair.AccessToken)
+				harusBerhasil(t, err, "sesi lain tidak ikut dicabut")
+				_, err = store.Refresh(ctx, pair.RefreshToken)
+				harusBerhasil(t, err, "penyegar sesi lain masih berlaku")
+			}
+		})
+	}
+}
+
+func TestLogoutAbsoluteExpiry(t *testing.T) {
+	for _, expired := range []bool{false, true} {
+		name := "before_boundary"
+		if expired {
+			name = "at_boundary"
+		}
+		t.Run(name, func(t *testing.T) {
+			store, db, jam := bukaStore(t, Config{})
+			siapkanPengguna(t, db, "u-1")
+			ctx := context.Background()
+			pair := terbitkan(t, store, "u-1")
+			advance := AbsoluteTTLBawaan
+			if !expired {
+				advance -= time.Millisecond
+			}
+			jam.Advance(advance)
+			err := store.Logout(ctx, pair.RefreshToken, "")
+			if expired {
+				harusGalat(t, err, ErrRefreshInvalid)
+				if n := jumlahAuditLogout(t, db); n != 0 {
+					t.Fatalf("audit logout kedaluwarsa = %d", n)
+				}
+			} else {
+				harusBerhasil(t, err, "Logout tepat sebelum batas")
+				jam.Advance(time.Hour)
+				harusBerhasil(t, store.Logout(ctx, pair.RefreshToken, ""), "logout tercabut setelah batas")
+			}
+			var absolute, refreshExpiry string
+			harusBerhasil(t, db.QueryRowContext(ctx,
+				`SELECT absolute_expires_at, refresh_expires_at FROM session_tokens WHERE id = ?`, pair.SessionID).
+				Scan(&absolute, &refreshExpiry), "baca batas sesi")
+			if absolute != formatWaktu(pair.AbsoluteExpiresAt) || refreshExpiry != absolute {
+				t.Fatalf("batas sesi diperpanjang: absolute=%s refresh=%s", absolute, refreshExpiry)
+			}
+			_, err = store.Refresh(ctx, pair.RefreshToken)
+			harusGalat(t, err, ErrRefreshInvalid)
+		})
+	}
+}
+
+// Jam pertama berhenti setelah BEGIN IMMEDIATE, bukan sebelum mengambil kunci.
+type logoutLockClock struct {
+	base    clock.Clock
+	once    sync.Once
+	locked  chan struct{}
+	release chan struct{}
+}
+
+func (c *logoutLockClock) Now() time.Time {
+	c.once.Do(func() {
+		close(c.locked)
+		<-c.release
+	})
+	return c.base.Now()
+}
+
+func TestLogoutRefreshSerializedBothOrderings(t *testing.T) {
+	for _, refreshFirst := range []bool{true, false} {
+		name := "logout_first"
+		if refreshFirst {
+			name = "refresh_first"
+		}
+		t.Run(name, func(t *testing.T) {
+			store, db, jam := bukaStore(t, Config{})
+			siapkanPengguna(t, db, "u-1")
+			siapkanPengguna(t, db, "u-2")
+			original := terbitkan(t, store, "u-1")
+			otherDevice := terbitkan(t, store, "u-1")
+			otherUser := terbitkan(t, store, "u-2")
+			gate := &logoutLockClock{base: jam, locked: make(chan struct{}), release: make(chan struct{})}
+			first := NewStore(db, gate, Config{})
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			type result struct {
+				pair Pair
+				err  error
+			}
+			firstDone := make(chan result, 1)
+			secondDone := make(chan result, 1)
+			go func() {
+				var r result
+				if refreshFirst {
+					r.pair, r.err = first.Refresh(ctx, original.RefreshToken)
+				} else {
+					r.err = first.Logout(ctx, original.RefreshToken, "race-first")
+				}
+				firstDone <- r
+			}()
+			<-gate.locked
+			started := make(chan struct{})
+			go func() {
+				close(started)
+				var r result
+				if refreshFirst {
+					r.err = store.Logout(ctx, original.RefreshToken, "race-second")
+				} else {
+					r.pair, r.err = store.Refresh(ctx, original.RefreshToken)
+				}
+				secondDone <- r
+			}()
+			<-started
+			close(gate.release)
+			a, b := <-firstDone, <-secondDone
+			harusBerhasil(t, a.err, "operasi pertama")
+			if refreshFirst {
+				harusBerhasil(t, b.err, "logout previous setelah refresh")
+				_, err := store.Refresh(ctx, a.pair.RefreshToken)
+				harusGalat(t, err, ErrRefreshInvalid)
+				_, err = store.Authenticate(ctx, a.pair.AccessToken)
+				harusGalat(t, err, ErrSessionRevoked)
+			} else {
+				harusGalat(t, b.err, ErrRefreshInvalid)
+			}
+			_, err := store.Refresh(ctx, original.RefreshToken)
+			harusGalat(t, err, ErrRefreshInvalid)
+			if n := jumlahAuditLogout(t, db); n != 1 {
+				t.Fatalf("audit race = %d, ingin 1", n)
+			}
+			for _, pair := range []Pair{otherDevice, otherUser} {
+				_, err := store.Refresh(ctx, pair.RefreshToken)
+				harusBerhasil(t, err, "race/replay tidak mencabut sesi lain")
+			}
+		})
+	}
+}
+
+func TestLogoutConcurrentDuplicateAuditsOnce(t *testing.T) {
+	store, db, _ := bukaStore(t, Config{})
+	siapkanPengguna(t, db, "u-1")
+	pair := terbitkan(t, store, "u-1")
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	for range 2 {
+		go func() {
+			<-start
+			results <- store.Logout(context.Background(), pair.RefreshToken, "")
+		}()
+	}
+	close(start)
+	for range 2 {
+		harusBerhasil(t, <-results, "logout konkuren")
+	}
+	if n := jumlahAuditLogout(t, db); n != 1 {
+		t.Fatalf("audit logout konkuren = %d, ingin 1", n)
+	}
+}
+
+func TestLogoutPersistsAcrossRestart(t *testing.T) {
+	for _, logoutBeforeRestart := range []bool{false, true} {
+		name := "previous_survives_restart"
+		if logoutBeforeRestart {
+			name = "revocation_survives_restart"
+		}
+		t.Run(name, func(t *testing.T) {
+			store, db, jam := bukaStore(t, Config{})
+			siapkanPengguna(t, db, "u-1")
+			ctx := context.Background()
+			pair := terbitkan(t, store, "u-1")
+			rotated, err := store.Refresh(ctx, pair.RefreshToken)
+			harusBerhasil(t, err, "Refresh sebelum restart")
+			if logoutBeforeRestart {
+				harusBerhasil(t, store.Logout(ctx, pair.RefreshToken, ""), "Logout sebelum restart")
+			}
+			path := db.Path()
+			harusBerhasil(t, db.Close(), "tutup sebelum restart")
+			reopened, err := database.Open(ctx, path)
+			harusBerhasil(t, err, "buka ulang database")
+			t.Cleanup(func() { _ = reopened.Close() })
+			restarted := NewStore(reopened, jam, Config{})
+			harusBerhasil(t, restarted.Logout(ctx, pair.RefreshToken, ""), "Logout previous setelah restart")
+			_, err = restarted.Refresh(ctx, rotated.RefreshToken)
+			harusGalat(t, err, ErrRefreshInvalid)
+			if n := jumlahAuditLogout(t, reopened); n != 1 {
+				t.Fatalf("audit setelah restart = %d, ingin 1", n)
+			}
+		})
+	}
+}
+
+func TestLogoutAuditFailureRollsBackRevocation(t *testing.T) {
+	store, db, _ := bukaStore(t, Config{})
+	siapkanPengguna(t, db, "u-1")
+	ctx := context.Background()
+	pair := terbitkan(t, store, "u-1")
+	_, err := db.ExecContext(ctx, `CREATE TRIGGER fail_logout_audit BEFORE INSERT ON audit_events
+		WHEN NEW.action = 'auth.logout' BEGIN SELECT RAISE(ABORT, 'injected audit failure'); END`)
+	harusBerhasil(t, err, "pasang kegagalan audit")
+	if err := store.Logout(ctx, pair.RefreshToken, ""); err == nil {
+		t.Fatal("Logout berhasil padahal audit gagal")
+	}
+	at, _ := bacaPencabutan(t, db, pair.SessionID)
+	if at.Valid || jumlahAuditLogout(t, db) != 0 {
+		t.Fatal("pencabutan/audit parsial tersimpan")
+	}
+	_, err = store.Authenticate(ctx, pair.AccessToken)
+	harusBerhasil(t, err, "sesi tetap aktif setelah rollback")
+	_, err = db.ExecContext(ctx, `DROP TRIGGER fail_logout_audit`)
+	harusBerhasil(t, err, "hapus kegagalan audit")
+	harusBerhasil(t, store.Logout(ctx, pair.RefreshToken, ""), "Logout setelah audit pulih")
+	if n := jumlahAuditLogout(t, db); n != 1 {
+		t.Fatalf("audit setelah retry = %d, ingin 1", n)
+	}
+}
+
+func TestLogoutPreviousRacesNextRefreshIsolation(t *testing.T) {
+	for _, refreshFirst := range []bool{true, false} {
+		name := "previous_logout_first"
+		if refreshFirst {
+			name = "next_refresh_first"
+		}
+		t.Run(name, func(t *testing.T) {
+			store, db, jam := bukaStore(t, Config{})
+			siapkanPengguna(t, db, "u-1")
+			siapkanPengguna(t, db, "u-2")
+			ctx := context.Background()
+			original := terbitkan(t, store, "u-1")
+			current, err := store.Refresh(ctx, original.RefreshToken)
+			harusBerhasil(t, err, "rotasi awal")
+			otherDevice := terbitkan(t, store, "u-1")
+			otherUser := terbitkan(t, store, "u-2")
+			gate := &logoutLockClock{base: jam, locked: make(chan struct{}), release: make(chan struct{})}
+			first := NewStore(db, gate, Config{})
+			refreshDone := make(chan error, 1)
+			logoutDone := make(chan error, 1)
+			refresh := func(s *Store) {
+				_, err := s.Refresh(ctx, current.RefreshToken)
+				refreshDone <- err
+			}
+			logout := func(s *Store) {
+				logoutDone <- s.Logout(ctx, original.RefreshToken, "")
+			}
+			if refreshFirst {
+				go refresh(first)
+			} else {
+				go logout(first)
+			}
+			<-gate.locked
+			if refreshFirst {
+				go logout(store)
+			} else {
+				go refresh(store)
+			}
+			close(gate.release)
+			refreshErr, logoutErr := <-refreshDone, <-logoutDone
+			if refreshFirst {
+				harusBerhasil(t, refreshErr, "refresh mendahului logout previous")
+				harusGalat(t, logoutErr, ErrRefreshInvalid)
+				at, _ := bacaPencabutan(t, db, original.SessionID)
+				if at.Valid || jumlahAuditLogout(t, db) != 0 {
+					t.Fatal("logout token dua generasi mencabut sesi atau menulis audit")
+				}
+			} else {
+				harusBerhasil(t, logoutErr, "logout previous mendahului refresh")
+				harusGalat(t, refreshErr, ErrRefreshInvalid)
+				if n := jumlahAuditLogout(t, db); n != 1 {
+					t.Fatalf("audit logout previous = %d, ingin 1", n)
+				}
+			}
+			for _, pair := range []Pair{otherDevice, otherUser} {
+				_, err := store.Refresh(ctx, pair.RefreshToken)
+				harusBerhasil(t, err, "race previous tidak mencabut sesi lain")
+			}
+		})
 	}
 }

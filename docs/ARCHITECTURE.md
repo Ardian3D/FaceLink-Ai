@@ -15,6 +15,33 @@
 - Gunakan antarmuka kamera seragam agar webcam pada fase software dapat diganti ESP32-S3 CAM tanpa mengubah domain absensi.
 - Jangan membuat ketergantungan pada cloud, penyedia AI berbayar, atau OmO saat aplikasi digunakan.
 - Semua data wajah tetap di lingkungan lokal; AI Engine hanya boleh mendengarkan di `127.0.0.1` atau IPC, tidak pernah terbuka pada jaringan.
+- **FL-OTP01 / D-038:** login utama Email OTP; Go/Chi menyimpan challenge HMAC
+  dan limit di SQLite, mengirim melalui Gmail SMTP TLS; Cloudflare Routing
+  menerima/meneruskan email, bukan pengirim. Google tetap sebagai implementasi
+  yang dinonaktifkan dari UI. SecureStore/sesi/RBAC tidak diganti.
+  Kontrak: [`EMAIL_OTP.md`](EMAIL_OTP.md).
+- **FL-ENR04:** integrasi sintetis/disposable memakai subprocess Python sekali
+  pakai dengan pipe privat HMAC-SHA256 dan batas ukuran/waktu; model pinned
+  diverifikasi sebelum load. Go memegang state/approval/key/audit/enkripsi;
+  Python tidak menerima DB/master key. Hanya command staging dapat memilih
+  processor nyata; `cmd/server` tetap tanpa enrollment. Kontrak §6.9 di
+  `API_CONTRACT.md`, bukti/residual di `FL_ENR04_TECHNICAL_REPORT.md`.
+- **FL-SEC01:** template AAD/envelopev2 mengikat immutable template/submission/
+  person/consent grant dan fingerprint lengkap model/pipeline/key version.
+  Decrypt merekonstruksi binding dari relasi record tervalidasi; bukan envelope
+  self-assertion. Pending-photo v1 terpisah tetap; template v1 unsupported tanpa
+  fallback. Migration00008 hanya disusun harness disposable; `cmd/server` dan
+  database Product Owner tidak dimigrasi. Tidak ada anti-rollback seluruh DB
+  atau penyelesaian D-030 sepihak. Kontrak DATA_MODEL §4.12/API_CONTRACT §6.10.
+- **FL-ENR05:** mode integration-fixtures pada staging saja menggabungkan actual
+  TS clients/controllers, normalOTP/verifiedHTTPS, satu WAL schema8 disposable
+  dan concrete real-Python processor. Worker paused/step/snapshot/reconcile serta
+  exact committed OTP-delivery barrier hanya stdin, bukan API produk.
+  Trace menghubungkan submission/approved canonical SHA/actual validated result;
+  worker audit/Python private requestID tidak dipalsukan. ACTIVEv2→withdraw/
+  REVOKED/cleanup0 terbukti. Client token-null menutup trust cached ACTIVE.
+  Tidak ada komponen/dependency/native/migration/production enrollment baru;
+  laporan dan batas bukti `FL_ENR05_TECHNICAL_REPORT.md`.
 
 ## 2. Gambaran deployment lokal
 
