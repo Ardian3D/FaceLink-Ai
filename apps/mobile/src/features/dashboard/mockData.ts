@@ -108,7 +108,7 @@ export const ringkasanDosen: RingkasanMetric[] = [
 export const ringkasanMahasiswa: RingkasanMetric[] = [
   { id: "hadir", label: "Kehadiran saya", value: "9/10", hint: "semester ini" },
   { id: "berikut", label: "Sesi berikutnya", value: "10:00", hint: "IF-101" },
-  { id: "konsen", label: "Persetujuan", value: "Aktif", hint: "biometrik" },
+  { id: "konsen", label: "Persetujuan", value: "Belum tersedia", hint: "belum dari server" },
 ];
 
 /** Kehadiran tujuh hari terakhir — admin dan dosen melihat tren ini. */

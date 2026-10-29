@@ -22,7 +22,7 @@ export const TIMEOUT_BAWAAN_MS = 5000;
 
 /** Jawaban mentah satu permintaan, sebelum ditafsirkan. */
 export type JawabanHttp =
-  | { jenis: "jawaban"; status: number; teks: string; durasiMs: number }
+  | { jenis: "jawaban"; status: number; teks: string; durasiMs: number; retryAfter?: string | null; serverDate?: string | null; etag?: string | null }
   | { jenis: "jaringan"; pesan: string; durasiMs: number }
   | { jenis: "timeout"; pesan: string; durasiMs: number };
 
@@ -32,9 +32,16 @@ export type OpsiPermintaan = {
   method?: "GET" | "POST" | "DELETE";
   /** Badan JSON. `undefined` berarti permintaan tanpa badan. */
   body?: unknown;
+  /** Badan biner mentah (mis. JPEG). Tidak pernah dicatat atau disalin. */
+  bodyBytes?: Uint8Array;
+  /** Content-Type untuk badan biner; diabaikan untuk JSON. */
+  contentType?: string;
+  /** Header tambahan yang sudah ditentukan pemanggil (mis. If-Match). */
+  headers?: Record<string, string>;
   /** Token akses Bearer. Tidak pernah dimasukkan ke URL atau log. */
   token?: string;
   timeoutMs?: number;
+  signal?: AbortSignal;
 };
 
 /**
@@ -50,6 +57,9 @@ export async function mintaHttp(
   const mulai = Date.now();
   const kendali = new AbortController();
   let habisWaktu = false;
+  const batalkan = () => kendali.abort();
+  opsi.signal?.addEventListener("abort", batalkan);
+  if (opsi.signal?.aborted) kendali.abort();
   const timer = setTimeout(() => {
     habisWaktu = true;
     kendali.abort();
@@ -64,12 +74,25 @@ export async function mintaHttp(
   if (opsi.body !== undefined) {
     tajuk["Content-Type"] = "application/json";
   }
+  if (opsi.bodyBytes !== undefined) {
+    tajuk["Content-Type"] = opsi.contentType ?? "application/octet-stream";
+  }
+  if (opsi.headers !== undefined) {
+    Object.assign(tajuk, opsi.headers);
+  }
+
+  const badan: BodyInit | undefined =
+    opsi.bodyBytes !== undefined
+      ? (opsi.bodyBytes as unknown as BodyInit)
+      : opsi.body === undefined
+        ? undefined
+        : JSON.stringify(opsi.body);
 
   try {
     const respons = await fetch(`${opsi.baseUrl}${path}`, {
       method: opsi.method ?? "GET",
       headers: tajuk,
-      body: opsi.body === undefined ? undefined : JSON.stringify(opsi.body),
+      body: badan,
       signal: kendali.signal,
     });
     const teks = await respons.text();
@@ -78,6 +101,9 @@ export async function mintaHttp(
       status: respons.status,
       teks,
       durasiMs: Date.now() - mulai,
+      retryAfter: respons.headers.get("Retry-After"),
+      serverDate: respons.headers.get("Date"),
+      etag: respons.headers.get("ETag"),
     };
   } catch (galat) {
     const durasiMs = Date.now() - mulai;
@@ -95,6 +121,7 @@ export async function mintaHttp(
     };
   } finally {
     clearTimeout(timer);
+    opsi.signal?.removeEventListener("abort", batalkan);
   }
 }
 

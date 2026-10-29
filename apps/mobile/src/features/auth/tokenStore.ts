@@ -45,6 +45,7 @@ export type SesiTersimpan = {
 let cache: SesiTersimpan | null = null;
 let sudahDimuat = false;
 let tersedia: boolean | null = null;
+let generasiMutasi = 0;
 /**
  * Apakah penyimpanan kredensial platform ada pada build ini.
  *
@@ -78,9 +79,11 @@ export function aksesMasihBerlaku(
  */
 export async function muatSesiTersimpan(): Promise<SesiTersimpan | null> {
   if (sudahDimuat) return cache;
+  const generasi = generasiMutasi;
   sudahDimuat = true;
   if (!(await penyimpananTersedia())) return null;
   const mentah = await SecureStore.getItemAsync(KUNCI);
+  if (generasi !== generasiMutasi) return cache;
   if (mentah === null) {
     cache = null;
     return null;
@@ -107,13 +110,16 @@ export async function simpanSesi(sesi: SesiTersimpan): Promise<void> {
   if (!(await penyimpananTersedia())) {
     throw new Error("penyimpanan kredensial platform tidak tersedia");
   }
-  cache = sesi;
-  sudahDimuat = true;
+  const generasi = ++generasiMutasi;
   await SecureStore.setItemAsync(KUNCI, JSON.stringify(sesi), {
     // Token hanya perlu tersedia setelah perangkat dibuka kuncinya; tidak ada
     // alasan menyalinnya ke perangkat lain melalui pencadangan.
     keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
   });
+  if (generasi === generasiMutasi) {
+    cache = sesi;
+    sudahDimuat = true;
+  }
 }
 
 /**
@@ -125,6 +131,7 @@ export async function simpanSesi(sesi: SesiTersimpan): Promise<void> {
  * token yang seharusnya sudah dibuang.
  */
 export async function hapusSesiTersimpan(): Promise<void> {
+  generasiMutasi += 1;
   cache = null;
   sudahDimuat = true;
   if (!(await penyimpananTersedia())) return;

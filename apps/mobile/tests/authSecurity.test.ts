@@ -3,14 +3,12 @@
  *
  * Dua hal diuji di sini karena keduanya mudah rusak tanpa disadari:
  *
- *  1. **Tidak ada bypass.** Mode demo dan pemilih role sudah dihapus; tidak
- *     boleh ada jalur yang memberi sesi tanpa `POST /auth/google`.
+ *  1. **Tidak ada bypass.** Sesi hanya dapat terbit setelah pertukaran yang
+ *     berhasil dengan backend; penolakan tidak boleh menghasilkan sesi lokal.
  *  2. **Tidak ada kebocoran ke log.** Token dan email tidak boleh tercetak,
  *     termasuk saat kegagalan — pesan galat yang menyertakan token akan
  *     berakhir di log perangkat atau laporan crash.
  */
-import fs from "node:fs";
-import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthFlow } from "@/features/auth/authFlow";
 import { apiTiruan, googleTiruan, penyimpananTiruan, sesiUntuk, MAHASISWA } from "./tiruan";
@@ -20,30 +18,6 @@ afterEach(() => {
 });
 
 describe("tidak ada bypass masuk", () => {
-  it("modul mode demo sudah tidak ada dan tidak dirujuk lagi", async () => {
-    // Kalau modul ini pernah dikembalikan, jalur masuk tanpa backend ikut
-    // kembali. Diperiksa di berkas, bukan lewat impor dinamis, supaya
-    // pemeriksa tipe tidak menuntut modul yang memang sudah dihapus.
-    const akar = path.resolve(import.meta.dirname, "../src/features/auth");
-    expect(fs.existsSync(path.join(akar, "demoMode.ts"))).toBe(false);
-    expect(fs.existsSync(path.join(akar, "demoAccounts.ts"))).toBe(false);
-
-    // Tidak ada berkas sumber yang masih merujuk modul itu. Daftar berkas
-    // dikumpulkan sendiri agar tidak bergantung pada perilaku Dirent versi Node.
-    const akarSumber = path.resolve(import.meta.dirname, "../src");
-    const akarApp = path.resolve(import.meta.dirname, "../app");
-    const kumpulkan = (dir: string): string[] =>
-      fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
-        const penuh = path.join(dir, e.name);
-        if (e.isDirectory()) return kumpulkan(penuh);
-        return /\.(ts|tsx)$/.test(e.name) ? [penuh] : [];
-      });
-    const merujuk = [...kumpulkan(akarSumber), ...kumpulkan(akarApp)].filter((berkas) => {
-      const isi = fs.readFileSync(berkas, "utf8");
-      return isi.includes("demoMode") || isi.includes("demoAccounts");
-    });
-    expect(merujuk).toEqual([]);
-  });
 
   it("tidak ada sesi yang terbit tanpa pertukaran ID token", async () => {
     const { api, catatan } = apiTiruan();

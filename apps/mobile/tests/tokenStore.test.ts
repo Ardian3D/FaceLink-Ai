@@ -154,6 +154,32 @@ describe("menghapus sesi", () => {
     const { hapusSesiTersimpan } = await muat();
     await expect(hapusSesiTersimpan()).resolves.toBeUndefined();
   });
+
+  it("does not refill cache from a read begun before deletion", async () => {
+    const old = JSON.stringify({ accessToken: "old-a", refreshToken: "old-r", expiresAtMs: 42 });
+    const pending = Promise.withResolvers<string | null>();
+    const started = Promise.withResolvers<void>();
+    toko.getItemAsync.mockImplementation(async () => {
+      started.resolve();
+      return pending.promise;
+    });
+    const store = await muat();
+    const reading = store.muatSesiTersimpan();
+    await started.promise;
+    await store.hapusSesiTersimpan();
+    pending.resolve(old);
+    expect(await reading).toBeNull();
+    expect(await store.muatSesiTersimpan()).toBeNull();
+  });
+
+  it("does not publish an unpersisted rotation in cache", async () => {
+    const store = await muat();
+    const old = { accessToken: "old-a", refreshToken: "old-r", expiresAtMs: 42 };
+    await store.simpanSesi(old);
+    toko.gagalTulis = true;
+    await expect(store.simpanSesi({ ...old, refreshToken: "new-r" })).rejects.toThrow();
+    expect(await store.muatSesiTersimpan()).toEqual(old);
+  });
 });
 
 describe("masih berlaku", () => {

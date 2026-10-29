@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Alert, StyleSheet, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 
 import { AppText } from "@/components/AppText";
 import { BarChart } from "@/components/dashboard/Charts";
@@ -11,6 +12,7 @@ import { SectionTitle } from "@/components/dashboard/SectionTitle";
 import { MiniStat, QuickAction } from "@/components/dashboard/StatCards";
 import { DashboardShell } from "@/features/dashboard/DashboardShell";
 import { useSession } from "@/features/auth/SessionProvider";
+import { enrollmentStagingAktif } from "@/features/enrollment/staging";
 import { useTheme , radius, spacing } from "@/theme";
 import { jadwalMahasiswa, riwayatMahasiswa, trenMingguan } from "@/features/dashboard/mockData";
 
@@ -25,6 +27,7 @@ import { jadwalMahasiswa, riwayatMahasiswa, trenMingguan } from "@/features/dash
 export default function MahasiswaDashboard() {
   const { colors } = useTheme();
   const { session } = useSession();
+  const router = useRouter();
   const [filter, setFilter] = useState("hari-ini");
 
   const jadwal = filter === "riwayat" ? [] : jadwalMahasiswa;
@@ -50,8 +53,8 @@ export default function MahasiswaDashboard() {
         />
         <MiniStat
           label="Persetujuan"
-          value="Aktif"
-          hint="biometrik"
+          value="Belum tersedia"
+          hint="belum dari server"
           icon="shield-checkmark-outline"
         />
       </View>
@@ -98,7 +101,13 @@ export default function MahasiswaDashboard() {
           <QuickAction
             icon="shield-outline"
             label="Persetujuan biometrik"
-            onPress={() => Alert.alert("Belum tersedia", "Pengaturan persetujuan memerlukan integrasi backend.")}
+            onPress={() => {
+              if (enrollmentStagingAktif) {
+                router.push("/enrollment");
+                return;
+              }
+              Alert.alert("Belum tersedia", "Pengaturan persetujuan memerlukan integrasi backend.");
+            }}
           />
         </View>
       </View>

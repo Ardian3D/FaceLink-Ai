@@ -10,6 +10,46 @@ letak dan **tidak** dapat melakukan Google Sign-In.
 > ke backend. Belum ada fitur dashboard yang memakai API; seluruh angka di
 > dashboard masih **data contoh** (`src/features/dashboard/mockData.ts`).
 
+## FL-ENR05 — integrated synthetic client evidence
+
+Actual authApi/Student/Admin clients dan controllers terbukti melalui normalOTP,
+verifiedHTTPS Go dan real YuNet/SFace pada satu SQLite WAL disposable sampai
+server ACTIVEv2→withdraw→REVOKED/cleanup0. Client tidak menyimpulkan ACTIVE
+dari202; token unavailable membatalkan trust cached ACTIVE sampai reload sah.
+Response-loss setelah real approval commit menyimpan uncertainty dan exact
+body/CAS/key replay200 tanpa audit ganda. OTP helper menunggu committed delivery,
+bukan hanya kemunculan file. Typecheck/lint dan230 tests lulus, termasuk8HTTPS
+client E2E saat seluruh opt-in aktif. Tambahan run: `FACELINK_ENR05_E2E=1`;
+`NODE_EXTRA_CA_CERTS` harus menunjuk development CA sebelum memulai Node.
+**Android UI/device/native build NOT_RUN**; tidak ada ADB/kamera/native changes.
+Staging route tetap terpisah/default-off; APK/video utuh. Laporan A–N/commands/
+residual: [`FL_ENR05_TECHNICAL_REPORT.md`](../../docs/FL_ENR05_TECHNICAL_REPORT.md).
+**STOP; bukan izin human enrollment/production atau UI overhaul.**
+
+## FL-STAB01 — logout dan lifecycle video
+
+Logout memakai refresh credential di body existing `/auth/logout`, bukan access
+token yang mungkin expired. Hanya204 mengonfirmasi pencabutan server; kegagalan
+jaringan/delete SecureStore ditampilkan jujur pada layar login. Pending
+login/refresh/storage writes difence/drain agar signout tidak hidup kembali.
+Video dua klip/crossfade tetap; ownership dibatalkan dan animasi dihentikan
+sebelum player Expo dilepas. Guard session-restore tetap.
+TypeScript/lint dan219 tes lulus/6 skipped; E2E HTTPS5+1 serta acceptance TECNO
+sintetis terbatas lulus. Tidak ada main native/dependency/permission change.
+Laporan: [`FL_STAB01_TECHNICAL_REPORT.md`](../../docs/FL_STAB01_TECHNICAL_REPORT.md).
+
+
+## Staging enrollment sintetis — FL-ENR02A
+
+Source reusable di `src/features/enrollment`; alur hanya diaktifkan pada
+staging terpisah `ai.facelink.enr02host`. Main tidak memiliki route enrollment
+dan flag `EXPO_PUBLIC_FACELINK_ENR_STAGING` default-off.
+Panduan prepare/server/login sintetis: [`research/fl-enr02a-host/README.md`](../../research/fl-enr02a-host/README.md).
+Typecheck/lint dan139 tes lulus; E2E opt-in memakai client aktual dan backend
+Go disposable. Build debug ARM64 dan export Android lulus, bukan bukti UI
+visual atau device E2E. Tidak ada kamera manusia/production.
+Laporan: [`FL_ENR02A_TECHNICAL_REPORT.md`](../../docs/FL_ENR02A_TECHNICAL_REPORT.md).
+
 ## Prasyarat
 
 - Node.js 20 atau lebih baru (diuji pada Node 24).
@@ -18,8 +58,8 @@ letak dan **tidak** dapat melakukan Google Sign-In.
 - Untuk Android: **development build** (lihat bawah). Expo Go **tidak** dapat
   dipakai lagi: Google Credential Manager adalah modul native.
 - **JDK 17** dan **Android SDK** (`ANDROID_HOME` + `adb`) untuk `expo prebuild`
-  dan build native. Ketiganya **belum ada** di mesin pengembangan ini, jadi
-  langkah itu belum pernah dijalankan.
+  dan build native. Toolchain dan APK debug x86_64 sudah diuji; lihat
+  `docs/ANDROID_SETUP.md` §18 untuk batas bukti release dan autentikasi.
 - Tidak perlu WSL, Docker, atau layanan berbayar.
 
 ## Menjalankan
@@ -30,6 +70,11 @@ npm install
 cp .env.example .env    # isi alamat backend + Web OAuth client ID
 npm start
 ```
+
+Autentikasi wajib **HTTPS dengan sertifikat tepercaya**, termasuk pada debug.
+Contoh emulator: `https://10.0.2.2:8080`, backend tetap `127.0.0.1:8080`.
+CA lokal hanya di source set debug (`plugins/with-dev-tls.js`); release tidak
+boleh mengandalkan CA tersebut. HTTP Metro tetap terpisah dari API autentikasi.
 
 Pemeriksaan mutu:
 
@@ -93,10 +138,11 @@ Build iOS menuntut tambahan yang belum dikonfigurasi — `iosUrlScheme` berisi
 ID token tidak dapat diterima dan `masukDenganGoogle` akan gagal, jadi jangan
 menganggap iOS sudah siap sebelum plugin itu ditambahkan dan diuji.
 
-**Status: PASSED pada HP fisik dan emulator.** APK debug arm64-v8a berjalan di TECNO LJ7 (Android 16, §12); APK debug **x86_64** berjalan di emulator Android 16 API 36 Google Play (§15) dengan login screen, latar video, safe area, dan modul native terverifikasi. **Google Sign-In tetap BLOCKED**: Web OAuth client
-ID belum ada, sehingga tombol masuk berhenti dengan pesan *"Aplikasi belum
-dikonfigurasi"*. Pemeriksaan config plugin di atas dibaca dari kode sumber paket
-2.3.0, bukan dari hasil login.
+**Status:** APK debug arm64-v8a dan x86_64 berjalan pada perangkat/emulator.
+Login Google Administrator lewat HTTPS lokal sudah dibuktikan (FL-ANDROID02E).
+FL-ANDROID02F menambahkan bukti pembatalan chooser nyata dan regresi sesi;
+E2E dosen/mahasiswa/tak-diundang masih menunggu akun Google yang sah.
+Status lengkap A1–A12 dan gate release: `docs/ANDROID_SETUP.md` §18.
 
 ### Port Metro dan variabel `CI`
 

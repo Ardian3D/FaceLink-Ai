@@ -23,7 +23,7 @@ export function GoogleSignInButton({
   disabled = false,
 }: {
   label?: string;
-  onPress: () => void;
+  onPress?: () => void;
   loading?: boolean;
   disabled?: boolean;
 }) {
@@ -37,10 +37,10 @@ export function GoogleSignInButton({
       accessibilityLabel={label}
       hitSlop={touch.hitSlop}
       disabled={nonaktif}
-      onPress={onPress}
+      onPress={nonaktif ? undefined : onPress}
       style={({ pressed }) => [
         styles.tombol,
-        { backgroundColor: pressed && !nonaktif ? colors.buttonLightPressed : colors.buttonLight },
+        { backgroundColor: nonaktif ? colors.surfaceElevated : pressed ? colors.buttonLightPressed : colors.buttonLight },
         nonaktif && styles.nonaktif,
       ]}
     >
@@ -53,7 +53,7 @@ export function GoogleSignInButton({
         <AppText
           variant="bodyLarge"
           weight="bold"
-          color={colors.onButtonLight}
+          color={nonaktif ? colors.textMuted : colors.onButtonLight}
           style={styles.teks}
         >
           {label}

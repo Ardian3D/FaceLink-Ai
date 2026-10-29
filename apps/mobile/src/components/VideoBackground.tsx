@@ -88,9 +88,25 @@ function KlipBerulang({ klip }: { klip: VideoSource[] }) {
     [pemain0, pemain1]
   );
 
+  const pemilik = useRef<readonly [VideoPlayer, VideoPlayer] | null>(null);
+  const animasiTransisi = useRef<Animated.CompositeAnimation | null>(null);
+  useEffect(() => {
+    pemilik.current = pemain;
+    return () => {
+      // Expo melepas player setelah cleanup efek. Batalkan kepemilikan lebih
+      // dulu: stop() maupun completion native yang sudah antre bisa memanggil
+      // callback animasi, tetapi tidak boleh lagi menyentuh player.
+      pemilik.current = null;
+      const animasi = animasiTransisi.current;
+      animasiTransisi.current = null;
+      animasi?.stop();
+      sedangBeralih.current = false;
+    };
+  }, [pemain]);
+
   const mulaiTransisi = useCallback(
     (dari: 0 | 1) => {
-      if (klip.length < 2 || sedangBeralih.current) return;
+      if (pemilik.current !== pemain || klip.length < 2 || sedangBeralih.current) return;
 
       const ke: 0 | 1 = dari === 0 ? 1 : 0;
       const masuk = pemain[ke];
@@ -104,7 +120,7 @@ function KlipBerulang({ klip }: { klip: VideoSource[] }) {
       // menyebabkan layar hitam.
       putarDariAwal(masuk);
 
-      Animated.parallel([
+      const animasi = Animated.parallel([
         Animated.timing(opasitas[dari]!, {
           toValue: 0,
           duration: DURASI_SEBERANG_MS,
@@ -115,7 +131,11 @@ function KlipBerulang({ klip }: { klip: VideoSource[] }) {
           duration: DURASI_SEBERANG_MS,
           useNativeDriver: Platform.OS !== "web",
         }),
-      ]).start(({ finished }) => {
+      ]);
+      animasiTransisi.current = animasi;
+      animasi.start(({ finished }) => {
+        if (pemilik.current !== pemain || animasiTransisi.current !== animasi) return;
+        animasiTransisi.current = null;
         if (finished) {
           istirahatkan(keluar);
           setAktif(ke);
@@ -129,7 +149,7 @@ function KlipBerulang({ klip }: { klip: VideoSource[] }) {
   /** Memulai pergantian bila lapisan ini hampir habis. */
   const cekHampirHabis = useCallback(
     (lapisan: 0 | 1, waktuSekarang: number) => {
-      if (lapisan !== aktif || sedangBeralih.current) return;
+      if (pemilik.current !== pemain || lapisan !== aktif || sedangBeralih.current) return;
       const total = pemain[lapisan]?.duration ?? 0;
       if (!total || total <= 0) return;
       // Mulai seberangan sedikit sebelum akhir supaya lapisan tujuan sudah
@@ -152,10 +172,10 @@ function KlipBerulang({ klip }: { klip: VideoSource[] }) {
   });
 
   useEventListener(pemain0, "statusChange", ({ status }) => {
-    if (status === "error") setGagal(true);
+    if (pemilik.current === pemain && status === "error") setGagal(true);
   });
   useEventListener(pemain1, "statusChange", ({ status }) => {
-    if (status === "error") setGagal(true);
+    if (pemilik.current === pemain && status === "error") setGagal(true);
   });
 
   // Hanya saat mount: `play()` di dalam setup berjalan sebelum `VideoView`
@@ -190,7 +210,9 @@ function KlipBerulang({ klip }: { klip: VideoSource[] }) {
             contentFit="cover"
             nativeControls={false}
             playsInline
-            onFirstFrameRender={() => setSiap(true)}
+            onFirstFrameRender={() => {
+              if (pemilik.current === pemain) setSiap(true);
+            }}
             // Dua video bertumpuk harus ikut dikomposisi bersama lapisan di
             // atasnya (scrim, logo, tombol). `SurfaceView` pada Android tidak
             // mendukung itu; `textureView` mendukung.
