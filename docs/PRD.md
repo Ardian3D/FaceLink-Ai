@@ -5,6 +5,13 @@
 **Revisi FL-010V (16 Oktober 2026):** melengkapi kebijakan final yang disetujui pemilik — satu role utama per akun (D-037), persyaratan transport lokal dan sesi (D-033/D-035), serta tiga risiko yang harus dinyatakan apa adanya (sertifikat lokal & trust chain Android belum diuji, prosedur offline saat sesi habis Q-24, ketergantungan konfigurasi Google OAuth). Setiap butir yang berubah ditandai **FL-010V (16 Oktober 2026)**; **tidak ada satu pun** butir di bawah ini yang boleh dibaca sebagai bukti fitur sudah berjalan.
 **Penting:** PRD mendeskripsikan kebutuhan, **bukan** menyatakan bahwa fitur telah diimplementasikan.
 
+**Keputusan produk terbaru FL-OTP01 / D-038:** Email OTP melalui **Continue with
+FaceLink** menjadi login utama ketiga role, tanpa akun Google wajib. Tombol
+Google tetap terlihat tetapi disabled + “Segera hadir”; implementasi Google
+dipertahankan. Persyaratan di bawah yang menyebut Google sebagai satu-satunya
+metode dibaca dengan perubahan ini; praregistrasi dan role backend tetap berlaku.
+Kontrak, SMTP, transisi Admin, serta batas keamanan: [`EMAIL_OTP.md`](EMAIL_OTP.md).
+
 ## 1. Ringkasan produk
 
 FaceLink AI adalah sistem absensi kelas berbasis pengenalan wajah yang menggabungkan terminal kamera, mesin AI lokal, backend, dan aplikasi React Native. Aplikasi React Native dipakai oleh **tiga role manusia** — `admin`, `dosen`, dan `mahasiswa` — yang semuanya masuk dengan **Google Sign-In**; tidak ada login email/kata sandi buatan sendiri. `admin` mengelola akun dan role, kelas beserta penugasan dosen, peserta, persetujuan biometrik, enrollment, perangkat, sesi, rekap, audit, dan ekspor; `dosen` membuka/menutup sesi dan menjalankan koreksi manual **hanya pada kelas yang ditugaskan kepadanya**; `mahasiswa` melihat kelas yang diikuti, jadwal sesi, status dan riwayat kehadiran, serta status persetujuannya **sendiri**. Terminal kamera bukan pengguna manusia: perangkat IoT memakai identitas dan autentikasi mesin terpisah (`device`), dan role tidak pernah ditentukan oleh Google maupun oleh klien.
