@@ -8,6 +8,54 @@ pengembang; ia **bukan** fitur absensi dan **tidak** menyimpan data biometrik.
 **belum dijalankan dengan peserta manusia**; laporan dan batas klaimnya ada di
 [`docs/CALIBRATION_FL_CV02A.md`](../../docs/CALIBRATION_FL_CV02A.md).
 
+**FL-ENR04:** `face_engine.pipeline` memakai wrapper model existing untuk
+ekstraksi sintetis terbatas; `face_engine.ipc` adalah worker sekali-pakai melalui
+stdin/stdout biner terautentikasi, bukan CLI webcam atau server jaringan.
+Hanya Go staging disposable yang meluncurkannya; jangan menyalin secret ke CLI.
+Pengujian tanpa kamera: `.venv\Scripts\python.exe -m pytest`.
+Smoke negatif historis menghasilkan NO_FACE dengan aman. **R2 membuktikan
+positive real-model** pada fixture prosedural existing setelah menghapus
+upscale512→960 yang tidak perlu. Threshold0,75 dan quality gate tetap;
+pipeline fingerprint `enr04-synthetic-native-v2`. `pipeline.similarity` memerlukan dua vektor unit float32/128 dan
+fingerprint identik, mengembalikan cosine [-1,1], bukan probabilitas identitas
+atau keputusan check-in. Tidak menetapkan threshold produksi.
+Laporan: [`FL_ENR04_TECHNICAL_REPORT.md`](../../docs/FL_ENR04_TECHNICAL_REPORT.md).
+Positive model/preprocessing: [`FL_ENR04_R2_TECHNICAL_REPORT.md`](../../docs/FL_ENR04_R2_TECHNICAL_REPORT.md).
+Blocker AADv1 pada hasil R2 diremediasi di Go oleh **FL-SEC01** tanpa perubahan
+engine/model/threshold; real-modelv2 positive dan withdrawal lulus.
+Laporan terbaru: [`FL_SEC01_TECHNICAL_REPORT.md`](../../docs/FL_SEC01_TECHNICAL_REPORT.md).
+GO hanya review/perencanaan sintetis; STOP tanpa FL-ENR05/human/production otomatis.
+Untuk mengukur fixture existing tanpa membuat kandidat/asset baru, dari root:
+
+```powershell
+services/face-engine/.venv/Scripts/python.exe services/face-engine/scripts/measure_existing_fixture.py --fixtures research/fl-enr02a-host/evidence-local/enr04-r1/fixtures-v1-verified --output research/fl-enr02a-host/evidence-local/enr04-r2/measurement-rerun.json
+```
+
+Output harus belum ada. Hanya metadata/dimensi/hash/waktu dicatat; bukan vektor.
+Bagian R1 berikut adalah snapshot sebelum perbaikan skala R2.
+
+
+### FL-ENR04-R1 — fixture nonmanusia dan screening terbatas
+
+`scripts/screen_synthetic_faces.py` membuat enam mannequin height-field2,5D
+dari persamaan/seed/primitive lokal, bukan asset manusia atau trained generator.
+CC0-1.0 hanya untuk generator dan fixture baru ini; bukan perubahan lisensi
+repo/dependency/model. Dari root repo, gunakan directory output baru/kosong:
+
+```powershell
+services/face-engine/.venv/Scripts/python.exe -O services/face-engine/scripts/screen_synthetic_faces.py --output research/fl-enr02a-host/evidence-local/enr04-r1/reproduction
+```
+
+Output existing tidak ditimpa. Artefak/evidence-local ignored; jangan otomatis
+menambahkan JPEG ke Git. Runtime/encoder versi dan hash dicatat dalam
+`screening.json`; reproduksi lintas versi tidak dijamin byte-identical.
+Enam kandidat v1 semuanya NO_FACE pada0,75; alignment/SFace positive tidak
+dijalankan, bukan dipaksa melalui landmark buatan. Validasi evidence IPC memakai
+conditional checks yang tetap aktif pada `-O`.
+Laporan: [`FL_ENR04_R1_TECHNICAL_REPORT.md`](../../docs/FL_ENR04_R1_TECHNICAL_REPORT.md).
+**PARTIAL; berhenti pada enam kandidat, tidak memulai FL-ENR05/manusia.**
+
+
 > **Batas yang tidak boleh dilanggar prototype ini**
 >
 > - Tidak ada foto, video, atau template biometrik yang ditulis ke disk. Saat
@@ -235,5 +283,6 @@ services/face-engine/
 - Ambang dan margin belum dikalibrasi; Q-07 tetap terbuka. Alat kalibrasi
   FL-CV02A sudah ada, tetapi **belum ada sesi dengan peserta manusia** — lihat
   `docs/CALIBRATION_FL_CV02A.md`.
-- Prototype tidak berjalan sebagai layanan jaringan dan tidak terhubung ke Go
-  Backend. Kontrak internal `docs/API_CONTRACT.md` §6 belum diimplementasikan.
+- Integrasi Go tersedia hanya melalui worker IPC FL-ENR04 pada staging
+  sintetis/disposable. Endpoint HTTP internal §6 tetap rancangan; server utama
+  tidak mengaktifkan model atau enrollment.

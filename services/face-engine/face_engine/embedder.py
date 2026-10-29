@@ -44,13 +44,17 @@ class Embedder:
         potongan wajah yang salah dan embedding yang mirip untuk semua orang —
         kegagalan senyap yang hanya terlihat saat skor antarwajah dibandingkan.
         """
-        if deteksi.baris is None:
+        if (deteksi.baris is None or deteksi.baris.shape != (15,)
+                or not np.isfinite(deteksi.baris).all()):
             raise GalatModel(
                 "Deteksi tidak membawa baris YuNet lengkap; "
                 "jalankan ulang deteksi memakai `Detektor.deteksi()`."
             )
 
-        wajah = self._pengenal.alignCrop(frame, deteksi.baris.astype(np.float32))
+        wajah = self._pengenal.alignCrop(frame, deteksi.baris.astype(np.float32, copy=False))
+        if (not isinstance(wajah, np.ndarray) or wajah.shape != (112, 112, 3)
+                or wajah.dtype != np.uint8):
+            raise GalatModel("SFace gagal menyejajarkan wajah.")
         vektor = np.asarray(self._pengenal.feature(wajah), dtype=np.float32).reshape(-1)
 
         if vektor.size != EMBEDDING_DIM:
@@ -58,10 +62,12 @@ class Embedder:
                 f"SFace mengembalikan {vektor.size} nilai, diharapkan {EMBEDDING_DIM}."
             )
 
-        norma = float(np.linalg.norm(vektor))
-        if norma == 0.0:
-            raise GalatModel("SFace mengembalikan vektor nol; wajah tidak dapat dipakai.")
-        return vektor / norma
+        if not np.isfinite(vektor).all():
+            raise GalatModel("SFace mengembalikan vektor tidak berhingga.")
+        norma = float(np.linalg.norm(vektor.astype(np.float64)))
+        if not np.isfinite(norma) or norma == 0.0:
+            raise GalatModel("SFace mengembalikan vektor tidak sah; wajah tidak dapat dipakai.")
+        return np.asarray(vektor / norma, dtype=np.float32)
 
     @staticmethod
     def kemiripan(a: np.ndarray, b: np.ndarray) -> float:

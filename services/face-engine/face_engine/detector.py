@@ -67,11 +67,14 @@ class Deteksi:
 def ukuran_masukan(lebar: int, tinggi: int, sisi_maks: int = DETECTOR_MAX_SIDE) -> tuple[int, int]:
     """Ukuran masukan detektor yang mempertahankan rasio aspek frame.
 
-    Sisi panjang dibatasi `sisi_maks`; sisi pendek mengikuti rasio asli dan
-    dibulatkan ke kelipatan 32 karena YuNet melakukan downsampling berulang.
+    Frame di bawah batas dipertahankan pada resolusi native: pembesaran yang
+    tidak diperlukan mengubah skala wajah yang dilihat model. Hanya frame besar
+    yang diperkecil, dengan sisi pendek mengikuti rasio dan kelipatan 32.
     """
     if lebar <= 0 or tinggi <= 0:
         return (sisi_maks, sisi_maks)
+    if max(lebar, tinggi) <= sisi_maks:
+        return (lebar, tinggi)
     skala = sisi_maks / max(lebar, tinggi)
     lebar_m = max(32, int(round(lebar * skala / 32)) * 32)
     tinggi_m = max(32, int(round(tinggi * skala / 32)) * 32)
@@ -126,6 +129,9 @@ class Detektor:
         _, hasil = self._detektor.detect(kecil)
         if hasil is None or len(hasil) == 0:
             return []
+        if (not isinstance(hasil, np.ndarray) or hasil.ndim != 2 or hasil.shape[1] != 15
+                or len(hasil) > DETECTOR_TOP_K or not np.isfinite(hasil).all()):
+            raise GalatModel("YuNet mengembalikan deteksi tidak sah.")
 
         skala_x = lebar_asli / lebar_model
         skala_y = tinggi_asli / tinggi_model
