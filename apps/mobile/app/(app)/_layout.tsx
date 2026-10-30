@@ -2,6 +2,8 @@ import React from "react";
 import { Redirect, Stack } from "expo-router";
 import { useSession } from "@/features/auth/SessionProvider";
 import { useTheme } from "@/theme";
+import { AdminReviewProvider } from "@/features/adminEnrollment/ReviewSession";
+import { adminEnrollmentStagingAktif } from "@/features/adminEnrollment/staging";
 
 /**
  * Kerangka area terautentikasi.
@@ -28,7 +30,7 @@ export default function AppLayout() {
   if (status === "unregistered") return <Redirect href="/not-registered" />;
   if (session === null) return <Redirect href="/" />;
 
-  return (
+  const content = (
     <Stack
       screenOptions={{
         headerShown: false,
@@ -37,4 +39,7 @@ export default function AppLayout() {
       }}
     />
   );
+  return adminEnrollmentStagingAktif && session.user.role === "admin"
+    ? <AdminReviewProvider key={`${session.user.id}:${session.user.role}`}>{content}</AdminReviewProvider>
+    : content;
 }

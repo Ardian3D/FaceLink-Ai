@@ -55,6 +55,14 @@ function alamatBackend(): { ok: true; baseUrl: string } | { ok: false; error: Se
       error: { kind: "config", message: konfigurasiApi.alasan },
     };
   }
+  // HTTP loopback tetap boleh untuk diagnostik tanpa token, bukan autentikasi.
+  // Metro juga memakai HTTP, tetapi tidak melewati klien ini.
+  if (new URL(konfigurasiApi.baseUrl).protocol !== "https:") {
+    return {
+      ok: false,
+      error: { kind: "config", message: "Autentikasi memerlukan HTTPS dengan sertifikat tepercaya." },
+    };
+  }
   return { ok: true, baseUrl: konfigurasiApi.baseUrl };
 }
 
@@ -206,7 +214,12 @@ export async function tukarIdToken(
   if (jawaban.status !== 200) {
     return { ok: false, error: galatHttp(jawaban.status, jawaban.teks, emailGoogle) };
   }
-  const data = bacaData(jawaban.teks);
+  return bacaSesi(jawaban.teks);
+}
+
+/** Satu parser sesi untuk Google dan Email OTP; role selalu dari server. */
+function bacaSesi(teks: string): HasilAuth<SesiBackend> {
+  const data = bacaData(teks);
   if (!adalahObjek(data)) {
     return { ok: false, error: { kind: "unknown", message: "bentuk_respons_login" } };
   }
@@ -234,6 +247,95 @@ export async function tukarIdToken(
       user,
     },
   };
+}
+
+export type EmailOtpError =
+  | SessionError
+  | { kind: "otpInvalid" }
+  | { kind: "validation" }
+  | { kind: "rateLimited"; retryAfter: number };
+
+export type HasilEmail<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: EmailOtpError };
+
+export type EmailChallenge = {
+  challengeId: string;
+  expiresIn: number;
+  retryAfter: number;
+};
+
+function galatEmail(jawaban: Extract<JawabanHttp, { jenis: "jawaban" }>): EmailOtpError {
+  const galat = bacaGalat(jawaban.teks);
+  if (jawaban.status === 429) {
+    const header = jawaban.retryAfter?.trim() ?? "";
+    const tanggal = Date.parse(header);
+    const server = Date.parse(jawaban.serverDate ?? "");
+    const detik = /^\d+$/.test(header)
+      ? Number(header)
+      : Math.ceil((tanggal - (Number.isFinite(server) ? server : Date.now())) / 1000);
+    return { kind: "rateLimited", retryAfter: Number.isFinite(detik) ? Math.max(1, detik) : 60 };
+  }
+  if (jawaban.status === 401) return { kind: "otpInvalid" };
+  if (jawaban.status === 400) return { kind: "validation" };
+  if (jawaban.status === 403 && galat?.code === "HTTPS_REQUIRED") {
+    return { kind: "config", message: "Autentikasi memerlukan HTTPS dengan sertifikat tepercaya." };
+  }
+  if (jawaban.status === 503) return { kind: "unavailable", message: "" };
+  return { kind: "unknown", message: "respons_autentikasi" };
+}
+
+export async function mintaKodeEmail(email: string, signal?: AbortSignal): Promise<HasilEmail<EmailChallenge>> {
+  const alamat = alamatBackend();
+  if (!alamat.ok) return alamat;
+  if (signal?.aborted) return { ok: false, error: { kind: "cancelled" } };
+  const jawaban = await mintaHttp("/api/v1/auth/email/request", {
+    baseUrl: alamat.baseUrl,
+    method: "POST",
+    body: { email: email.trim().toLowerCase() },
+    timeoutMs: TIMEOUT_AUTH_MS,
+    signal,
+  });
+  if (signal?.aborted) return { ok: false, error: { kind: "cancelled" } };
+  if (jawaban.jenis !== "jawaban") return { ok: false, error: galatTransport(jawaban) };
+  if (jawaban.status !== 202) return { ok: false, error: galatEmail(jawaban) };
+  const data = bacaData(jawaban.teks);
+  if (
+    !adalahObjek(data) ||
+    typeof data.challenge_id !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.challenge_id) ||
+    typeof data.expires_in !== "number" || !Number.isSafeInteger(data.expires_in) || data.expires_in <= 0 ||
+    typeof data.retry_after !== "number" || !Number.isSafeInteger(data.retry_after) || data.retry_after < 0
+  ) {
+    return { ok: false, error: { kind: "unknown", message: "bentuk_respons_challenge" } };
+  }
+  return { ok: true, data: {
+    challengeId: data.challenge_id,
+    expiresIn: data.expires_in,
+    retryAfter: data.retry_after,
+  } };
+}
+
+export async function verifikasiKodeEmail(
+  challengeId: string, code: string, signal?: AbortSignal
+): Promise<HasilEmail<SesiBackend>> {
+  const alamat = alamatBackend();
+  if (!alamat.ok) return alamat;
+  if (signal?.aborted) return { ok: false, error: { kind: "cancelled" } };
+  const jawaban = await mintaHttp("/api/v1/auth/email/verify", {
+    baseUrl: alamat.baseUrl,
+    method: "POST",
+    body: { challenge_id: challengeId, code },
+    timeoutMs: TIMEOUT_AUTH_MS,
+    signal,
+  });
+  // A successful session must reach AuthFlow even after cancellation so it can
+  // be discarded/revoked there instead of silently retaining credentials.
+  if (jawaban.jenis !== "jawaban") {
+    return { ok: false, error: signal?.aborted ? { kind: "cancelled" } : galatTransport(jawaban) };
+  }
+  if (jawaban.status !== 200) return { ok: false, error: galatEmail(jawaban) };
+  return bacaSesi(jawaban.teks);
 }
 
 /**
@@ -316,20 +418,21 @@ export async function ambilSaya(accessToken: string): Promise<HasilAuth<CurrentU
 }
 
 /**
- * `POST /auth/logout` — mencabut sesi di server.
- *
- * Kegagalan **tidak** dilempar dan tidak menghalangi keluar: token lokal tetap
- * harus dihapus walau jaringan mati, karena sesi di perangkat adalah hal yang
- * paling mendesak untuk dibuang. Sesi yang tidak tercabut di server akan
- * kedaluwarsa sendiri (akses 60 menit, absolut 30 hari).
+ * Revokes only the session proven by this refresh credential, even after
+ * access expiry. A missing 204 is not proof of remote revocation.
  */
-export async function keluarSesi(accessToken: string): Promise<void> {
+export async function keluarSesi(refreshToken: string): Promise<HasilAuth<void>> {
   const alamat = alamatBackend();
-  if (!alamat.ok) return;
-  await mintaHttp("/api/v1/auth/logout", {
+  if (!alamat.ok) return alamat;
+  const jawaban = await mintaHttp("/api/v1/auth/logout", {
     baseUrl: alamat.baseUrl,
     method: "POST",
-    token: accessToken,
+    body: { refresh_token: refreshToken },
     timeoutMs: TIMEOUT_AUTH_MS,
   });
+  if (jawaban.jenis !== "jawaban") return { ok: false, error: galatTransport(jawaban) };
+  if (jawaban.status !== 204) {
+    return { ok: false, error: galatHttp(jawaban.status, jawaban.teks) };
+  }
+  return { ok: true, data: undefined };
 }

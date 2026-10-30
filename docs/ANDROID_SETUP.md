@@ -101,7 +101,7 @@ Get-ChildItem $dest   # jdk-17.0.20.1+1
 ```
 
 `tar` dipakai, bukan `unzip`: `unzip` gagal pada jalur yang memuat apostrof
-(`Ardian's`), sedangkan `tar` (bawaan Windows 10+) menerimanya.
+(pada nama profil Windows), sedangkan `tar` (bawaan Windows 10+) menerimanya.
 
 Setel `JAVA_HOME` pada lingkup **User** (tidak menuntut administrator), lalu buka
 terminal baru:
@@ -114,7 +114,7 @@ terminal baru:
 **Alternatif installer** (juga tanpa biaya):
 `winget install --id EclipseAdoptium.Temurin.17.JDK` atau
 `winget install --id Microsoft.OpenJDK.17`; keduanya menulis ke
-`C:\Program Files` sehingga menuntut Administrator.
+`<program-files>` sehingga menuntut Administrator.
 
 **JDK yang lebih baru dari 17 tidak direkomendasikan** oleh React Native; AGP 9.2
 menyatakan minimum 17, dan JDK 26 pernah dilaporkan memicu kegagalan
@@ -190,8 +190,8 @@ akar drive).
 arahkan Gradle ke sana lewat `android/local.properties` (diabaikan Git):
 
 ```
-sdk.dir=C:/Users/<anda>/AppData/Local/Android/Sdk
-cmake.dir=C:/Users/<anda>/AppData/Local/Android/Sdk/cmake/3.31.6
+sdk.dir=<android-sdk>
+cmake.dir=<android-sdk>/cmake/3.31.6
 ```
 
 Pakai **garis miring maju**. Garis miring terbalik pada `cmake.dir` membuat
@@ -345,7 +345,7 @@ bukan kerusakan.
 `apps/mobile/.env` (diabaikan Git):
 
 ```
-EXPO_PUBLIC_FACELINK_API_BASE_URL=http://127.0.0.1:8080
+EXPO_PUBLIC_FACELINK_API_BASE_URL=https://10.0.2.2:8080
 EXPO_PUBLIC_FACELINK_GOOGLE_WEB_CLIENT_ID=<Web client ID dari langkah 5>
 ```
 
@@ -356,6 +356,10 @@ cd backend
 $env:FACELINK_GOOGLE_CLIENT_IDS = "<Web client ID>"
 go run ./cmd/server
 ```
+
+Untuk autentikasi, backend juga wajib dijalankan dengan
+`FACELINK_TLS_CERT`/`FACELINK_TLS_KEY` dan CA debug yang dipercaya (§17–§18).
+HTTP loopback hanya untuk diagnostik tanpa token/Metro, bukan login atau sesi.
 
 ## 7. Build dan jalankan
 
@@ -414,7 +418,7 @@ Semua langkah di bawah menuntut akun uji terdaftar (lihat bagian 9).
 | A5 | Batal | Tekan tombol lalu tutup lembar akun | Kembali ke layar masuk tanpa pesan galat |
 | A6 | SecureStore | Masuk, tutup paksa aplikasi, buka lagi | Langsung masuk tanpa memilih akun lagi |
 | A7 | Pemulihan sesi | Matikan backend, buka aplikasi | Layar masuk dengan "Coba lagi"; **token tidak hilang** |
-| A8 | Penyegaran | Ubah jam perangkat +1 jam, buka aplikasi, nyalakan backend | Sesi pulih; log backend memuat tepat satu `auth.session.refreshed` |
+| A8 | Penyegaran | Advance clock server terisolasi dalam pengujian; E2E memakai expiry sebenarnya, bukan menggeser jam perangkat | Access expired ditolak, refresh berotasi, token baru memulihkan sesi |
 | A9 | Logout | Pengaturan → Keluar | Layar masuk; token hilang; backend mencatat `auth.logout` |
 | A10 | Cabut akses | Sebagai admin, `PATCH /users/{id}` status `suspended`, lalu buka aplikasi | Kembali ke layar masuk/ditolak, bukan dashboard |
 | A11 | Routing lintas-role | Buka `facelinkai:///admin` dengan sesi mahasiswa | Dialihkan ke beranda mahasiswa |
@@ -1117,14 +1121,14 @@ pernah menerima permintaan. Sekarang:
 - Kalimat `kind: "unknown"` diubah menjadi *"Aplikasi menerima keadaan yang
   belum dikenal"* — tidak lagi menyalahkan backend.
 
-**Terverifikasi di perangkat:** pesan baru muncul saat akun belum siap, dan
-tidak muncul lagi setelah akun aktif.
+**Terverifikasi di perangkat:** pesan baru tampil pada kondisi kesiapan login
+yang belum terpenuhi; tidak disamakan dengan galat backend.
 
 ### 17c. Hasil A1–A12
 
 | # | Skenario | Hasil | Bukti |
 |---|---|---|---|
-| A1 | Masuk berhasil (admin) | **PASSED** | `POST /auth/google` **200** (248 ms); beranda "Beranda sistem" dengan label `Profil Administrator`; `users.status` → **`active`**, `last_login` terisi |
+| A1 | Masuk berhasil (admin) | **PASSED** | Login dan navigasi role berhasil; rincian status akun/last-login tidak dipublikasikan |
 | A2 | Role dosen | **BLOCKED** | butuh akun Google dosen yang diundang — hanya satu akun penguji |
 | A3 | Role mahasiswa | **BLOCKED** | idem |
 | A4 | Akun belum terdaftar | **BLOCKED** | butuh akun Google kedua yang tidak diundang |
@@ -1132,20 +1136,14 @@ tidak muncul lagi setelah akun aktif.
 | A6 | SecureStore (tutup paksa lalu buka) | **PASSED** | `am force-stop` → buka → langsung beranda Administrator tanpa memilih akun |
 | A7 | Pemulihan saat backend mati | **PASSED** | backend dimatikan → "Backend tidak terjangkau" + "Coba lagi"; sesi tidak hilang |
 | A8 | Penyegaran token | **PARTIAL** | backend hidup lagi → `GET /me` **200** (access token masih valid 60 menit). Jalur refresh belum terpicu, jadi `auth.session.refreshed` **belum** teruji |
-| A9 | Logout | **PASSED** | "Keluar" → layar masuk; `session_tokens.revoked_at` terisi dengan `revoked_reason='logout'`; audit `auth.logout` success |
+| A9 | Logout | **PASSED** | Keluar kembali ke layar masuk; hasil pemeriksaan backend diringkas tanpa riwayat sesi per akun |
 | A10 | Cabut akses (suspend) | **BLOCKED** | butuh admin kedua/dosen; `PATCH /users/{id}` belum diuji dari UI |
 | A11 | Routing lintas-role | **PASSED (parsial)** | `facelinkai:///admin` tanpa sesi → tetap layar masuk. Versi "sesi mahasiswa dialihkan" butuh akun mahasiswa |
 | A12 | Tidak ada demo | **PASSED** | panel pengaturan: 0 kemunculan `demo`, `ganti role`, `Dosen`, `Mahasiswa` |
 
-**Rantai audit yang terverifikasi di database:**
-
-```
-auth.login.denied      failure  (2× — token palsu sebelum akun siap)
-user.bootstrapped      success  (system)
-auth.google.linked     success  (user) — akun invited → active
-auth.google.succeeded  success  (user)
-auth.logout            success  (user)
-```
+**Hasil audit historis:** pemeriksaan lokal mendukung kesimpulan login/logout
+di atas. Urutan event, jumlah kegagalan dan transisi status akun nyata tidak
+dipublikasikan; observasi ini tidak diganti dengan fixture sintetis.
 
 Tidak ada token, ID token, atau email di log: `logcat` → **0** kemunculan
 `eyJhbGciOi`/`refresh_token`/`access_token`.
@@ -1160,16 +1158,20 @@ Cannot set prop 'player' on view 'class expo.modules.video.TextureVideoView'
 → Caused by: Cannot use shared object that was already released.
 ```
 
-**Penyebab:** `KlipBerulang` membuat dua `useVideoPlayer` yang dilepas saat
-komponen unmount; jika `VideoView` masih menerima prop `player` pada render
-terakhir, shared object sudah dilepas. Ini terjadi saat layar masuk berpindah
-ke beranda (video latar di-unmount).
+**Hipotesis, belum root cause terbukti:** lifetime `useVideoPlayer` dan teardown
+`VideoView` mungkin bertumpang tindih saat unmount. Log di atas tidak membuktikan
+urutan release native. Tidak ada crash yang teramati saat temuan lama, tetapi
+itu bukan jaminan bahwa dampaknya selalu kosmetik.
 
-**Dampak:** kosmetik — video tetap diputar, login tetap berhasil, tidak ada
-crash. **Belum diperbaiki** pada tahap ini karena perbaikannya menyentuh
-lifecycle komponen UI (di luar batas "jangan ubah desain") dan perlu keputusan
-apakah akan memakai satu pemutar dengan `replaceAsync` atau menahan mount
-sampai animasi selesai.
+**Status FL-ENR02A-R2 (26 Oktober 2026): FIXED untuk jalur startup yang dapat
+direproduksi.** Video login tidak lagi dipasang selama sesi masih dipulihkan;
+A/B TECNO LJ7 menunjukkan warning pra-fix dan tidak ada warning pasca-fix pada
+urutan restart yang sama. Tidak ada FATAL. Root cause lain di luar urutan
+mount→redirect belum diinstrumentasi. Detail: `FL_ENR02A_R2_VIDEO_ACCESSIBILITY_REPORT.md`.
+
+**Catatan historis:** perbaikan ini menunggu reproduksi yang dapat diandalkan;
+hasil upaya FL-ANDROID02F dicatat di §18. Root cause lain di luar
+mount→redirect belum dibuktikan.
 
 ### 17e. Kendala build yang ditemukan dan solusinya
 
@@ -1183,10 +1185,7 @@ sampai animasi selesai.
 
 Dikonfirmasi pemilik sebelum eksekusi. Hasil:
 
-```
-Akun admin pertama dibuat dengan status "invited".
-user_id b5859ea7-e5ee-48a7-9da3-b84f81a91b44
-```
+Bootstrap pertama berhasil; output UUID/status akun tidak dipublikasikan.
 
 Eksekusi kedua **ditolak** (`exit 1`, "sudah ada akun admin dengan status
 invited atau active") — penjaga `COUNT(*)` di dalam transaksi bekerja.
@@ -1205,9 +1204,135 @@ Database yang dipakai: `backend/data/facelink.db`.
 
 1. **A2/A3/A4/A10** — butuh 2–3 akun Google tambahan yang diundang sebagai
    `dosen`/`mahasiswa`, dan satu akun yang **tidak** diundang untuk A4.
-2. **A8 penuh** — butuh access token kedaluwarsa (60 menit) atau jam perangkat
-   yang digeser. Emulator Play Store **tidak** mengizinkan `su`/`adb root`, jadi
-   penggeseran jam **tidak** dapat dilakukan tanpa mengubah image menjadi
-   `google_apis` (tanpa Play) — yang akan mematikan Credential Manager.
-3. **Error lifecycle `expo-video`** — perlu keputusan perbaikan (§17d).
+2. **A8 penuh** — clock injection pada database uji membuktikan expiry/rotation;
+   bukti refresh nyata melalui SecureStore emulator masih parsial. Jangan
+   menggeser jam perangkat: emulator Play Store tidak perlu diganti/root.
+   Image `google_apis` tidak otomatis berarti tanpa Google Play Services.
+3. **Error lifecycle `expo-video`** — dikenal, root cause belum terbukti (§17d/§18).
 4. **Rotasi sertifikat dev** — manual, belum otomatis.
+
+## 18. FL-ANDROID02F — Verifikasi lanjutan (22 Oktober 2026)
+
+Cabang tetap `feat/fl-ui02-google-auth-android`; tanpa merge/force push,
+perubahan desain, akun palsu, bootstrap ulang, atau perubahan TTL production.
+Hasil 02E yang diterima pemilik tidak dijalankan ulang sebagai audit lengkap.
+
+### 18a. Status A1–A12
+
+| Skenario | Status E2E | Bukti / batas |
+|---|---|---|
+| A1 Administrator | PASSED | Bukti login Google nyata 02E diterima pemilik; role backend, bukan role demo |
+| A2 Dosen | BLOCKED | Belum ada akun Google tambahan yang disetujui dan diundang |
+| A3 Mahasiswa | BLOCKED | Sama; tidak mengubah Admin menjadi mahasiswa |
+| A4 Tidak diundang | BLOCKED | Perlu Google OAuth Test User sah yang tidak ada dalam allowlist FaceLink |
+| A5 Pembatalan | PASSED | Chooser `com.google.android.gms/.identitycredentials.ui.CredentialChooserActivity` benar-benar tampil; `adb shell input keyevent KEYCODE_BACK` menutup chooser; MainActivity kembali, tombol Google terlihat, tanpa error perangkat/Coba Lagi. Ini pembatalan UI native terotomasi, bukan timeout atau pembatalan manual pemilik |
+| A6 SecureStore | PASSED | Force-stop/restore nyata 02E; regresi 02F memakai tiruan storage, bukan bukti native tambahan |
+| A7 Pemulihan offline | PASSED | Bukti 02E; regresi 02F memeriksa seluruh sesi persisten tetap utuh saat network error |
+| A8 Expiry + refresh | PARTIAL | Clock server terisolasi + HTTP router nyata: expiry → 401, refresh → token baru, `/me` → 200. Native SecureStore setelah expiry belum dibuktikan |
+| A9 Logout | PASSED | Logout nyata 02E; regresi 02F memastikan refresh lama ditolak sesudah logout |
+| A10 Suspended/revocation | BLOCKED | Otomatis backend lulus; E2E butuh akun kedua. Admin aktif terakhir tidak dinonaktifkan |
+| A11 Routing lintas-role | PARTIAL | Bukti 02E bukan sesi mahasiswa nyata; perlu A3 dahulu |
+| A12 Tanpa demo | PASSED | Bukti 02E tetap berlaku |
+
+Undangan sah setelah alamat/izin penguji tersedia: Admin memanggil
+`POST /api/v1/users` melalui HTTPS dengan `email`, `display_name`, dan
+`role=dosen` atau `mahasiswa`. Backend membuat `invited`, audit `user.invited`;
+login Google pertama menautkan identitas dan mengaktifkan akun. Validasi
+`GET /me`, role/status database, dan akses route backend. Akun A4 sengaja
+tidak diundang; jangan membuat identitas/token Google tiruan di database nyata.
+Token Admin tidak dicetak atau ditanam pada command history. Tidak ada undangan
+baru yang dieksekusi pada checkpoint ini.
+
+### 18b. Regresi sesi dan perbaikan transport
+
+- Memperkuat `TestPenyegaranMemutarToken`: advance `clock.Fake` 61 menit,
+  expiry access, rotasi pasangan, identitas/role tetap, access baru valid.
+- Concurrent refresh: tepat satu menang, replay mencabut sesi, pasangan pemenang
+  juga tidak dapat dipakai lagi. Tidak memperlemah deteksi replay.
+- Refresh setelah logout ditolak. Restore dengan `/me` yang mencabut sesi
+  menghapus storage dan access dalam memori; network error mempertahankan sesi.
+- Ditemukan klien auth menerima HTTP loopback/10.0.2.2. Dua tes gagal sebelum
+  perbaikan; kini seluruh endpoint auth menolak HTTP sebelum `fetch`.
+  Diagnostik tanpa token dan Metro tetap boleh HTTP sesuai batas sebelumnya.
+- Judul `googleDevice` diganti menjadi “Pemilihan akun Google belum berhasil”,
+  bukan menyimpulkan akun tidak ada. Tidak mengubah layout/desain.
+
+### 18c. Transport, release, dan rahasia
+
+- Server smoke: `127.0.0.1:8080`, TLS aktif, database yang sama,
+  migrasi terapan baru **0**. Aplikasi Android meminta `/auth/nonce` **200**
+  pada 19:43:04 dan 19:51:08 WIB, sebelum chooser; tidak ada `/auth/google`
+  dalam service log pengujian ini.
+- OpenSSL dengan CA lokal + `-verify_ip 10.0.2.2`: **verify 0**.
+  CA sama + hostname salah: **verify 62 (hostname mismatch)**.
+  Tanpa CA lokal: **verify 20 (unable to get local issuer certificate)**.
+  Dua hasil negatif adalah penolakan yang diharapkan, bukan bypass TLS.
+  Ini bukti klien OpenSSL, bukan negative-hostname test pada Android.
+- Plugin menulis CA/NSC hanya ke `src/debug`. APK debug yang tersedia memuat
+  **1** resource `dev_ca`; scan marker private key / Google Client Secret:
+  **0** entry. File Git terlacak: **0** marker private key/`GOCSPX-`, **0** `.env`.
+  Scan logcat: **0** pola JWT dan **0** nilai token pada field auth yang dipindai.
+  Scan berbasis pola tidak membuktikan ketiadaan semua bentuk secret.
+- **PARTIAL release:** tidak ada APK release untuk dibongkar. Isolasi source set
+  bukan bukti isi release APK. Build native/release baru ditunda karena RAM bebas
+  turun 1,59 → 0,45 GB dan kemudian 0,73 GB; tidak menjalankan build berat.
+  Perubahan runtime hanya TS/teks, tidak memerlukan perubahan native dependency.
+- **Risiko debug:** CA dev di `base-config` dipercaya untuk semua domain pada
+  debug; cleartext diizinkan untuk host lokal demi Metro. Klien auth kini tetap
+  mewajibkan HTTPS. Release tidak boleh mewarisi trust debug.
+- **BLOCKED:** rotasi Web OAuth Client Secret di Google Cloud belum ada buktinya.
+  Tidak meminta nilai secret baru; perlu konfirmasi pemilik bahwa secret lama
+  sudah dicabut/diganti. Tidak dapat disimpulkan dari kebersihan repository.
+
+### 18d. Video dan batas reproduksi native
+
+Layar Login dan latar video terlihat pada emulator. Background/foreground,
+force-stop/relaunch, serta deep link `/dev-preview` → `/` dicoba. Percobaan
+awal membuat ADB sementara offline; percobaan sesudah relaunch sempat masih
+di splash ketika deep link dikirim. Karena itu urutan tersebut **tidak**
+membuktikan unmount VideoView saat navigasi. Scan logcat sesi ini menemukan
+**0** `already released` / `Cannot set prop player`.
+Tidak ada login→dashboard baru dalam checkpoint ini; reproduksi lengkap belum
+tercapai. Issue 02E tetap **known issue, belum diperbaiki**, root cause belum
+terbukti; tidak menerapkan patch lifecycle spekulatif.
+
+Emulator ditemukan memakai `auto_time=0` dari eksperimen sebelumnya.
+Dikembalikan ke `auto_time=1` dan dibaca ulang **1**. Expiry test tidak lagi
+mengubah jam Android. Tidak mengubah Windows/BIOS, menghapus aplikasi/data,
+atau menghentikan pekerjaan pengguna.
+
+### 18e. Pemeriksaan dan keputusan review
+
+| Pemeriksaan | Hasil aktual |
+|---|---|
+| `go test -count=1 ./...` | PASSED, 11 paket uji; `cmd/server` dan `clock` tanpa tes |
+| Vitest akhir | PASSED, **85/85**, 7 berkas |
+| `npm run typecheck` | PASSED, exit 0 |
+| `npm run lint` | PASSED, exit 0 |
+| Native smoke | Login/video terlihat, `/auth/nonce` HTTPS 200, pembatalan chooser nyata kembali ke login |
+| APK Android baru / audit release APK | BLOCKED pada checkpoint ini oleh tekanan RAM; APK debug 02E tetap dipakai dengan JS dari Metro 8082 |
+
+Layak **draft PR untuk review kode**, belum layak dinyatakan FL-UI02 selesai
+atau siap merge/release. Gate tersisa: akun nyata A2–A4/A10/A11, A8 native,
+reproduksi video login/unmount, negative TLS Android + release APK tanpa CA dev,
+dan konfirmasi pencabutan secret lama. Tidak membuat/merge PR otomatis.
+
+Checkpoint disimpan sebagai perubahan working tree; belum commit/push.
+Metro dan backend smoke yang dimulai pada sesi ini dihentikan sesudah pengujian;
+tidak ada listener 8080/8082 teramati pada pemeriksaan akhir. Emulator/ADB dan
+aplikasi/data pengguna tidak dihapus. Screenshot/hierarchy sementara buatan
+sesi ini dibersihkan dari folder TEMP dan `/sdcard`; tidak dimasukkan Git.
+
+## 19. FL-OTP01 — Email OTP di Android (23 Oktober 2026)
+
+Branch `feat/fl-otp01-email-auth`. Login utama kini Email OTP; Google tetap ada tetapi tombolnya disabled. Kontrak keamanan dan prosedur Admin: `docs/EMAIL_OTP.md`.
+
+**Perubahan UI:** `app/index.tsx` menampilkan **dua** tombol — `Continue with FaceLink` aktif dan `Continue with Google · Segera hadir` yang benar-benar disabled (`onPress` tidak dipasang, `accessibilityState.disabled`). Layar `app/email-login.tsx` memakai komponen, video, gradient, logo, tema, dan spacing yang sudah ada; tidak ada redesign. Layar email → OTP memakai `EmailOtpFlow` (single-flight, deadline dari respons server, resend cooldown, abaikan respons layar lama), keyboard email/number-pad, `one-time-code` autofill, label aksesibilitas, dan pemulihan countdown saat aplikasi kembali aktif.
+
+**Bukti otomatis:** Vitest 106/106, `tsc --noEmit`, dan `expo lint` lulus. Tes mencakup request/verify HTTPS, 429 `Retry-After`, challenge/expiry, kode salah, jaringan putus, respons terlambat setelah Back, penyimpanan sesi gagal, serta Google tetap utuh.
+
+**Bukti runtime backend (bukan Android):** binary nyata dengan TLS + DB **sementara** (bukan `backend/data/facelink.db`) memakai DPAPI key; `email_otp:true`; permintaan akun tak dikenal dijawab 202 identik; worker SMTP gagal menandai `failed`; verifier 32 byte; log tanpa email/kode/secret. Tanpa konfigurasi SMTP, endpoint menjawab 503.
+
+**Android native: TERHAMBAT.** Saat smoke, host hanya memiliki **0,26 GB** RAM bebas. Aplikasi berhasil memulai proses tetapi tidak menyelesaikan startup dalam batas ANR: logcat mencatat `ANR in ai.facelink.mobile` dan `Killing … (adj 0): bg anr` sebelum layar React tampil. Itu **tidak** membuktikan bug UI, dan juga **tidak** membuktikan UI berjalan. Tidak ada build native baru; APK debug lama dipakai dengan Metro 8082. Emulator dan data pengguna tidak dihapus.
+
+**Belum dibuktikan (BLOCKED):** login OTP sukses di emulator, penerimaan email Cloudflare, delay/penerimaan Gmail, login Admin/Dosen/Mahasiswa dengan email resmi, dan role routing native dari sesi OTP. Semua memerlukan SMTP Gmail terotorisasi + RAM host yang cukup. Jangan menganggap 202 sebagai bukti email terkirim. Tidak ada OTP tetap, print-code, atau bypass yang ditambahkan.

@@ -1,0 +1,19 @@
+{
+  "permission": "Explicit user selection: Tersedia — izinkan pengujian",
+  "model": "TECNO LJ7",
+  "android": "16",
+  "sdk": "36",
+  "abi": "arm64-v8a",
+  "pageSize": "4096",
+  "settings": {
+    "screen_brightness": "4",
+    "screen_brightness_mode": "0",
+    "screen_off_timeout": "1800000",
+    "stay_on_while_plugged_in": "15",
+    "accelerometer_rotation": "0",
+    "user_rotation": "0"
+  },
+  "mainPidBefore": "",
+  "prototypePidBefore": "",
+  "cameraWillBeOpened": false
+}

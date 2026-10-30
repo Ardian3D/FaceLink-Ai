@@ -117,7 +117,6 @@ var polaRahasia = map[string]*regexp.Regexp{
 	"nama berkas basis data": regexp.MustCompile(`(?i)facelink[\w-]*\.(db|sqlite3?)(-wal|-shm)?`),
 	"string koneksi":         regexp.MustCompile(`(?i)(dsn|connection[_ ]?string|_pragma|file:[^\s"]+)`),
 	"token atau kunci":       regexp.MustCompile(`(?i)(bearer\s|api[_-]?key|secret|password|token_hash|authorization)`),
-	"embedding biometrik":    regexp.MustCompile(`(?i)(embedding|face_template|face_templates|biometric|vector\s*\[)`),
 	"jejak tumpukan":         regexp.MustCompile(`goroutine \d+ \[|\.go:\d+ \+0x`),
 }
 

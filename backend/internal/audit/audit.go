@@ -61,18 +61,25 @@ type Event struct {
 // Daftar ini sengaja sempit: apa pun yang dapat memuat identitas, token, atau
 // data biometrik tidak termasuk di dalamnya.
 var kunciMetadata = map[string]bool{
-	"reason_code":       true,
-	"role_before":       true,
-	"role_after":        true,
-	"status_before":     true,
-	"status_after":      true,
-	"provider":          true,
-	"session_id":        true,
-	"method":            true,
-	"path":              true,
-	"count":             true,
-	"migration":         true,
-	"identifier_prefix": true,
+	"reason_code":          true,
+	"role_before":          true,
+	"role_after":           true,
+	"status_before":        true,
+	"status_after":         true,
+	"provider":             true,
+	"session_id":           true,
+	"method":               true,
+	"path":                 true,
+	"count":                true,
+	"migration":            true,
+	"identifier_prefix":    true,
+	"fields":               true,
+	"source_before":        true,
+	"source_after":         true,
+	"checked_in_at_before": true,
+	"checked_in_at_after":  true,
+	"actor_before":         true,
+	"actor_after":          true,
 }
 
 // batasNilaiMetadata membatasi panjang setiap nilai metadata.

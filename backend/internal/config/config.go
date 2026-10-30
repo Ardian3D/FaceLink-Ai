@@ -19,6 +19,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Ardian3D/FaceLink-Ai/backend/internal/otpkey"
+	"github.com/Ardian3D/FaceLink-Ai/backend/internal/smtpemail"
 )
 
 // Nama variabel lingkungan yang dikenali. Dikumpulkan di satu tempat agar
@@ -44,8 +47,13 @@ const (
 	// EnvTLSCert dan EnvTLSKey mengaktifkan HTTPS pada backend. Keduanya harus
 	// diisi bersamaan atau dikosongkan bersamaan; hanya satu yang diisi ditolak
 	// agar tidak ada kesan "HTTPS aktif" padahal tidak.
-	EnvTLSCert = "FACELINK_TLS_CERT"
-	EnvTLSKey  = "FACELINK_TLS_KEY"
+	EnvTLSCert        = "FACELINK_TLS_CERT"
+	EnvTLSKey         = "FACELINK_TLS_KEY"
+	EnvOTPHMACKeyFile = "FACELINK_OTP_HMAC_KEY_FILE"
+	// EnvSMTPAllowedFromDomains memuat domain alias yang sudah diverifikasi
+	// operator di penyedia SMTP, dipisahkan koma. Tanpa entri ini, SMTP_FROM
+	// wajib sama dengan SMTP_USERNAME.
+	EnvSMTPAllowedFromDomains = "SMTP_ALLOWED_FROM_DOMAINS"
 )
 
 // Nilai bawaan. Alamat bawaan sengaja loopback: mesin AI lokal dan backend tidak
@@ -96,6 +104,9 @@ type Config struct {
 	// docs/SECURITY_PRIVACY.md §6.
 	TLSCertPath string
 	TLSKeyPath  string
+	// SMTP dan key hanya untuk backend, tidak boleh ditulis ke log.
+	SMTP       smtpemail.Config
+	OTPHMACKey []byte
 	// Timeout server HTTP.
 	ReadTimeout     time.Duration
 	WriteTimeout    time.Duration
@@ -131,6 +142,7 @@ func (c Config) Redacted() map[string]any {
 	return map[string]any{
 		"addr":             c.Addr,
 		"tls":              tlsState,
+		"email_otp":        len(c.OTPHMACKey) == 32,
 		"database_path":    c.DatabasePath,
 		"migrations_dir":   c.MigrationsDir,
 		"ai_engine_url":    aiState,
@@ -250,6 +262,11 @@ func LoadFrom(lookup EnvLookup) (Config, error) {
 		}
 	}
 
+	smtpCfg, otpKey, otpErr := loadEmailOTP(lookup, tlsCert != "" && tlsKey != "")
+	if otpErr != nil {
+		problems = append(problems, otpErr.Error())
+	}
+
 	if len(problems) > 0 {
 		return Config{}, fmt.Errorf("konfigurasi tidak valid:\n  - %s", strings.Join(problems, "\n  - "))
 	}
@@ -263,6 +280,8 @@ func LoadFrom(lookup EnvLookup) (Config, error) {
 		GoogleJWKSURL:   jwksURL,
 		TLSCertPath:     tlsCert,
 		TLSKeyPath:      tlsKey,
+		SMTP:            smtpCfg,
+		OTPHMACKey:      otpKey,
 		ReadTimeout:     readTimeout,
 		WriteTimeout:    writeTimeout,
 		IdleTimeout:     idleTimeout,
@@ -270,6 +289,42 @@ func LoadFrom(lookup EnvLookup) (Config, error) {
 		LogLevel:        logLevel,
 		BuildVersion:    buildVersion,
 	}, nil
+}
+
+func loadEmailOTP(lookup EnvLookup, tlsConfigured bool) (smtpemail.Config, []byte, error) {
+	names := []string{"SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_AUTH_SECRET", "SMTP_FROM", "SMTP_REPLY_TO", EnvSMTPAllowedFromDomains, EnvOTPHMACKeyFile}
+	values := make(map[string]string, len(names))
+	enabled := false
+	for _, name := range names {
+		values[name] = getString(lookup, name, "")
+		if strings.TrimSpace(values[name]) != "" {
+			enabled = true
+		}
+	}
+	if !enabled {
+		return smtpemail.Config{}, nil, nil
+	}
+	if !tlsConfigured {
+		return smtpemail.Config{}, nil, errors.New("Email OTP memerlukan sertifikat HTTPS backend")
+	}
+	port, err := strconv.Atoi(strings.TrimSpace(values["SMTP_PORT"]))
+	if err != nil {
+		return smtpemail.Config{}, nil, errors.New("SMTP_PORT wajib 465 atau 587")
+	}
+	c := smtpemail.Config{
+		Host: strings.TrimSpace(values["SMTP_HOST"]), Port: port,
+		Username: strings.TrimSpace(values["SMTP_USERNAME"]), AuthSecret: values["SMTP_AUTH_SECRET"],
+		From: strings.TrimSpace(values["SMTP_FROM"]), ReplyTo: strings.TrimSpace(values["SMTP_REPLY_TO"]),
+		AllowedFromDomains: pecahDaftar(strings.ToLower(values[EnvSMTPAllowedFromDomains])),
+	}
+	if err := c.Validate(); err != nil {
+		return smtpemail.Config{}, nil, err
+	}
+	key, err := otpkey.Load(strings.TrimSpace(values[EnvOTPHMACKeyFile]))
+	if err != nil {
+		return smtpemail.Config{}, nil, err
+	}
+	return c, key, nil
 }
 
 // pecahDaftar memecah nilai berkoma menjadi daftar bersih tanpa entri kosong.

@@ -1,0 +1,89 @@
+{
+  "deepLink": "Starting: Intent { act=android.intent.action.VIEW dat=facelinkcam03:///... cmp=ai.facelink.cam03host/ai.facelink.mobile.MainActivity }\r\nWarning: Activity not started, intent has been delivered to currently running top-most instance.\r\nStatus: ok\r\nLaunchState: UNKNOWN (0)\r\nActivity: ai.facelink.cam03host/ai.facelink.mobile.MainActivity\r\nTotalTime: 0\r\nWaitTime: 12\r\nComplete",
+  "controls": [
+    {
+      "text": "FL-CAM03 · actual FaceLink host",
+      "enabled": "true",
+      "clickable": "false",
+      "bounds": "[64,129][1016,206]"
+    },
+    {
+      "text": "Native capture verification uses synthetic fixtures only. This route exposes metadata, not images, uploads, OTP requests or sessions. Existing login video playback is observed separately through scalar SDK events; the normal host retains real HTTPS/auth dependencies.",
+      "enabled": "true",
+      "clickable": "false",
+      "bounds": "[64,260][1016,532]"
+    },
+    {
+      "text": "Idle — explicit Run required. Synthetic native fixtures only.",
+      "enabled": "true",
+      "clickable": "false",
+      "bounds": "[64,586][1016,682]"
+    },
+    {
+      "text": "RUN SYNTHETIC VERIFICATION",
+      "enabled": "true",
+      "clickable": "true",
+      "bounds": "[65,737][1015,832]"
+    },
+    {
+      "text": "RUN SYNTHETIC VERIFICATION",
+      "enabled": "true",
+      "clickable": "false",
+      "bounds": "[86,758][994,810]"
+    },
+    {
+      "text": "CANCEL AND DRAIN",
+      "enabled": "true",
+      "clickable": "true",
+      "bounds": "[65,870][1015,965]"
+    },
+    {
+      "text": "CANCEL AND DRAIN",
+      "enabled": "true",
+      "clickable": "false",
+      "bounds": "[86,891][994,943]"
+    },
+    {
+      "text": "REFRESH STATUS / STORAGE METADATA",
+      "enabled": "true",
+      "clickable": "true",
+      "bounds": "[65,1003][1015,1098]"
+    },
+    {
+      "text": "REFRESH STATUS / STORAGE METADATA",
+      "enabled": "true",
+      "clickable": "false",
+      "bounds": "[86,1024][994,1076]"
+    },
+    {
+      "text": "READ ACTUAL HOST PLAYBACK METADATA",
+      "enabled": "true",
+      "clickable": "true",
+      "bounds": "[65,1136][1015,1231]"
+    },
+    {
+      "text": "READ ACTUAL HOST PLAYBACK METADATA",
+      "enabled": "true",
+      "clickable": "false",
+      "bounds": "[86,1157][994,1209]"
+    },
+    {
+      "text": "CHECK SECURESTORE AVAILABILITY ONLY",
+      "enabled": "true",
+      "clickable": "true",
+      "bounds": "[65,1269][1015,1364]"
+    },
+    {
+      "text": "CHECK SECURESTORE AVAILABILITY ONLY",
+      "enabled": "true",
+      "clickable": "false",
+      "bounds": "[86,1290][994,1342]"
+    },
+    {
+      "text": "Playback metadata observes the existing host players only. Ready/playing/progress and overlap do not prove rendered appearance. No screenshot or video frames are collected.",
+      "enabled": "true",
+      "clickable": "false",
+      "bounds": "[64,1792][1016,1976]"
+    }
+  ]
+}

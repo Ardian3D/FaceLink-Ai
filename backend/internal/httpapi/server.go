@@ -14,6 +14,8 @@ import (
 	"github.com/Ardian3D/FaceLink-Ai/backend/internal/authz"
 	"github.com/Ardian3D/FaceLink-Ai/backend/internal/clock"
 	"github.com/Ardian3D/FaceLink-Ai/backend/internal/database"
+	"github.com/Ardian3D/FaceLink-Ai/backend/internal/emailotp"
+	"github.com/Ardian3D/FaceLink-Ai/backend/internal/enrollment"
 	"github.com/Ardian3D/FaceLink-Ai/backend/internal/migrations"
 	"github.com/Ardian3D/FaceLink-Ai/backend/internal/oidc"
 	"github.com/Ardian3D/FaceLink-Ai/backend/internal/session"
@@ -32,9 +34,13 @@ type Server struct {
 	Accounts *auth.Store
 	Sessions *session.Store
 	Google   *oidc.Verifier
+	EmailOTP *emailotp.Service
 	Audit    *audit.Writer
 	Scope    authz.Directory
 	Clock    clock.Clock
+
+	// Explicit injection only. The normal server never enables synthetic enrollment.
+	Enrollment *enrollment.Service
 }
 
 // authSiap melaporkan apakah komponen autentikasi tersedia. Pemeriksaan ini

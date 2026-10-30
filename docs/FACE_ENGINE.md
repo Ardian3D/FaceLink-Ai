@@ -3,6 +3,14 @@
 **Status:** Rencana pengujian, bukan laporan hasil eksperimen. Seluruh proses dilakukan lokal; peserta harus berizin dan dapat memilih absensi manual.
 **Alat yang sudah ada:** `services/face-engine` menyediakan harness FL-CV02A (`python -m face_engine.calibrate`) dan modul evaluasi tanpa kamera. Status pelaksanaannya — termasuk **belum adanya peserta manusia** — dicatat di [`CALIBRATION_FL_CV02A.md`](CALIBRATION_FL_CV02A.md). Dokumen ini tetap rencana; matriks §7 belum dijalankan.
 
+**Bukti FL-ENR04 (27 Oktober 2026):** pipeline YuNet → quality/landmark →
+SFace tersedia melalui IPC privat Go/Python pada staging sintetis/disposable.
+Model/checksum asli ter-load dan negative path NO_FACE terbukti end-to-end;
+**REAL_MODEL_POSITIVE_NOT_PROVEN**. Tes komponen SFace dengan landmark buatan
+tidak membuktikan positive detection. Matriks manusia §7, kalibrasi, FAR/FRR,
+dan PAD/liveness tetap belum terbukti. Laporan:
+[`FL_ENR04_TECHNICAL_REPORT.md`](FL_ENR04_TECHNICAL_REPORT.md).
+
 ## 1. Tujuan
 
 Mengidentifikasi **satu peserta yang sudah mendaftar** di depan terminal kelas, dengan menolak hasil yang tidak jelas. Pengenalan wajah bukan verifikasi identitas resmi, alat keamanan tingkat tinggi, maupun cara untuk menyimpulkan ketidakhadiran.

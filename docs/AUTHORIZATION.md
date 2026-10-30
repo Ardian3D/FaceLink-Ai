@@ -10,6 +10,10 @@
 
 > **Status kode.** Sejak **FL-011 (16 Oktober 2026)**, autentikasi Google, sesi, pengelolaan akun, penautan peserta, penugasan dosen, dan portal `/me/classes` **sudah ditulis sebagai kode**. Sebagian besar **endpoint produk** (konsen, enrollment, absensi, perangkat, rekap, audit-events) **belum ada**, sehingga skenario pada §8 yang menuntut endpoint itu **BELUM TERVERIFIKASI**. Kebijakan peran/cakupan pada §4–§5 sudah diuji lewat uji otomatis pada harness `internal/authz` dan alur HTTP FL-011; rinciannya di §4.15 dan `docs/TEST_PLAN.md`.
 
+**Pembaruan implementasi FL-CORE01 (25 Oktober 2026), tanpa perubahan role/matriks:** people CRUD serta kelas/roster sudah berjalan sesuai §4.2/§4.3/§4.6. Admin aktif diperiksa ulang dalam transaksi mutasi. Binding hanya ke mahasiswa active dan person aktif dengan referensi roster terverifikasi; email bukan bukti identitas kampus. Dosen hanya membaca kelas/peserta yang ditugaskan (`404` di luar cakupan); mahasiswa tetap tidak dapat membaca daftar peserta atau mengubah binding (`403`). Resolver `/me/classes` menolak person inactive, deleted, atau belum terverifikasi (`409 ACCOUNT_NOT_LINKED`) dan tidak mengambil ownership dari request client. Audit mutasi binding/roster/penugasan atomik, tanpa event ganda saat PUT identik. Bukti: `internal/httpapi/core01_test.go`, `internal/auth/core01_test.go`; seluruh tes Go dan vet lulus, serta smoke HTTPS loopback pada database disposable. Bukan bukti RBAC HP dengan akun testing nyata; status historis FL-011 di §4.15 tetap baseline saat itu.
+
+**Pembaruan FL-CORE02 (25 Oktober 2026), matriks tidak berubah:** lifecycle `/sessions`, manual-checkins, dan rekap attendance tersedia untuk Admin serta Dosen yang ditugaskan. Salah role `403`, objek di luar kelas Dosen `404`; pembacaan daftar disaring. Semua mutasi memeriksa ulang akun aktif dan scope di dalam transaksi, termasuk sebelum idempotency replay. `/me/attendance` hanya Mahasiswa; identity selector client ditolak, sumber identity adalah person aktif terverifikasi yang tertaut di backend. Mahasiswa tidak mendapat hak mencatat hadir sendiri. Otorisasi rekap dijalankan sebelum ETag/304. Bukti HTTP terisolasi: `internal/httpapi/core02_test.go`; bukan bukti pengujian akun nyata/HP.
+
 ---
 
 ## 1. Prinsip otorisasi yang berlaku
@@ -124,7 +128,9 @@ Diturunkan langsung dari `docs/API_CONTRACT.md` §4. **Total 54 baris endpoint.*
 
 > **FL-010V (16 Oktober 2026):** persetujuan D-034 **tidak mengubah** satu pun baris pada §4.1–§4.13. Tidak ada endpoint baru, tidak ada peran yang ditambah atau dikurangi, dan tidak ada perubahan izin. Bila suatu saat izin berubah, perubahan itu wajib punya alasan terdokumentasi dan tabel rekap §4.14 harus dihitung ulang secara programatis.
 
-Dari 54 endpoint, **3** dapat dipanggil tanpa token (`POST /auth/nonce`, `POST /auth/google`, `GET /healthz`) dan **51** menuntut kredensial yang sah; jumlah 51 adalah soal autentikasi, bukan soal peran.
+> **FL-OTP01 / D-038:** menambahkan **dua** endpoint publik Email OTP pada §4.1. Rekap jumlah pada bagian ini sudah dihitung ulang menjadi **56** endpoint (**5** publik). Peran tidak berubah; role tetap dari database.
+
+Dari 56 endpoint, **5** dapat dipanggil tanpa token (`POST /auth/nonce`, `POST /auth/google`, `POST /auth/email/request`, `POST /auth/email/verify`, `GET /healthz`) dan **51** menuntut kredensial yang sah; jumlah 51 adalah soal autentikasi, bukan soal peran.
 
 Istilah: `publik` = boleh tanpa token · `device` = token perangkat, bukan role manusia · `admin`, `dosen`, `mahasiswa` = tiga role pengguna manusia.
 
@@ -134,8 +140,10 @@ Istilah: `publik` = boleh tanpa token · `device` = token perangkat, bukan role 
 |---|---|---|---|
 | `POST` | `/auth/nonce` | publik | Menerbitkan nonce sekali pakai (TTL 5 menit, disimpan sebagai hash) yang wajib dikirim ke Google dan kembali bersama ID token; batas laju menyusul bersama `/auth/google` |
 | `POST` | `/auth/google` | publik | Batas laju ketat per alamat dan per identitas; audit tiap percobaan berhasil/gagal |
+| `POST` | `/auth/email/request` | publik | HTTPS wajib; 8-digit OTP, HMAC, anti-enumeration, cooldown + limit akun/IP/global; respons 202 sama untuk akun dikenal/tidak |
+| `POST` | `/auth/email/verify` | publik | HTTPS wajib; consume atomik sekali pakai, batas tebakan/akun/IP/global; sesi hanya untuk akun undangan aktif dengan role database |
 | `POST` | `/auth/refresh` | admin, dosen, mahasiswa | Token penyegar lama tidak dapat dipakai dua kali; rotasi + deteksi pemakaian ulang |
-| `POST` | `/auth/logout` | admin, dosen, mahasiswa | Mencabut sesi sendiri; panggilan kedua tetap `204` |
+| `POST` | `/auth/logout` | admin, dosen, mahasiswa | Bukti JSON refresh current/previous mencabut hanya sesinya, tanpa access token; revoked credential idempoten `204`; bukan endpoint arbitrary-session |
 | `GET` | `/me` | admin, dosen, mahasiswa | Mengembalikan role, status, `person_id`, dan `class_ids` milik pemanggil |
 | `GET` | `/auth/sessions` | **admin saja** | Melihat sesi aktif seluruh akun |
 | `DELETE` | `/auth/sessions/{session_id}` | **admin saja** | Mencabut sesi mana pun; audit `auth.session.revoked` |
@@ -160,23 +168,32 @@ Istilah: `publik` = boleh tanpa token · `device` = token perangkat, bukan role 
 | `PATCH` | `/people/{person_id}` | **admin saja** | Audit daftar nama field yang berubah |
 | `DELETE` | `/people/{person_id}` | **admin saja** | Wajib menghapus template terkait dalam transaksi sama (D-015); `409 POLICY_CONFLICT` bila retensi belum ditetapkan |
 
-### 4.4 Modul 4 — Persetujuan biometrik
+### 4.4 Modul 4 — Consent V1 (FL-ENR01B)
+
+**DESIGN APPROVED / SYNTHETIC IMPLEMENTATION AUTHORIZED**,26Oktober2026. Menggantikan admin-grant lama; tidak mengubah assignment tiga role atau OTP/session.
 
 | Metode | Jalur | Peran | Kewajiban tambahan |
 |---|---|---|---|
-| `GET` | `/people/{person_id}/consent` | **admin saja** | Menampilkan status, bukan isi biometrik |
-| `POST` | `/people/{person_id}/consent` | **admin saja** | Mencatat `recorded_by`; audit `consent.granted` |
-| `POST` | `/people/{person_id}/consent/withdraw` | **admin saja** | Wajib alasan; memicu prosedur penghapusan `docs/SECURITY_PRIVACY.md` §5f; audit `consent.withdrawn` |
+| `GET` | `/me/consent` | mahasiswa | Own binding/notice/status; bukan consent dari login |
+| `POST` | `/me/consent` | mahasiswa | Explicit acceptance/version; If-Match+idempotency; audit |
+| `POST` | `/me/consent/withdraw` | mahasiswa | Own subject saja; revoke/fence segera tanpa key |
+| `POST` | `/people/{person_id}/consent/withdraw` | admin | Assisted campus request/reference; tidak memberi consent atas nama subject |
 
-### 4.5 Modul 5 — Enrollment wajah
+### 4.5 Modul 5 — Submission/review V1 (FL-ENR01B)
 
 | Metode | Jalur | Peran | Kewajiban tambahan |
 |---|---|---|---|
-| `POST` | `/people/{person_id}/face-enrollments` | **admin saja** | Wajib konsen aktif; `422 CONSENT_REQUIRED` |
-| `GET` | `/people/{person_id}/face-enrollments` | **admin saja** | Status/progres saja; tidak mengembalikan embedding atau gambar |
-| `POST` | `/face-enrollments/{enrollment_id}/samples` | **admin saja** | Validasi jenis/ukuran/waktu proses; gambar tidak disimpan permanen |
-| `POST` | `/face-enrollments/{enrollment_id}/complete` | **admin saja** | Audit `enrollment.completed` |
-| `DELETE` | `/face-enrollments/{enrollment_id}` | **admin saja** | Audit `template.deleted` |
+| `GET` | `/me/face-enrollment` | mahasiswa | Own status, bukan foto/template |
+| `POST` | `/me/face-enrollment-submissions` | mahasiswa | Akun/person/roster verified, consent aktif, satu JPEG final |
+| `GET` | `/face-enrollment-submissions` | admin | List terbatas, audit count, no photo bytes |
+| `GET` | `/face-enrollment-submissions/{submission_id}` | admin | Restricted review detail/history, audit |
+| `GET` | `/face-enrollment-submissions/{submission_id}/photo` | admin | Auth+guard+audit sebelum private bytes; no-store; expiry72jam |
+| `POST` | `/face-enrollment-submissions/{submission_id}/approve` | admin | Immutable decision, attestation sintetis, If-Match;202 bukan ACTIVE |
+| `POST` | `/face-enrollment-submissions/{submission_id}/reject` | admin | Allowlist reason, CAS/idempotency, purge |
+| `POST` | `/face-enrollment-submissions/{submission_id}/retry-processing` | admin | Semua original guards termasuk reviewer; setelah photo purge ditolak |
+
+Dosen tidak mendapat akses consent mutation, preview atau review. Role ditolak403 sebelum lookup; self route menolak subject dari client. Reviewer ineligible memutus jalur activation; role kembali tidak menghidupkan approval lama. Endpoint samples/complete/admin-create lama tidak dipasang sebagai alias. Hanya synthetic dependency injection; tidak ada production switch. Detail input/output/error mengikat: API_CONTRACT §5.3–§5.4.
+
 
 ### 4.6 Modul 6 — Kelas, keanggotaan, dan penugasan dosen
 
@@ -239,7 +256,7 @@ Istilah: `publik` = boleh tanpa token · `device` = token perangkat, bukan role 
 | `GET` | `/me/classes` | dosen, mahasiswa | `dosen` → kelas yang ditugaskan; `mahasiswa` → kelas yang diikuti; akun `mahasiswa` belum tertaut → `409 ACCOUNT_NOT_LINKED` |
 | `GET` | `/me/schedule` | **mahasiswa saja** | Sesi absensi kelas yang diikuti; **tidak** memuat data peserta lain |
 | `GET` | `/me/attendance` | **mahasiswa saja** | Riwayat kehadiran sendiri; tanpa embedding, tanpa template, tanpa data orang lain |
-| `GET` | `/me/consent` | **mahasiswa saja** | Status persetujuan sendiri, baca saja |
+| `GET` | `/me/consent` | **mahasiswa saja** | Own consent+notice; mutasi self-service terbatas yang disetujui FL-ENR01B ada pada §4.4 |
 
 ### 4.13 Terminal kamera
 
@@ -257,12 +274,12 @@ Istilah: `publik` = boleh tanpa token · `device` = token perangkat, bukan role 
 | `dosen` + `mahasiswa` | 1 | `GET /me/classes` |
 | Hanya `mahasiswa` | 3 | Jadwal, riwayat kehadiran sendiri, status konsen sendiri |
 | Hanya `device` | 1 | Terminal kamera |
-| Publik tanpa token | 3 | `POST /auth/nonce`, `POST /auth/google`, `GET /healthz` |
-| **Total** | **54** | 29 + 14 + 3 + 1 + 3 + 1 + 3 |
+| Publik tanpa token | 5 | `POST /auth/nonce`, `POST /auth/google`, `POST /auth/email/request`, `POST /auth/email/verify`, `GET /healthz` |
+| **Total** | **56** | 29 + 14 + 3 + 1 + 3 + 1 + 5 |
 
-Jumlah endpoint yang boleh dipanggil tiap peran: `admin` **46** · `dosen` **18** · `mahasiswa` **7** · `device` **1** · publik **3**.
+Jumlah endpoint yang boleh dipanggil tiap peran: `admin` **46** · `dosen` **18** · `mahasiswa` **7** · `device` **1** · publik **5**.
 
-**Jumlah lintas peran tidak dijumlahkan menjadi 54.** Satu endpoint dapat diakses beberapa peran; karena itu kolom "Kelompok akses" di atas memakai pengelompokan yang **saling lepas** (setiap endpoint tepat satu kelompok), sedangkan baris "jumlah per peran" boleh tumpang tindih. Angka pada tabel ini **wajib diverifikasi programatis** terhadap tabel §4.1–§4.13 sebelum dipakai sebagai acuan implementasi. Panjang baris 54 dan rekap ini menggantikan rekap 43 endpoint FL-010/FL-010R.
+**Jumlah lintas peran tidak dijumlahkan menjadi 56.** Satu endpoint dapat diakses beberapa peran; karena itu kolom "Kelompok akses" di atas memakai pengelompokan yang **saling lepas** (setiap endpoint tepat satu kelompok), sedangkan baris "jumlah per peran" boleh tumpang tindih. Angka pada tabel ini **wajib diverifikasi programatis** terhadap tabel §4.1–§4.13 sebelum dipakai sebagai acuan implementasi. Panjang baris 56 mencakup dua endpoint Email OTP FL-OTP01; rekap 54 sebelumnya berlaku sampai FL-ANDROID02F.
 
 ### 4.15 Status implementasi FL-011 (16 Oktober 2026)
 

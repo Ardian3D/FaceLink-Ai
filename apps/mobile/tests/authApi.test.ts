@@ -9,7 +9,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const BASE = "http://127.0.0.1:8080";
+const BASE = "https://127.0.0.1:8080";
 
 /** Memasang jawaban `fetch` untuk satu permintaan. */
 function jawab(status: number, badan: unknown): void {
@@ -43,6 +43,29 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   delete process.env.EXPO_PUBLIC_FACELINK_API_BASE_URL;
+});
+
+describe("transport autentikasi", () => {
+  it.each(["http://127.0.0.1:8080", "http://10.0.2.2:8080"])(
+    "tidak mengirim kredensial melalui %s, termasuk pada debug",
+    async (alamat) => {
+      const api = await muatModul(alamat);
+      const fetch = vi.fn();
+      vi.stubGlobal("fetch", fetch);
+      for (const hasil of [
+        await api.mintaNonce(),
+        await api.tukarIdToken("id-token-uji", "nonce-uji"),
+        await api.segarkanSesi("refresh-uji"),
+        await api.ambilSaya("access-uji"),
+        await api.mintaKodeEmail("orang@example.test"),
+        await api.verifikasiKodeEmail("11111111-1111-4111-8111-111111111111", "01234567"),
+      ]) {
+        expect(hasil).toMatchObject({ ok: false, error: { kind: "config" } });
+      }
+      await api.keluarSesi("access-uji");
+      expect(fetch).not.toHaveBeenCalled();
+    }
+  );
 });
 
 describe("mintaNonce", () => {
@@ -248,23 +271,95 @@ describe("segarkanSesi", () => {
 });
 
 describe("keluarSesi", () => {
-  it("mencabut sesi di server dengan token akses", async () => {
-    const { keluarSesi } = await muatModul();
-    const dipanggil: string[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (url: string) => {
-        dipanggil.push(url);
-        return new Response("", { status: 204 });
-      })
-    );
-    await keluarSesi("token-abc");
-    expect(dipanggil).toEqual([`${BASE}/api/v1/auth/logout`]);
-  });
-
-  it("tidak melempar walau jaringan mati", async () => {
+  it("reports a network failure as unconfirmed remote revocation", async () => {
     const { keluarSesi } = await muatModul();
     gagalJaringan("Network request failed");
-    await expect(keluarSesi("token-abc")).resolves.toBeUndefined();
+    expect(await keluarSesi("synthetic-refresh")).toEqual({
+      ok: false, error: { kind: "network" },
+    });
+  });
+
+  it.each([200, 401, 500])("does not claim revocation after HTTP %i", async status => {
+    const { keluarSesi } = await muatModul();
+    jawab(status, { error: { code: "UNAUTHENTICATED" } });
+    expect((await keluarSesi("synthetic-refresh")).ok).toBe(false);
+  });
+});
+
+describe("Email OTP", () => {
+  const challengeId = "11111111-1111-4111-8111-111111111111";
+
+  it("mengirim email ternormalisasi dalam body, bukan URL", async () => {
+    const api = await muatModul();
+    jawab(202, { data: { challenge_id: challengeId, expires_in: 300, retry_after: 60, message: "generik" } });
+    expect(await api.mintaKodeEmail("  Orang@Example.Test ")).toEqual({
+      ok: true, data: { challengeId, expiresIn: 300, retryAfter: 60 },
+    });
+    expect(vi.mocked(fetch).mock.calls[0]?.[0]).toBe(`${BASE}/api/v1/auth/email/request`);
+    expect(JSON.parse(vi.mocked(fetch).mock.calls[0]?.[1]?.body as string)).toEqual({ email: "orang@example.test" });
+  });
+
+  it.each([401, 400, 503, 403])("memetakan galat %s tanpa detail akun/delivery", async (status) => {
+    const api = await muatModul();
+    jawab(status, { error: { code: status === 403 ? "HTTPS_REQUIRED" : "OTP_INVALID", message: "detail-rahasia" } });
+    const hasil = await api.verifikasiKodeEmail(challengeId, "01234567");
+    expect(hasil).toMatchObject({ ok: false, error: { kind: ({ 401: "otpInvalid", 400: "validation", 503: "unavailable", 403: "config" } as Record<number, string>)[status] } });
+    expect(JSON.stringify(hasil)).not.toContain("detail-rahasia");
+  });
+
+  it.each([
+    ["90", "Thu, 22 Oct 2026 10:00:00 GMT", 90],
+    ["Thu, 22 Oct 2026 10:02:00 GMT", "Thu, 22 Oct 2026 10:00:00 GMT", 120],
+    ["rusak", "Thu, 22 Oct 2026 10:00:00 GMT", 60],
+  ])("memakai Retry-After %s relatif ke jam server", async (retryAfter, serverDate, expected) => {
+    const api = await muatModul();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: { code: "RATE_LIMITED" } }), {
+      status: 429, headers: { "Retry-After": String(retryAfter), Date: String(serverDate) },
+    })));
+    for (const hasil of [await api.mintaKodeEmail("orang@example.test"), await api.verifikasiKodeEmail(challengeId, "01234567")]) {
+      expect(hasil).toEqual({ ok: false, error: { kind: "rateLimited", retryAfter: expected } });
+    }
+  });
+
+  it("mempertahankan nol awal dan membaca sesi dengan parser yang sama", async () => {
+    const api = await muatModul();
+    jawab(200, { data: {
+      access_token: "access", refresh_token: "refresh", expires_in: 3600,
+      user: { id: challengeId, display_name: "Uji", role: "admin", status: "active", person_id: null, class_ids: [] },
+    } });
+    const hasil = await api.verifikasiKodeEmail(challengeId, "01234567");
+    expect(hasil).toMatchObject({ ok: true, data: { accessToken: "access", user: { role: "admin" } } });
+    expect(JSON.parse(vi.mocked(fetch).mock.calls[0]?.[1]?.body as string)).toEqual({ challenge_id: challengeId, code: "01234567" });
+  });
+
+  it("menolak bentuk challenge dan sesi yang tidak sah", async () => {
+    const api = await muatModul();
+    jawab(202, { data: { challenge_id: challengeId, expires_in: -1, retry_after: 60 } });
+    expect(await api.mintaKodeEmail("orang@example.test")).toMatchObject({ ok: false, error: { kind: "unknown" } });
+    jawab(200, { data: { access_token: "a", refresh_token: "r", expires_in: 3600, user: { role: "owner" } } });
+    expect(await api.verifikasiKodeEmail(challengeId, "01234567")).toMatchObject({ ok: false, error: { kind: "unknown" } });
+  });
+
+  it("membatalkan fetch saat layar keluar dan tidak mengirim bila sudah batal", async () => {
+    const api = await muatModul();
+    const controller = new AbortController();
+    const fetch = vi.fn((_url: string, init: RequestInit) => {
+      const { promise, reject } = Promise.withResolvers<Response>();
+      init.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+      return promise;
+    });
+    vi.stubGlobal("fetch", fetch);
+    const request = api.mintaKodeEmail("orang@example.test", controller.signal);
+    controller.abort();
+    expect(await request).toEqual({ ok: false, error: { kind: "cancelled" } });
+    expect(await api.verifikasiKodeEmail(challengeId, "01234567", controller.signal)).toEqual({ ok: false, error: { kind: "cancelled" } });
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("memetakan koneksi gagal sebagai galat jaringan tanpa mencoba ulang", async () => {
+    const api = await muatModul();
+    gagalJaringan("Network request failed");
+    expect(await api.mintaKodeEmail("orang@example.test")).toEqual({ ok: false, error: { kind: "network" } });
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

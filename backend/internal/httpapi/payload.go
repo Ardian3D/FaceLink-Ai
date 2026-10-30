@@ -18,11 +18,19 @@ type healthzPayload struct {
 
 // readyzPayload adalah badan /readyz saat seluruh komponen siap.
 type readyzPayload struct {
-	Status     string     `json:"status"`
-	Database   string     `json:"database"`
-	AIEngine   string     `json:"ai_engine"`
-	Migrations string     `json:"migrations"`
-	WAL        walPayload `json:"wal"`
+	Status           string           `json:"status"`
+	Database         string           `json:"database"`
+	AIEngine         string           `json:"ai_engine"`
+	Migrations       string           `json:"migrations"`
+	WAL              walPayload       `json:"wal"`
+	ManualAttendance serviceReadiness `json:"manual_attendance"`
+	Biometrics       serviceReadiness `json:"biometrics"`
+}
+
+// serviceReadiness memisahkan readiness core dari jalur biometrik D-030.
+type serviceReadiness struct {
+	Status string `json:"status"`
+	Reason string `json:"reason"`
 }
 
 type walPayload struct {

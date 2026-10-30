@@ -1,0 +1,12 @@
+{
+  "name": "facelink-native-capture-host",
+  "version": "0.2.3",
+  "private": true,
+  "main": "index.ts",
+  "types": "index.ts",
+  "react-native": "index.ts",
+  "files": ["index.ts", "react-native.config.js", "android"],
+  "peerDependencies": {
+    "react-native": ">=0.88.0"
+  }
+}

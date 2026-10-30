@@ -2,6 +2,183 @@
 
 Daftar ini **usulan pembagian tugas**, bukan GitHub Issues yang telah dibuat. Kerjakan per tugas dan validasi syaratnya. Tidak ada tugas cloud sebelum MVP lokal dinyatakan siap dan pemilik memintanya.
 
+**FL-STAB02 — laporan selesai; crash UNRESOLVED / Fast-Track PARTIAL.**
+Izin baru dipakai untuk bounded debug/release-like comparison pada TECNO.
+Timestamp fatal historis dipulihkan;0 fatal baru teramati bukan bukti fixed.
+Sesi/preview/offline ACTIVE-unverified/withdrawal disposable diuji; manual
+uncertainty replay UI belum terdemonstrasi. Controller85PASS, build release-like exit0.
+Enam package terinventaris; kelima non-main hanya kandidat evaluasi cleanup,
+bukan izin uninstall. Main tetap, tiga staging force-stop, host/root/reverse bersih.
+Diagnosis callback/reset dan CDP lengkap memerlukan tugas/izin terpisah.
+Laporan: `FL_STAB02_TECHNICAL_REPORT.md`. **STOP tanpa FL-UI01 otomatis.**
+
+**FL-ENR06-R1 — pelaporan selesai; acceptance keseluruhan PARTIAL (29 Oktober 2026).**
+Positive integrated Android chain pada satu submission PASS: Student/Admin
+dua package terisolasi, real Python, encrypted AADv2 ACTIVE, withdrawal
+REVOKED/cleanup0. Form bergerak akibat history polling diperbaiki dan diuji
+pada TECNO. Satu crash native dev inspector tetap terbuka; diagnosis/remediasi
+dan sisa lifecycle native memerlukan tugas/izin berikutnya, tidak dimulai otomatis.
+Kedua staging force-stop; host/root disposable bersih; APK/video/model utuh.
+Laporan A–L: `FL_ENR06_R1_TECHNICAL_REPORT.md`. **STOP; bukan human/production/FL-UI01.**
+Entri FL-ENR05 dan sebelumnya berikut merupakan snapshot historis.
+
+**FL-ENR05 — SELESAI: GO Synthetic Integrated E2E (28 Oktober 2026).**
+Actual Student/Admin TypeScript clients/controllers, normal OTP, verifiedHTTPS,
+satu WAL schema8 disposable, real YuNet/SFace IPC dan AADv2 membuktikan satu
+continuous ACTIVE→withdraw→REVOKED/cleanup0. Response-loss setelah real commit
+direplay identik tanpa audit ganda. Student stale ACTIVE pada token-null
+diperbaiki; fixture OTP menunggu committed delivery dan cleanup direkonsiliasi.
+Go18+vet, Python217PASS/1SKIP, mobile230PASS termasuk8HTTPS E2E+typecheck/lint,
+native/JS36PASS. Independent review findings ditutup; Android UI NOT_RUN.
+Tidak ada migration baru/ADB/kamera/human/productionDB/commit/push/merge.
+Laporan A–N: `FL_ENR05_TECHNICAL_REPORT.md`. Residual D-030/native/backup/PAD/
+kalibrasi/fullDBrollback tetap. **STOP; tahap berikutnya memerlukan task terpisah.**
+Entri FL-SEC01 dan sebelumnya berikut adalah snapshot historis.
+
+**FL-SEC01 — SELESAI pada sintetis/disposable: AAD template v2 record-bound.**
+Semua field kontrak terikat; ciphertext swap FAIL-before→PASS-after, legacyv1
+unsupported tanpa fallback/newwrite. Migration00008 menjaga legacy bytes/ledger/FK
+dan hanya harness disposable; database Product Owner tidak disentuh.
+Real YuNet/SFace→IPC→ACTIVEv2→withdraw→REVOKED/cleanup0,18verified HTTPSrequests.
+Go18paket+vet, Python217PASS/1skip, mobile219PASS/6skip+typecheck/lint, E2E6/6 lulus.
+Independent review crypto/domain/migration tanpa defect tersisa. FullDBrollback
+dan D-030 tidak ditutup oleh AEAD. Laporan `FL_SEC01_TECHNICAL_REPORT.md`.
+**GO terbatas review/perencanaan FL-ENR05 sintetis; eksekusi memerlukan task baru.
+STOP; bukan izin manusia/production/migrasi Product Owner.**
+Entri R2 dan sebelumnya berikut adalah snapshot historis.
+
+**FL-ENR04-R2 — positive real-model PASS; NO-GO FL-ENR05 karena AAD v1.**
+Perbaikan native512 alih-alih upscale960 memakai fixture R1 existing, tanpa
+kandidat/threshold baru. Real YuNet/SFace→IPC→HTTPS→encrypted ACTIVE→withdraw
+terbukti. AADv1 belum mengikat template/submission UUID: envelope substitution
+diterima pada dua snapshot offline; bukan jalur UPDATE normal atau exploit API.
+Perlu keputusan kontrak AADv2 terpisah; runtime ciphertext tidak diubah.
+Laporan: `FL_ENR04_R2_TECHNICAL_REPORT.md`. **STOP; R3/R4 tidak otomatis.**
+Entri R1/FL-ENR04 berikut adalah hasil historis.
+
+**FL-ENR04-R1 — PARTIAL; positive model belum terbukti.**
+Enam mannequin height-field prosedural lokal berprovenance/hash tetap semuanya
+NO_FACE tanpa menurunkan threshold. Generator/reproducibility, real IPC dan
+harness strict-positive tersedia; configured positive test FAIL/NO_FACE,
+tanpa template ACTIVE palsu. Failed encryption/duplicate worker/matching guards
+ditambah; Python213PASS/1skip, Go18paket+vet, E2E6/6.
+Laporan: `FL_ENR04_R1_TECHNICAL_REPORT.md`. **STOP; belum GO FL-ENR05.**
+
+**FL-ENR04 — integrasi Go/Python YuNet/SFace: PARTIAL (27 Oktober 2026).**
+IPC privat HMAC, strict schema/bounds/timeout, model checksum, quality/landmark/
+finite128, similarity tanpa threshold produksi; opt-in pada staging disposable.
+Smoke nyata NO_FACE menolak aktivasi dan membersihkan foto dengan audit.
+REAL_MODEL_POSITIVE_NOT_PROVEN. Rincian dan bukti:
+`FL_ENR04_TECHNICAL_REPORT.md`. **STOP; bukan izin FL-ENR05/manusia/production.**
+
+**FL-STAB01 — F1/F2 selesai pada skenario terukur (27 Oktober 2026).**
+Refresh-proof logout mencabut hanya sesi sendiri setelah access expiry; remote
+failure dilaporkan jujur. Cleanup crossfade mencegah callback setelah release.
+Go17+vet, mobile/stage219 PASS/6 skipped, HTTPS E2E5+1, stage ARM64 dan TECNO LJ7
+sintetis lulus; native proof tidak universal. F3 tetap di luar scope.
+Laporan: `FL_STAB01_TECHNICAL_REPORT.md`. **STOP; tidak memulai FL-ENR04 otomatis.**
+
+
+**FL-ENR03 — Admin enrollment staging UI synthetic; PARTIAL dengan acceptance perangkat PASS (27 Oktober 2026).**
+Queue/detail/binding/roster/reviewer/history, preview terotorisasi, dan
+Approve/Reject/Retry memakai endpoint enrollment existing; tanpa endpoint atau migrasi baru.
+Route hanya di staging saat flag Admin aktif; main default-OFF. Bukti: Go 17 paket ok/4 tanpa
+tes + vet; mobile 206 tes lulus/6 skipped; E2E HTTPS Go nyata 5/5; stage typecheck/lint,
+build ARM64; APK tanpa CAMERA/media. TECNO LJ7 dengan izin ADB eksplisit: OTP tiga role,
+queue/filter/cari/empty/offline, detail/consent/audit, preview+invalidasi, Approve202→worker
+ACTIVE, Reject, Retry, replay timeout idempoten, expiry72jam, RBAC403, logout mencabut sesi.
+Dua defect runtime diperbaiki (polling menghapus halaman; UUID besar ditolak validator).
+TalkBack/font scaling NOT_RUN (tanpa izin settings). Temuan terbuka F1 logout setelah access
+token kedaluwarsa, F2 crash video login, F3 tombol konfirmasi sesaat nonaktif. Laporan A–M:
+`FL_ENR03_TECHNICAL_REPORT.md`. **STOP; NO-GO human capture/production/commit otomatis.**
+
+**FL-ENR02B-R2 — happy path LIVE DEVICE PASS; keseluruhan PARTIAL (26 Oktober 2026).**
+Blocker positive readiness/same-frame R1 ditutup: fixture gambar mannequin pada layar,
+dwell1504.66ms/32 sampel; frame1512 sama pada READY/capture/consume/release.
+Native stale/duplicate ditolak; ownedBytes0/heldFrames0/busyfalse sesudah consume.
+Tidak ada upload/enrollment ACTIVE; main dan10 settings utuh, cleanup selesai.
+Residual: prefix trace awal, mirror/crop visual absolut, background/cancel saat encoding.
+Laporan A–M: `FL_ENR02B_R2_READINESS_CAPTURE_REPORT.md`; TEST_PLAN §16.
+**STOP pada saat itu; FL-ENR03 kemudian dikerjakan sebagai staging synthetic sesuai entri di atas.**
+
+**Catatan historis FL-ENR02B-R1 — PARTIAL; positive capture saat itu masih blocker (26 Oktober 2026).**
+TECNO LJ7: izin baru sebelum ADB; startup/consent/permission, preview mannequin,
+NO_FACE/TOO_FAR dan cancel/Back/background tanpa camera auto-resume teramati.
+Trace READY/CONSUME belum ada; unit/build PASS bukan live capture PASS.
+Fix sink detach saat host destruction dan copy intro mannequin. Kamera ditutup,
+staging force-stopped/installed, layanan dan reverse task dihentikan; main utuh.
+Laporan A–M: `FL_ENR02B_R1_ANDROID_ACCEPTANCE_REPORT.md`; TEST_PLAN §15.
+**NO-GO Admin Enrollment UI integration, live submission/manusia/production otomatis.**
+
+**FL-ENR02B — PARTIAL; offline native integration + staging builds selesai, live camera NOT_RUN (26 Oktober 2026).**
+```
+FaceLinkCaptureLive CAM00 ditambahkan; detector patch; dua mode terpisah.
+Synthetic default tanpa CAMERA; mannequin staging dengan CAMERA/FLAG_SECURE.
+147 tes mobile/staging, export1622 modules, mannequin debug BUILD SUCCESSFUL.
+```
+Live guidance/consume/mannequin/permission/device belum dijalankan. Laporan A–L:
+`FL_ENR02B_TECHNICAL_REPORT.md`; TEST_PLAN §14. NO device/kamera/human/production.
+
+**FL-ENR02A-R2 — PARTIAL; GO terbatas synthetic-only (26 Oktober 2026).**
+Video login tidak dipasang selama session restore/redirect; warning
+`TextureVideoView/already released` yang direproduksi pra-fix hilang pada A/B
+TECNO LJ7 pasca-fix, tanpa FATAL. Accessibility: target48dp, heading, label,
+checkbox hint, announcement status, label progress, copy offline tegas, font2.0.
+Residual: TalkBack penuh dan kontras putih pada tombol merah. Main/staging143
+tes/typecheck/lint dan export/bundling lulus. Laporan A–H:
+`FL_ENR02A_R2_VIDEO_ACCESSIBILITY_REPORT.md`; TEST_PLAN §13.
+**NO-GO FL-ENR02B otomatis.**
+
+**FL-ENR02A-R1 — PARTIAL keseluruhan; alur inti perangkat sintetis PASSED (26 Oktober 2026).**
+TECNO LJ7 + staging terpisah + HTTPS nyata membuktikan consent, scan/cancel,
+Pending/Reject/retry/ACTIVE/withdrawal/Expired, offline-stale dan cold relaunch.
+Main APK dan enam setting HP tetap sama; tanpa kamera atau DB Product Owner.
+Automated HTTPS3 subtest,139 tes mobile/typecheck/lint, backend16 paket/vet/smoke lulus.
+Residual: warning lifecycle expo-video host (ANDROID_SETUP §17d), TalkBack belum diuji.
+Cleanup selesai, staging tetap installed/force-stopped. Laporan A–M:
+`FL_ENR02A_R1_ANDROID_ACCEPTANCE_REPORT.md`; TEST_PLAN §12. NO-GO ENR02B otomatis.
+
+**FL-ENR02A — implementasi/verifikasi offline selesai; acceptance UI Android PARTIAL (26 Oktober 2026).**
+Staging terpisah, consent/status aktual, guided scan fixture sintetis,
+submission/review/withdrawal tersedia; main default-off. Main/staging139 tes,
+typecheck/lint, E2E client/backend nyata dan build debug ARM64 lulus.
+UI visual/device/OTP staging belum dijalankan: memerlukan izin ADB/install baru.
+Tidak ada capture manusia, migrasi database Product Owner atau production.
+Laporan A–L: `FL_ENR02A_TECHNICAL_REPORT.md`; `TEST_PLAN.md` §11.
+**NO-GO FL-ENR02B otomatis; STOP setelah laporan.**
+
+**FL-ENR01B — SELESAI untuk backend sintetis/disposable (26 Oktober 2026, belum commit/merge/deploy).**
+Notice/consent/withdrawal, satu JPEG pending terenkripsi TTL72jam, review
+attestation Admin, processor internal test-only, activation AES-256-GCM,
+fencing/idempotency, retry terbatas, audit atomik, dan reconciliation tersedia.
+Dua belas route hanya aktif jika service diinjeksi; `cmd/server` tetap nil.
+Migrasi `synthetic-migrations/00007` berada di luar discovery normal dan hanya
+dipakai fixture disposable. Go tests 16 paket + vet + smoke HTTPS lulus; race
+dan runtime Linux NOT_RUN. **NO-GO** manusia, production, migrasi database
+Product Owner, dan FL-ENR02 otomatis. Laporan: `FL_ENR01B_TECHNICAL_REPORT.md`;
+bukti acceptance: `TEST_PLAN.md` §10 / `PROJECT_STATE.md`.
+
+**FL-CORE02 — SELESAI (25 Oktober 2026, nonbiometrik, belum commit/merge/deploy).**
+Lifecycle sesi dan attendance foundation tersedia; hanya fallback manual yang
+aktif, Face Recognition tetap mekanisme utama yang direncanakan. RBAC/scope,
+student own history, uniqueness, idempotency snapshot, koreksi beralasan,
+audit rollback dan concurrency diuji; migration006 hanya disposable.
+Go tests/vet dan smoke HTTPS lulus; race detector NOT_RUN.
+Gate berikutnya hanya review scope integrasi: **NO-GO otomatisasi biometrik**
+tanpa persetujuan/dependensi tersendiri; tidak memulai task berikutnya.
+Pemetaan acceptance 1–18 dan residual ada di `TEST_PLAN.md` §9 / PROJECT_STATE.
+
+
+**FL-CORE01 — SELESAI (25 Oktober 2026, nonbiometrik, belum commit/merge).**
+People CRUD, external_code/NIM immutable unik global, explicit Admin roster
+attestation, active-mahasiswa binding satu-ke-satu, kelas/membership, RBAC,
+audit atomik, validation/concurrency/idempotency dan fixture sintetis tersedia.
+Seluruh tes Go, vet, smoke HTTPS SQLite WAL disposable, dan uji upgrade/rollback
+ledger lulus. Migration `00005` belum diterapkan ke database Product Owner.
+Tidak menyetujui P01–P12 atau FL-ENR01. Rekomendasi berikutnya: tinjau scope
+FL-CORE02 untuk sesi dan absensi manual; **belum dimulai**, memerlukan tugas
+terpisah yang disetujui. R5/ENR00/ENR00R di bawah tetap riwayat, bukan dihapus.
+
 | Tugas | Hasil yang diinginkan | Ketergantungan | Bukti penerimaan |
 |---|---|---|---|
 | FL-001 | Rapikan repo, dokumen, `.gitignore`, pemeriksaan rahasia | Review pemilik | Tidak ada rahasia/data biometrik di Git |
@@ -69,3 +246,67 @@ Baris **FL-CV02A** ditambahkan dari pekerjaan pada cabang `research/fl-cv02a-fac
 - **Keputusan rekayasa yang penting.** Aturan keputusan diterapkan satu kali oleh `evaluation.status_uji()`, yang meniru urutan `matcher.cocokkan()`; kesetaraannya diuji pada vektor acak. Wajah tak dikenal yang ambigu kini **tidak** dihitung sebagai penerimaan — sebelumnya skor teratas yang lolos ambang dihitung diterima walau sistem tidak menyatakan identitas. `HasilUji` menyimpan skor seluruh identitas sehingga distribusi impostor dan margin tidak kehilangan data.
 - **Pengujian yang benar-benar dijalankan.** `pytest` di `services/face-engine`: **102 lulus, 1 dilewati** (gambar acak tanpa wajah pada `test_models.py:122`). Smoke: `calibrate --help`, `--peserta 1` → exit 2, sesi persetujuan lewat stdin, dan laporan sintetis memuat seluruh bagian.
 - **Yang belum ada.** **Tidak ada peserta manusia yang diukur.** Seluruh angka pada `docs/CALIBRATION_FL_CV02A.md` berasal dari vektor sintetis dan membuktikan aritmetika alat, bukan performa model. **Q-07 tetap terbuka.**
+
+## Residual FL-OTP01E-R5 dan gate FL-ENR00 (24 Oktober 2026)
+
+Ini pencatatan temuan, bukan izin mengubah source, provider, DNS, akun, UI,
+atau mengumpulkan biometrik. Bukti lengkap: `EMAIL_OTP.md` bagian R5.
+
+| Residual existing | Status / bukti | Kriteria penutupan terpisah |
+|---|---|---|
+| Original-hop Gmail DMARC tidak aligned | PARTIAL sender-security; PASS final berasal dari Cloudflare forwarding, bukan Gmail domain signing (`EMAIL_OTP.md` §FL-OTP01T-R) | Keputusan pemilik atas pengiriman aligned/risk acceptance; header asli terverifikasi, tanpa mengganti SMTP/DNS diam-diam |
+| PATCH display_name tanpa audit khusus | Gap terbukti pada `backend/internal/httpapi/admin_handlers.go:149-179` | Perubahan audit disetujui terpisah; actor/entity/perubahan nama tercatat tanpa PII berlebihan |
+| Dokumentasi invitation Google-only | `API_CONTRACT.md:539-541`, `ANDROID_SETUP.md:1240-1244` masih menyebut Google-only; OTP kini mengaktifkan invited | Selaraskan dokumen pada tugas tersendiri tanpa mengubah admin-only invitation atau menganggap POST users mengirim email |
+| Validasi email invitation lebih longgar dari OTP | Invitation hanya trim/lowercase/nonempty; OTP memvalidasi sintaks/panjang/display-name/CRLF | Setujui parity validasi dan regresi perilaku; tidak menambah pembatasan domain Google |
+| Distribusi asset video pada fresh clone | MP4 ignored, hanya lokal; fallback ScanBackdrop sudah ada, paritas video belum reproducible | Pemilik memilih klip aman didistribusikan, backdrop kode, atau batas demo lokal; jangan commit video wajah atau ubah ignore tanpa izin |
+| Blank intermiten video | PARTIAL RCA; pemulihan UI03 dan konfirmasi video normal tidak membuktikan root cause lama | Reproduksi terkontrol dan bukti penyebab sebelum patch; backup preserved tetap disimpan |
+| Restore/refresh HP dan live RBAC target | PARTIAL; logout server target terbukti, tetapi restore/rotation target dan live 403 belum | Uji manual minimum R5, principal terpisah, tanpa ekstraksi token HP; tambah cakupan HTTP Mahasiswa→Dosen pada tugas pengujian yang disetujui |
+
+### FL-ENR00 — review kesiapan consent/enrollment, belum izin implementasi
+
+**GO hanya review kontrak/kesiapan; NO-GO enrollment biometrik nyata.** Literal
+`Persetujuan / Aktif / biometrik` di `app/(app)/mahasiswa.tsx:50-55` dan fixture
+`mockData.ts:108-112` tidak berasal dari backend. Snapshot R5 memiliki nol
+`people`, `consent_records`, dan `face_enrollments`; login OTP bukan consent.
+Ini gap untuk penggunaan live; UI tidak diubah pada R5 sesuai instruksi.
+
+Sebelum implementasi/penangkapan wajah, sepakati dan buktikan:
+
+- Pemisahan aktivasi akun, tautan peserta, consent eksplisit/versioned, dan
+  enrollment; tidak menafsirkan fixture atau login sebagai persetujuan.
+- Cakupan role dan authorization live, status consent sebenarnya dari backend,
+  serta UI yang tidak mengklaim “Aktif” tanpa data yang sah.
+- Pencabutan izin/penghapusan template dan jalur absensi manual yang setara
+  (terkait FL-012/FL-023/FL-033).
+- Scope FL-ENR00 dan acceptance gate disetujui pemilik secara terpisah.
+
+### Proposal FL-ENR00 tersedia — menunggu review, bukan izin FL-ENR01
+
+Spesifikasi A–O: [`FACE_ENROLLMENT_V1.md`](FACE_ENROLLMENT_V1.md).
+Rencana: self-consent Mahasiswa → satu foto pending terenkripsi → review
+identitas kampus Admin → ekstraksi YuNet/SFace → ACTIVE hanya setelah
+template terenkripsi berkomit. Tidak ada implementasi atau migrasi pada tahap ini.
+
+- Review konflik kontrak lama dan keputusan P01–P12 sebelum menyetujui cutover.
+- Prasyarat: roster/person/link sah, absensi manual operasional, KeyProvider,
+  encrypted storage/deletion, authenticated extraction service, dan capture/
+  preview memory-only yang terbukti pada perangkat.
+- Acceptance T01–T24 merupakan rencana **BELUM DIJALANKAN**, bukan hasil PASS.
+- Bukti/temuan R5 tetap berlaku; proposal tidak menutup sender-security,
+  restore/refresh HP target, live RBAC 403, atau kalibrasi Q-07.
+- **GO review spesifikasi; NO-GO FL-ENR01/capture nyata sebelum approval.**
+
+### FL-ENR00R — decision package, belum persetujuan
+
+Review kritis: [`FACE_ENROLLMENT_DECISION_REVIEW.md`](FACE_ENROLLMENT_DECISION_REVIEW.md).
+Status P01–P12: **OPEN** P01–P04/P07/P10; **BLOCKED** P09 (kamera) dan
+P11 (prasyarat); **RECOMMENDED dengan koreksi** P05/P06/P08/P12.
+Temuan utama: approval foto belum mengikat akun pengirim ke orang yang
+hadir; foto pending 7 hari bertentangan dengan kebijakan; API people,
+kelas, sesi, dan absensi manual masih kontrak sehingga gate D-030 belum
+terpenuhi; AAD/template unik/enum consent dan konflik timer/startup D-030
+perlu diputuskan. Rekomendasi: alur synchronous/supervisi, pending
+≤30 menit bila perlu, tanpa job/lease table, audit+activation satu
+transaksi, binding code Admin–Mahasiswa.
+**GO** implementasi prasyarat nonbiometrik dan review keputusan;
+**NO-GO** FL-ENR01, migration, template write, kamera, capture nyata.

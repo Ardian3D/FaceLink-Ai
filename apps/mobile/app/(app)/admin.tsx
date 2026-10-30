@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import { Alert, StyleSheet, View } from "react-native";
+import { useRouter } from "expo-router";
+import { adminEnrollmentStagingAktif } from "@/features/adminEnrollment/staging";
 
 import { AppText } from "@/components/AppText";
 import { BarChart, Sparkline } from "@/components/dashboard/Charts";
@@ -31,6 +33,7 @@ import {
  */
 export default function AdminDashboard() {
   const { colors } = useTheme();
+  const router = useRouter();
   const [filter, setFilter] = useState("semua");
 
   // Angka mengikuti ringkasan yang sama dengan data contoh: 48 peserta
@@ -155,6 +158,10 @@ export default function AdminDashboard() {
               onPress={() => bukaPintasan(p.id)}
             />
           ))}
+          {adminEnrollmentStagingAktif ? (
+            <QuickAction icon="scan-outline" label="Face Enrollment · Pengajuan"
+              onPress={() => router.push("/admin-enrollment")} />
+          ) : null}
         </View>
       </View>
     </DashboardShell>

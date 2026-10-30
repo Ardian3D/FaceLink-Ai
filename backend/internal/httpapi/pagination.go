@@ -28,6 +28,10 @@ const (
 	jenisKursorAkun = "u"
 	// jenisKursorKelas adalah penanda kursor daftar kelas (`GET /me/classes`).
 	jenisKursorKelas = "k"
+	// jenisKursorPerson adalah penanda kursor daftar peserta (`GET /people`).
+	jenisKursorPerson = "p"
+	// jenisKursorDaftarKelas berbeda dari /me/classes dan memakai code + id.
+	jenisKursorDaftarKelas = "c"
 )
 
 // permintaanHalaman adalah parameter paginasi yang sudah divalidasi.
@@ -89,6 +93,12 @@ func kursorAkun(createdAt, id string) string {
 // ditentukan id kelas.
 func kursorKelas(id string) string {
 	return bikinKursor(jenisKursorKelas, "", id)
+}
+
+// kursorPerson membuat kursor buram untuk daftar peserta, memakai kunci
+// `(created_at, id)` agar penambahan baris baru tidak menggeser halaman.
+func kursorPerson(createdAt, id string) string {
+	return bikinKursor(jenisKursorPerson, createdAt, id)
 }
 
 func bikinKursor(jenis, kunci, id string) string {

@@ -6,6 +6,7 @@ import { AppButton } from "@/components/AppButton";
 import { AppText } from "@/components/AppText";
 import { BrandLogo } from "@/components/BrandLogo";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
+import { MailIcon } from "@/components/MailIcon";
 import { Screen } from "@/components/Screen";
 import { StateView } from "@/components/StateView";
 import { VideoBackground } from "@/components/VideoBackground";
@@ -23,10 +24,8 @@ import { BrandThemeScope, layout, spacing, useTheme } from "@/theme";
  * dan tombol tetap terbaca. Lapisan itu makin pekat ke bawah, jadi bagian atas
  * video tetap terlihat.
  *
- * Satu tombol, satu jalur: "Continue with Google" meminta nonce ke backend,
- * menjalankan Google Sign-In, lalu menukar ID token menjadi sesi FaceLink AI.
- * Tidak ada tombol "Skip", tidak ada masuk tanpa verifikasi, dan tidak ada
- * jalur yang menentukan role sendiri — role datang dari backend.
+ * FaceLink Email OTP menjadi jalur masuk utama. Implementasi Google tetap
+ * tersedia di lapisan autentikasi, tetapi tombolnya tidak dapat diaktifkan.
  *
  * Setiap kegagalan yang mungkin terjadi punya kalimat dan tindakan sendiri.
  * Menampilkan "gagal" untuk semua sebab akan menyuruh pengguna memperbaiki hal
@@ -47,7 +46,7 @@ export default function LoginScreen() {
 function LayarMasuk() {
   const { colors } = useTheme();
   const router = useRouter();
-  const { status, error, session, tahap, startSignIn, ulangiPemulihan } = useSession();
+  const { status, error, session, tahap, ulangiPemulihan } = useSession();
   const mengecek = status === "checking";
   const memulihkan = status === "memulihkan";
   // Efek di bawah bergantung pada `tahap`, yang berubah dua kali selama proses
@@ -74,6 +73,13 @@ function LayarMasuk() {
     if (status === "signedOut" || status === "failed") sudahNavigasi.current = false;
   }, [router, status, tahap]);
 
+  // Jangan memasang pemutar video selama sesi masih dipulihkan. Bila sesi sah,
+  // layar ini langsung redirect; memasang video lebih awal membuat VideoView
+  // dan shared player dilepas bersamaan dan memicu warning native
+  // "shared object already released" pada sebagian timing Android.
+  const videoAktif =
+    status !== "memulihkan" && status !== "signedIn" && status !== "unregistered";
+
   // Sesi yang sudah sah tidak perlu melihat layar masuk lagi.
   if (status === "signedIn" && session !== null) {
     return <Redirect href={roleHome[session.user.role]} />;
@@ -87,7 +93,7 @@ function LayarMasuk() {
 
   return (
     <View style={[styles.layar, { backgroundColor: colors.background }]}>
-      <VideoBackground />
+      {videoAktif ? <VideoBackground /> : null}
       <LinearGradient
         colors={[
           colors.overlayLight,
@@ -116,12 +122,13 @@ function LayarMasuk() {
               />
             ) : (
               <>
-                <GoogleSignInButton
-                  onPress={() => {
-                    void startSignIn();
-                  }}
-                  loading={mengecek}
+                <AppButton
+                  label="Continue with FaceLink"
+                  icon={<MailIcon size={22} color={colors.onAccent} />}
+                  onPress={() => router.push("/email-login")}
+                  disabled={mengecek}
                 />
+                <GoogleSignInButton label="Continue with Google" disabled />
                 <AppText variant="caption" color={colors.textSecondary} center>
                   Masuk memerlukan internet. Role akun ditentukan backend FaceLink
                   AI, bukan oleh aplikasi.
@@ -216,7 +223,7 @@ function pesanGalat(
       return {
         judul: "Layanan masuk belum siap",
         keterangan:
-          "Backend belum dikonfigurasi untuk Google Sign-In. Hubungi admin; percobaan ulang tidak akan berhasil sampai konfigurasi server diperbaiki.",
+          "Layanan autentikasi belum siap. Hubungi admin untuk memeriksa konfigurasi server.",
         bisaUlangi: false,
       };
     case "playServices":
@@ -233,11 +240,24 @@ function pesanGalat(
           "Masuk dengan Google memerlukan development build atau APK di perangkat Android. Pratinjau web dan Expo Go tidak memuat modul native yang dibutuhkannya.",
         bisaUlangi: false,
       };
+    case "signOutIncomplete":
+      return {
+        judul: "Keluar belum terkonfirmasi sepenuhnya",
+        keterangan: [
+          error.localCleared
+            ? "Kredensial lokal sudah dihapus."
+            : "Penghapusan kredensial perangkat belum terkonfirmasi; jangan anggap perangkat sudah bersih.",
+          error.remoteRevoked
+            ? "Sesi server sudah dicabut."
+            : "Pencabutan sesi server belum terkonfirmasi. Hubungi Admin untuk mencabut sesi perangkat ini.",
+        ].join(" "),
+        bisaUlangi: false,
+      };
     case "sessionEnded":
       return {
         judul: "Sesi berakhir",
         keterangan:
-          "Sesi Anda tidak berlaku lagi. Masuk kembali dengan Google untuk melanjutkan.",
+          "Sesi Anda tidak berlaku lagi. Masuk kembali dengan FaceLink untuk melanjutkan.",
         bisaUlangi: false,
       };
     case "identityRejected":
@@ -255,7 +275,7 @@ function pesanGalat(
       };
     case "googleDevice":
       return {
-        judul: "Tidak ada akun Google",
+        judul: "Pemilihan akun Google belum berhasil",
         keterangan:
           "Credential Manager tidak menghasilkan akun Google: perangkat belum memiliki akun, lembar akun ditutup sebelum memilih, atau layanan Google tidak merespons tepat waktu. Periksa akun di Pengaturan Android, lalu coba lagi.",
         bisaUlangi: true,

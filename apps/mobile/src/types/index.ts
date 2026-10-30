@@ -85,6 +85,8 @@ export type SessionError =
   | { kind: "unknown"; message: string }
   /** Sesi tidak lagi berlaku di server (dicabut, akun ditangguhkan, atau token tidak dikenal). */
   | { kind: "sessionEnded" }
+  /** Local sign-out completed with unconfirmed remote revocation or storage deletion. */
+  | { kind: "signOutIncomplete"; remoteRevoked: boolean; localCleared: boolean }
   /**
    * Google ID token ditolak backend (): tanda tangan,
    * audience, waktu, atau nonce tidak cocok. Berbeda dari `sessionEnded`: tidak

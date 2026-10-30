@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/Ardian3D/FaceLink-Ai/backend/internal/audit"
 	"github.com/Ardian3D/FaceLink-Ai/backend/internal/ids"
 )
 
@@ -147,7 +148,6 @@ func (s *Store) Authenticate(ctx context.Context, accessToken string) (Session, 
 // kembali dianggap pemakaian ulang: sesinya dicabut lalu ErrRefreshReused
 // dikembalikan, sehingga pencuri token tidak mendapat sesi yang dapat dipakai.
 func (s *Store) Refresh(ctx context.Context, refreshToken string) (Pair, error) {
-	now := s.clk.Now().UTC()
 	hashDiminta := hashToken(refreshToken)
 
 	var (
@@ -156,6 +156,7 @@ func (s *Store) Refresh(ctx context.Context, refreshToken string) (Pair, error) 
 	)
 
 	err := s.dalamTransaksiImmediate(ctx, func(conn *sql.Conn) error {
+		now := s.clk.Now().UTC()
 		// 1. Token penyegar yang masih berlaku.
 		baris, err := s.bacaPenyegar(ctx, conn, sqlCariLewatPenyegar, hashDiminta)
 		if err != nil {
@@ -250,89 +251,65 @@ func (s *Store) Refresh(ctx context.Context, refreshToken string) (Pair, error) 
 	return pair, nil
 }
 
-// Revoke mencabut satu sesi. Pencabutan bersifat idempoten: memanggilnya pada
-// sesi yang sudah tercabut berhasil tanpa mengubah alasan dan waktu pencabutan
-// yang pertama. Sesi yang tidak ada menghasilkan ErrNotFound.
-//
-// Batas waktu pencabutan diperiksa lebih dahulu: mencabut sesi yang sudah
-// kedaluwarsa tidak mengubah apa pun, sehingga jawabannya `404` sesuai kontrak
-// §5.1 ("mencabut sesi yang sudah tercabut mengembalikan 404") dan keadaan itu
-// tetap dapat dibedakan dari pencabutan yang benar-benar terjadi.
-func (s *Store) Revoke(ctx context.Context, sessionID, reason string) error {
-	now := s.clk.Now().UTC()
-	tercabut, err := s.RevokeOwned(ctx, sessionID, "", now, reason)
-	if err != nil {
-		return err
-	}
-	if !tercabut {
-		return fmt.Errorf("sesi: sesi %s tidak ditemukan: %w", sessionID, ErrNotFound)
-	}
-	return nil
+// Logout mencabut hanya sesi pemilik token penyegar saat ini atau satu generasi
+// sebelumnya. Pencarian, pencabutan, dan audit diserialkan dengan rotasi dalam
+// BEGIN IMMEDIATE; jalur ini tidak pernah menjalankan deteksi reuse Refresh.
+// Kredensial sesi yang sudah dicabut berhasil tanpa menimpa alasan atau audit.
+func (s *Store) Logout(ctx context.Context, refreshToken, requestID string) error {
+	hashDiminta := hashToken(refreshToken)
+	return s.dalamTransaksiImmediate(ctx, func(conn *sql.Conn) error {
+		now := s.clk.Now().UTC()
+		baris, err := s.bacaPenyegar(ctx, conn, sqlCariLewatPenyegar, hashDiminta)
+		if err != nil {
+			return err
+		}
+		if baris == nil {
+			baris, err = s.bacaPenyegar(ctx, conn, sqlCariLewatPenyegarLama, hashDiminta)
+			if err != nil {
+				return err
+			}
+		}
+		if baris == nil {
+			return ErrRefreshInvalid
+		}
+		sesi := baris.sesi
+		if sesi.RevokedAt != nil {
+			return nil
+		}
+		if !now.Before(sesi.AbsoluteExpiresAt) {
+			return ErrRefreshInvalid
+		}
+		if err := s.cabutDiTransaksi(ctx, conn, sesi.ID, now, "logout"); err != nil {
+			return err
+		}
+		return audit.NewWriter(conn, s.clk).Record(ctx, audit.Event{
+			ActorType: audit.ActorUser, ActorID: sesi.UserID, Action: "auth.logout",
+			EntityType: "session_token", EntityID: sesi.ID, Result: audit.ResultSuccess,
+			RequestID: requestID, Metadata: map[string]string{"session_id": sesi.ID},
+		})
+	})
 }
 
-// RevokeOwned mencabut satu sesi dengan pemeriksaan cakupan kepemilikan.
-//
-// ownerID kosong berarti pemanggil berwenang atas sesi mana pun (admin pada
-// `DELETE /auth/sessions/{session_id}`, kontrak §5.1). ownerID terisi berarti
-// sesi hanya boleh dicabut bila memang milik pengguna itu — inilah yang menjaga
-// sesi yang dibatalkan pengguna lain tidak dapat dicabut lewat jalur ini, dan
-// membuat percobaan seperti itu tidak dapat membedakan "bukan milik saya" dari
-// "tidak ada" (keduanya `404`).
-//
-// Nilai balik kedua false berarti tidak ada yang dicabut: sesi tidak ada,
-// bukan milik ownerID, atau sudah tercabut.
-func (s *Store) RevokeOwned(ctx context.Context, sessionID, ownerID string, now time.Time, reason string) (bool, error) {
-	// 1. Jalur cepat: pencabutan langsung oleh pemilik sesi atau admin. Sesi
-	// yang sudah kedaluwarsa tidak disentuh agar jawabannya tetap 404.
+// Revoke mencabut satu sesi lewat jalur administratif. Sesi yang tidak ada,
+// sudah tercabut, atau kedaluwarsa menghasilkan ErrNotFound (HTTP 404).
+func (s *Store) Revoke(ctx context.Context, sessionID, reason string) error {
+	now := formatWaktu(s.clk.Now().UTC())
 	hasil, err := s.db.ExecContext(ctx,
 		`UPDATE session_tokens SET revoked_at = ?, revoked_reason = ?
 		  WHERE id = ? AND revoked_at IS NULL
-		    AND (access_expires_at > ? OR refresh_expires_at > ?)
-		    AND (? = '' OR user_id = ?)`,
-		formatWaktu(now), reason, sessionID, formatWaktu(now), formatWaktu(now), ownerID, ownerID)
+		    AND (access_expires_at > ? OR refresh_expires_at > ?)`,
+		now, reason, sessionID, now, now)
 	if err != nil {
-		return false, fmt.Errorf("sesi: mencabut sesi %s: %w", sessionID, err)
+		return fmt.Errorf("sesi: mencabut sesi %s: %w", sessionID, err)
 	}
 	jumlah, err := hasil.RowsAffected()
 	if err != nil {
-		return false, fmt.Errorf("sesi: menghitung baris tercabut untuk sesi %s: %w", sessionID, err)
+		return fmt.Errorf("sesi: menghitung baris tercabut untuk sesi %s: %w", sessionID, err)
 	}
-	if jumlah == 1 {
-		return true, nil
+	if jumlah == 0 {
+		return fmt.Errorf("sesi: sesi %s tidak ditemukan: %w", sessionID, ErrNotFound)
 	}
-
-	// 2. Nol baris: sesinya sudah tercabut, sudah kedaluwarsa, tidak ada, atau
-	// bukan milik ownerID. Keadaan baris dibaca untuk membedakannya.
-	var (
-		userID     string
-		revokedAt  sql.NullString
-		accessExp  string
-		refreshExp string
-	)
-	err = s.db.QueryRowContext(ctx,
-		`SELECT user_id, revoked_at, access_expires_at, refresh_expires_at FROM session_tokens WHERE id = ?`,
-		sessionID).Scan(&userID, &revokedAt, &accessExp, &refreshExp)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("sesi: memeriksa keberadaan sesi %s: %w", sessionID, err)
-	}
-
-	if revokedAt.Valid {
-		return false, nil
-	}
-	if ownerID != "" && userID != ownerID {
-		return false, nil
-	}
-	batas, err := parseWaktu(refreshExp)
-	if err != nil {
-		return false, fmt.Errorf("sesi: membaca batas sesi %s: %w", sessionID, err)
-	}
-	if !now.Before(batas) {
-		return false, nil
-	}
-	return true, nil
+	return nil
 }
 
 // ListActiveForUser mengembalikan sesi aktif satu pengguna. Sesi yang sudah

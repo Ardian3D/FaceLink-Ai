@@ -173,7 +173,7 @@ func TestSQLDirectoryMembacaCakupanNyata(t *testing.T) {
 		`INSERT INTO people (id, external_code, display_name) VALUES ('p1','P001','Peserta Satu'), ('p2','P002','Peserta Dua')`,
 		`INSERT INTO class_lecturers (class_id, user_id, assigned_by) VALUES ('c1','d1','a1')`,
 		`INSERT INTO class_memberships (class_id, person_id, created_by) VALUES ('c1','p1','a1')`,
-		`INSERT INTO people (id, external_code, display_name, account_user_id) VALUES ('p3','P003','Peserta Tiga','m1')`,
+		`INSERT INTO people (id, external_code, display_name, account_user_id, identity_reference, identity_verified_at) VALUES ('p3','P003','Peserta Tiga','m1','roster-sintetis/P003','2026-10-16T00:00:00.000Z')`,
 		`UPDATE class_memberships SET left_at = '2026-10-16T00:00:00.000Z' WHERE class_id = 'c1' AND person_id = 'p1'`,
 	}
 	for _, stmt := range seed {

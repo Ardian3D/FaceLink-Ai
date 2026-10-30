@@ -1,0 +1,71 @@
+{
+  "status": "PARTIAL",
+  "width": 1080,
+  "height": 2460,
+  "nonBlackRgbPixels": 14069,
+  "maxRgbChannel": 255,
+  "storedImage": false,
+  "scope": "Current prototype secure screen; screenshot bytes processed only in host memory, not persisted. No recents/other-app visual capture.",
+  "regionInvestigation": {
+    "nonBlackBands": {
+      "0": 6853,
+      "500": 1141,
+      "600": 826,
+      "2400": 3488
+    },
+    "bounds": {
+      "minX": 60,
+      "minY": 47,
+      "maxX": 1079,
+      "maxY": 2443
+    },
+    "innerRect": [
+      0,
+      70,
+      1080,
+      2390
+    ],
+    "innerNonBlackPixels": 4572
+  },
+  "appContent": {
+    "rect": [
+      70,
+      120,
+      1010,
+      2350
+    ],
+    "nonBlackPixels": 0,
+    "status": "PASSED"
+  },
+  "nonBlackBandBounds": {
+    "0": {
+      "pixels": 6896,
+      "minX": 60,
+      "maxX": 1020,
+      "minY": 47,
+      "maxY": 83
+    },
+    "500": {
+      "pixels": 1141,
+      "minX": 1066,
+      "maxX": 1079,
+      "minY": 514,
+      "maxY": 599
+    },
+    "600": {
+      "pixels": 826,
+      "minX": 1066,
+      "maxX": 1079,
+      "minY": 600,
+      "maxY": 662
+    },
+    "2400": {
+      "pixels": 3488,
+      "minX": 365,
+      "maxX": 714,
+      "minY": 2434,
+      "maxY": 2443
+    }
+  },
+  "limitations": "Whole-screen all-black assertion is PARTIAL: top/bottom and right-edge nonblack pixels remain; origin not independently attributed. Audited central app content is black. No system controls changed or other-app thumbnail captured."
+}

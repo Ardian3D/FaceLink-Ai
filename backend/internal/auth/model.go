@@ -105,10 +105,20 @@ type LecturerAssignment struct {
 
 // Person adalah potret satu baris peserta seperlunya respons API (kontrak §5.2).
 // AccountUserID kosong berarti peserta belum tertaut akun mana pun.
+//
+// Note, IdentityReference, dan IdentityVerifiedAt adalah fondasi roster
+// nonbiometrik FL-CORE01. IdentityVerifiedAt berarti admin aktif secara
+// eksplisit mengesahkan referensi kampus nonkosong, bukan verifikasi email/KYC.
 type Person struct {
-	ID            string
-	ExternalCode  string
-	DisplayName   string
-	Status        string
-	AccountUserID string
+	ID                 string
+	ExternalCode       string
+	DisplayName        string
+	Status             string
+	Note               string
+	IdentityReference  string
+	IdentityVerifiedAt *time.Time
+	AccountUserID      string
+	ConsentState       string
+	EnrollmentState    string
+	CreatedAt          time.Time
 }

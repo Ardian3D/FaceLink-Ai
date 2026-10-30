@@ -1,0 +1,29 @@
+{
+  "coldStart": true,
+  "emailNavigation": {
+    "texts": [
+      "",
+      "FaceLink",
+      "Ai",
+      "LANGKAH 1/2",
+      "Masuk dengan FaceLink",
+      "Masukkan email yang telah diundang admin. Role dan akses akun ditentukan server FaceLink AI.",
+      "Alamat email",
+      "nama@facelink.online",
+      "Gunakan alamat yang sudah didaftarkan admin, misalnya nama@facelink.online.",
+      "Kirim kode verifikasi"
+    ],
+    "emailInputVisible": true,
+    "otpRequested": false,
+    "credentialsEntered": false
+  },
+  "backgroundThenResume": [
+    "FL-CAM03 · actual FaceLink host",
+    "Native capture verification uses synthetic fixtures only. This route exposes metadata, not images, uploads, OTP requests or sessions. Existing login video playback is observed separately through scalar SDK events; the normal host retains real HTTPS/auth dependencies.",
+    "Cancelled; native drain acknowledged.",
+    "RUN SYNTHETIC VERIFICATION"
+  ],
+  "cameraOpened": false,
+  "hardwareBackToLogin": false,
+  "explicitBackToLogin": true
+}

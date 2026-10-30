@@ -275,12 +275,6 @@ func (s Server) handleLinkPersonAccount(w http.ResponseWriter, r *http.Request) 
 		s.tulisGalatDomain(w, r, err)
 		return
 	}
-	s.catatAudit(r, audit.Event{
-		ActorType: audit.ActorUser, ActorID: principal.UserID, Action: "person.account_linked",
-		EntityType: "person", EntityID: personID, Result: audit.ResultSuccess,
-		Reason:   "Akun mahasiswa ditautkan ke baris peserta",
-		Metadata: map[string]string{"count": "1"},
-	})
 	// Kontrak §5.2 menuntut objek peserta dengan `account_user_id` terisi,
 	// sehingga klien dapat membaca hasil penautan tanpa permintaan tambahan.
 	writeData(w, r, http.StatusOK, personRing{
@@ -312,11 +306,6 @@ func (s Server) handleUnlinkPersonAccount(w http.ResponseWriter, r *http.Request
 		s.tulisGalatDomain(w, r, err)
 		return
 	}
-	s.catatAudit(r, audit.Event{
-		ActorType: audit.ActorUser, ActorID: principal.UserID, Action: "person.account_unlinked",
-		EntityType: "person", EntityID: personID, Result: audit.ResultSuccess,
-		Reason: "Tautan akun peserta dilepas",
-	})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -369,12 +358,6 @@ func (s Server) handleAssignLecturer(w http.ResponseWriter, r *http.Request) {
 		s.tulisGalatDomain(w, r, err)
 		return
 	}
-	s.catatAudit(r, audit.Event{
-		ActorType: audit.ActorUser, ActorID: principal.UserID, Action: "class.dosen_assigned",
-		EntityType: "class", EntityID: classID, Result: audit.ResultSuccess,
-		Reason:   "Penugasan dosen pada kelas",
-		Metadata: map[string]string{"count": "1"},
-	})
 
 	status := http.StatusOK
 	if dibuat {
@@ -389,16 +372,10 @@ func (s Server) handleRemoveLecturer(w http.ResponseWriter, r *http.Request) {
 	classID := chi.URLParam(r, "class_id")
 	userID := chi.URLParam(r, "user_id")
 
-	if err := s.Accounts.RemoveLecturer(r.Context(), classID, userID); err != nil {
+	if err := s.Accounts.RemoveLecturer(r.Context(), principal.UserID, classID, userID); err != nil {
 		s.tulisGalatDomain(w, r, err)
 		return
 	}
-	s.catatAudit(r, audit.Event{
-		ActorType: audit.ActorUser, ActorID: principal.UserID, Action: "class.dosen_removed",
-		EntityType: "class", EntityID: classID, Result: audit.ResultSuccess,
-		Reason:   "Penugasan dosen dicabut dari kelas",
-		Metadata: map[string]string{"count": "1"},
-	})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -497,6 +474,14 @@ func (s Server) handleMeClasses(w http.ResponseWriter, r *http.Request) {
 // kesalahan program tidak tersamar sebagai kesalahan pemanggil.
 func (s Server) tulisGalatDomain(w http.ResponseWriter, r *http.Request, err error) {
 	switch {
+	case errors.Is(err, auth.ErrActorUnauthorized):
+		writeErrorCode(w, r, http.StatusForbidden, codeForbiddenRole, pesanGalatAuth(codeForbiddenRole))
+	case errors.Is(err, auth.ErrDuplicateExternalCode):
+		writeErrorCode(w, r, http.StatusConflict, "DUPLICATE_EXTERNAL_CODE", "Kode peserta sudah digunakan.")
+	case errors.Is(err, auth.ErrPolicyConflict):
+		writeErrorCode(w, r, http.StatusConflict, "POLICY_CONFLICT", "Operasi bertentangan dengan kebijakan retensi atau sesi terbuka.")
+	case errors.Is(err, auth.ErrIdentityNotVerified), errors.Is(err, auth.ErrSubjectInactive), errors.Is(err, auth.ErrAccountInactive):
+		writeErrorCode(w, r, http.StatusConflict, codeConflict, "Identitas atau akun belum memenuhi syarat penautan.")
 	case errors.Is(err, auth.ErrNotFound), errors.Is(err, session.ErrNotFound):
 		writeErrorCode(w, r, http.StatusNotFound, codeNotFound, "Sumber daya tidak ditemukan.")
 	case errors.Is(err, auth.ErrLastAdminProtected):

@@ -1,0 +1,85 @@
+{
+  "branch": "feat/fl-otp01-email-auth",
+  "head": "87bac5e96602e9ff5568069d1c6b1bd1d96913b7",
+  "staged": 0,
+  "unstaged": 26,
+  "untracked": 25,
+  "adbUsed": false,
+  "apks": [
+    {
+      "name": "cam00-arm64-debug.apk",
+      "bytes": 77049870,
+      "sha256": "5fcecf9af04945769217f31019c4affe8eaf1251bb451b295f92c0c3c3dadf35"
+    },
+    {
+      "name": "cam01-arm64-release-r2.apk",
+      "bytes": 44718542,
+      "sha256": "d29092015bd779962b68b103bb370d726e721866fadd6d9375b002387349a955"
+    },
+    {
+      "name": "cam01-arm64-release.apk",
+      "bytes": 44718542,
+      "sha256": "221b5a5ea4d0ef08b9f7af82344547d694890855926e046d7d56ae2394518d59"
+    },
+    {
+      "name": "cam01-generated-release-preserved.apk",
+      "bytes": 44718542,
+      "sha256": "d29092015bd779962b68b103bb370d726e721866fadd6d9375b002387349a955"
+    },
+    {
+      "name": "cam02-arm64-release-diag.apk",
+      "bytes": 44748250,
+      "sha256": "839999c2cde86a7b06478f4586c2e83d2d085a963e8662b3e169f089371a1032"
+    },
+    {
+      "name": "cam02-arm64-release-r2.apk",
+      "bytes": 44748250,
+      "sha256": "e97cac1916731ab9c1ab544b32fb06aab557d155cb16d66def002d28fd225acb"
+    },
+    {
+      "name": "cam02-arm64-release.apk",
+      "bytes": 44748250,
+      "sha256": "f59604a278919dc24d563a1faaa3c71ed97c8a5c9a8697191b64c9f2fadb3e9c"
+    }
+  ],
+  "preservedGenerated": {
+    "name": "enr01a-cam02-generated-preserved.apk",
+    "bytes": 44748250,
+    "sha256": "e97cac1916731ab9c1ab544b32fb06aab557d155cb16d66def002d28fd225acb"
+  },
+  "phase": "Git/APK baseline before implementation and before new device permission; adbUsed:false applies to that baseline phase only.",
+  "finalApkPreservation": {
+    "status": "PASSED",
+    "originalApks": [
+      {
+        "name": "cam00-arm64-debug.apk",
+        "unchanged": true
+      },
+      {
+        "name": "cam01-arm64-release-r2.apk",
+        "unchanged": true
+      },
+      {
+        "name": "cam01-arm64-release.apk",
+        "unchanged": true
+      },
+      {
+        "name": "cam01-generated-release-preserved.apk",
+        "unchanged": true
+      },
+      {
+        "name": "cam02-arm64-release-diag.apk",
+        "unchanged": true
+      },
+      {
+        "name": "cam02-arm64-release-r2.apk",
+        "unchanged": true
+      },
+      {
+        "name": "cam02-arm64-release.apk",
+        "unchanged": true
+      }
+    ],
+    "generatedCam02Preserved": true
+  }
+}

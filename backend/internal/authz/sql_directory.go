@@ -59,7 +59,9 @@ func (d *SQLDirectory) PersonForUser(ctx context.Context, userID string) (string
 	var personID string
 	err := d.db.QueryRowContext(ctx,
 		`SELECT id FROM people
-		  WHERE account_user_id = ? AND deleted_at IS NULL`,
+		  WHERE account_user_id = ? AND deleted_at IS NULL AND status = 'active'
+		    AND identity_verified_at IS NOT NULL
+		    AND length(trim(COALESCE(identity_reference, ''))) > 0`,
 		userID).Scan(&personID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil

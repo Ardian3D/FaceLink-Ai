@@ -1,0 +1,541 @@
+{
+  "status": "PASSED",
+  "build": {
+    "command": "gradlew.bat assembleRelease -PreactNativeArchitectures=arm64-v8a --offline --console=plain",
+    "duration": "4m5s",
+    "buildSuccessful": true,
+    "r8": true,
+    "lintVital": true,
+    "revision": "R2; removed incidental error-prefix assertion, retained real-codec failure/no-handle/cleanup checks"
+  },
+  "apk": {
+    "name": "enr01a-arm64-release-r2.apk",
+    "bytes": 44778102,
+    "sha256": "03bcf25e56e1004c5a5506c949051e55107e69862d5509531dacdda9d9f71f26"
+  },
+  "packageLine": "package: name='ai.facelink.cam00proof' versionCode='1' versionName='0.0.1' platformBuildVersionName='17' platformBuildVersionCode='37' compileSdkVersion='37' compileSdkVersionCodename='17'",
+  "nativeCode": "native-code: 'arm64-v8a'",
+  "permissions": [
+    "uses-permission: name='android.permission.CAMERA'",
+    "uses-permission: name='ai.facelink.cam00proof.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'"
+  ],
+  "applicationDebuggable": false,
+  "manifestSecurityLines": [
+    "A: http://schemas.android.com/apk/res/android:allowBackup(0x01010280)=false",
+    "A: http://schemas.android.com/apk/res/android:extractNativeLibs(0x010104ea)=false",
+    "A: http://schemas.android.com/apk/res/android:usesCleartextTraffic(0x010104ec)=false",
+    "A: http://schemas.android.com/apk/res/android:screenOrientation(0x0101001e)=1"
+  ],
+  "bundle": [
+    {
+      "name": "assets/index.android.bundle",
+      "bytes": 1395924
+    }
+  ],
+  "zipAlignPassed": true,
+  "nativeLibraries": 23,
+  "elfLoadSegments": 69,
+  "elfAndZip16k": true,
+  "libraries": [
+    {
+      "name": "lib/arm64-v8a/libNitroImage.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "50bf8586cc3af9cbd26c6f84d5bdb633d84cee003bfa86e959b84d0dddf0ef2a",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libNitroModules.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "91f3c639a3e0b91fbf1769acba9f29e35c7afe47cf5c2bf875271532921e550d",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libVisionCamera.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "d2eea82c87d19b18ba4be9627046c34f45e028e8bd807ea905a0182f8c552f2c",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libVisionCameraFaceDetector.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "ea2e90279bacc7e8462d646406da020caffd494ed3ec78608e00317672a838df",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libappmodules.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "773eb1b68f5da89496edb6740e7072e5ebcb42733655fb75ce44bbc3ecdc52c8",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libc++_shared.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "3e852764502d06e0cf1080d532ae7c608b7649d946a3a9d7e84e3d4b7d683214",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libexpo-modules-core.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "602daa85e4f8c7503e398fbb7288904919876a804ae53f687b9ecf41f5ea2798",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libexpo-modules-jsi.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "7c555680e8abe5fa6c6820f5976830b0309a5189dfe2f089aebdcf592e9744c5",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libexpo-modules-v2.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "34b9b3aed43e299200d8790a4db222c3c35f1ec5dc93fd7f2d7ea80972f4c6e9",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libface_detector_v2_jni.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "d2d105239f5c723838a6bea81ee9cf828b8a56b4de4bc1f4a2556b320d758851",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libfbjni.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "a9e35ba55d3f956920281f519385f8a72475ee24819799cb08375fdd4cce2b22",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libgifimage.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "cfbb51d1fe58ba985ad1f06d4ac0afa70e5323d25517642881f4833d7020e44f",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libhermestooling.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "52607cec46d60dbd4d46f41dc9870c55a87051b6d412f02ff71242d97fc45ec6",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libhermesvm.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "d4ccaf2523cd3b938e295646a5bcf927e134cbd6e4c4f9e3a6fd26d8d85e8217",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libimage_processing_util_jni.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "a791deb99bdd8ae2e6dccba192e257ec7396350c8541835b273ced8bf0c6c775",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libimagepipeline.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "1b377992e4256fa9398ec057722f84a359c7d588e570c8a41f51d930c19ece7d",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libjsi.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "5fdfbabeee20b300fc084bc9bddfa55b7a3e46dafc1464a4309cf0c906f6b0eb",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libnative-filters.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "bb82aec5ab2a8ac4e1968f41c6477824f1f3fff90c0eeb2c90cdeb1923d69833",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libnative-imagetranscoder.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "2aed28298a25afd52ac670cf9682398c6c7ba42a57195c01efd565e7ddfe17ca",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libreactnative.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "0a108cd36ab33974758ff4a1391cb278ceb8e1ed3710abb0a873271120fff52b",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libstatic-webp.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "bfce3139342fad716d25623b559d9901fc795d6b7622ebe21a417b4c84e3a92a",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libsurface_util_jni.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "8220dabd8c03ffa7a1b0642e7bf359aadd9a3224070e6de5ae9b0c711c717a0c",
+      "identicalToAuditedR1": true
+    },
+    {
+      "name": "lib/arm64-v8a/libzstd-kmp.so",
+      "zipMethod": 0,
+      "zipAligned16k": true,
+      "loads": [
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        },
+        {
+          "alignment": 16384,
+          "aligned16k": true
+        }
+      ],
+      "sha256": "10ec47f13bee884450b0911066019ba7aa6b4164a4c1f8c33c9d30dd3fd8868a",
+      "identicalToAuditedR1": true
+    }
+  ],
+  "deviceExecution": true,
+  "limitations": [
+    "Static 16KB ELF/ZIP alignment only; actual device uses 4KB pages.",
+    "Main FaceLink Expo Development Build and live camera cutover not exercised in this task.",
+    "Local debug signing is not production distribution."
+  ],
+  "signing": {
+    "verified": true,
+    "localDebugCertificate": true,
+    "certificateSha256": "fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c",
+    "sameSignerAsPreservedCam02R2": true,
+    "productionDistribution": false
+  },
+  "sdk": {
+    "min": "24",
+    "target": "36"
+  }
+}

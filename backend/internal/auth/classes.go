@@ -24,15 +24,15 @@ func (s *Store) AssignLecturer(ctx context.Context, actorID, classID, userID str
 
 	dibuat := false
 	err := s.immediateTx(ctx, func(ctx context.Context, conn *sql.Conn) error {
+		if err := requireActiveAdminTx(ctx, conn, actorID); err != nil {
+			return err
+		}
 		user, err := userByIDTx(ctx, conn, userID)
 		if err != nil {
 			return err
 		}
 		if user.Role != RoleDosen {
 			return fmt.Errorf("%w: akun %s berrole %s, bukan dosen", ErrRoleInvalid, userID, string(user.Role))
-		}
-		if _, err := userByIDTx(ctx, conn, actorID); err != nil {
-			return err
 		}
 		if err := pastikanKelasAda(ctx, conn, classID); err != nil {
 			return err
@@ -52,7 +52,11 @@ func (s *Store) AssignLecturer(ctx context.Context, actorID, classID, userID str
 			return fmt.Errorf("auth: jumlah penugasan dibuat tidak dapat dibaca: %w", err)
 		}
 		dibuat = jumlah == 1
-		return nil
+		if !dibuat {
+			return nil
+		}
+		return s.auditTx(ctx, conn, actorID, "class.dosen_assigned", "class", classID,
+			"Dosen ditugaskan ke kelas", map[string]string{"count": "1"})
 	})
 	if err != nil {
 		return false, err
@@ -63,25 +67,34 @@ func (s *Store) AssignLecturer(ctx context.Context, actorID, classID, userID str
 // RemoveLecturer mencabut penugasan seorang dosen dari satu kelas. Penugasan
 // yang tidak ada dikembalikan sebagai ErrNotFound supaya pemanggil dapat
 // membedakan pencabutan yang berhasil dari id yang salah.
-func (s *Store) RemoveLecturer(ctx context.Context, classID, userID string) error {
-	classID, userID = teks(classID), teks(userID)
-	if classID == "" || userID == "" {
-		return fmt.Errorf("%w: classID dan userID wajib diisi", ErrInvalidInput)
+func (s *Store) RemoveLecturer(ctx context.Context, actorID, classID, userID string) error {
+	actorID, classID, userID = teks(actorID), teks(classID), teks(userID)
+	if actorID == "" || classID == "" || userID == "" {
+		return fmt.Errorf("%w: actorID, classID, dan userID wajib diisi", ErrInvalidInput)
 	}
 
-	res, err := s.db.ExecContext(ctx,
-		`DELETE FROM class_lecturers WHERE class_id = ? AND user_id = ?`, classID, userID)
-	if err != nil {
-		return fmt.Errorf("auth: gagal mencabut penugasan dosen %s dari kelas %s: %w", userID, classID, err)
-	}
-	terhapus, err := res.RowsAffected()
-	if err != nil {
-		return fmt.Errorf("auth: jumlah penugasan terhapus tidak dapat dibaca: %w", err)
-	}
-	if terhapus == 0 {
-		return fmt.Errorf("%w: penugasan dosen %s pada kelas %s", ErrNotFound, userID, classID)
-	}
-	return nil
+	return s.immediateTx(ctx, func(ctx context.Context, conn *sql.Conn) error {
+		if err := requireActiveAdminTx(ctx, conn, actorID); err != nil {
+			return err
+		}
+		if err := pastikanKelasAda(ctx, conn, classID); err != nil {
+			return err
+		}
+		res, err := conn.ExecContext(ctx,
+			`DELETE FROM class_lecturers WHERE class_id = ? AND user_id = ?`, classID, userID)
+		if err != nil {
+			return fmt.Errorf("auth: gagal mencabut penugasan dosen %s dari kelas %s: %w", userID, classID, err)
+		}
+		terhapus, err := res.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("auth: jumlah penugasan terhapus tidak dapat dibaca: %w", err)
+		}
+		if terhapus == 0 {
+			return fmt.Errorf("%w: penugasan dosen %s pada kelas %s", ErrNotFound, userID, classID)
+		}
+		return s.auditTx(ctx, conn, actorID, "class.dosen_removed", "class", classID,
+			"Penugasan dosen dicabut dari kelas", map[string]string{"count": "1"})
+	})
 }
 
 // LecturersForClass mengembalikan seluruh penugasan dosen pada satu kelas
@@ -133,7 +146,9 @@ func (s *Store) LecturersForClass(ctx context.Context, classID string) ([]Lectur
 // baris tanpa GROUP BY dan tanpa menggandakan hasil.
 const kolomKelas = `c.id, c.code, c.title,
 	(SELECT COUNT(*) FROM class_memberships cm
-	  WHERE cm.class_id = c.id AND cm.left_at IS NULL) AS member_count,
+	  JOIN people p ON p.id = cm.person_id
+	  WHERE cm.class_id = c.id AND cm.left_at IS NULL
+	    AND p.deleted_at IS NULL AND p.status = 'active') AS member_count,
 	(SELECT s.id FROM attendance_sessions s
 	  WHERE s.class_id = c.id AND s.status = 'open'
 	  ORDER BY s.closes_at LIMIT 1) AS active_session_id`
@@ -256,6 +271,9 @@ func (s *Store) LinkPersonAccount(ctx context.Context, actorID, personID, userID
 
 	var hasil Person
 	err := s.immediateTx(ctx, func(ctx context.Context, conn *sql.Conn) error {
+		if err := requireActiveAdminTx(ctx, conn, actorID); err != nil {
+			return err
+		}
 		user, err := userByIDTx(ctx, conn, userID)
 		if err != nil {
 			return err
@@ -263,39 +281,27 @@ func (s *Store) LinkPersonAccount(ctx context.Context, actorID, personID, userID
 		if user.Role != RoleMahasiswa {
 			return fmt.Errorf("%w: akun %s berrole %s", ErrNotMahasiswa, userID, string(user.Role))
 		}
-		if _, err := userByIDTx(ctx, conn, actorID); err != nil {
-			return err
+		if user.Status != StatusActive {
+			return fmt.Errorf("%w: akun %s berstatus %s", ErrAccountInactive, userID, user.Status)
 		}
 
-		// Baris peserta sekaligus membawa pengaitan yang sudah ada, sehingga
-		// keberadaan peserta dan keadaan pengaitannya dibaca sekali saja.
-		var (
-			akunPeserta        sql.NullString
-			externalCode, nama string
-			statusPeserta      string
-		)
-		if err := conn.QueryRowContext(ctx,
-			`SELECT account_user_id, external_code, display_name, status
-			   FROM people WHERE id = ? AND deleted_at IS NULL`,
-			personID).Scan(&akunPeserta, &externalCode, &nama, &statusPeserta); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return fmt.Errorf("%w: peserta %s", ErrNotFound, personID)
-			}
-			return fmt.Errorf("auth: gagal membaca pengaitan peserta %s: %w", personID, err)
+		peserta, err := personByIDTx(ctx, conn, personID)
+		if err != nil {
+			return err
 		}
-		hasil = Person{
-			ID:           personID,
-			ExternalCode: externalCode,
-			DisplayName:  nama,
-			Status:       statusPeserta,
+		if peserta.Status != "active" {
+			return fmt.Errorf("%w: peserta %s berstatus %s", ErrSubjectInactive, personID, peserta.Status)
 		}
-		if akunPeserta.Valid && akunPeserta.String == userID {
+		if teks(peserta.IdentityReference) == "" || memuatKontrol(peserta.IdentityReference) || peserta.IdentityVerifiedAt == nil {
+			return fmt.Errorf("%w: peserta %s", ErrIdentityNotVerified, personID)
+		}
+		if peserta.AccountUserID == userID {
 			// Pengaitan yang sama diulang tidak mengubah apa pun.
-			hasil.AccountUserID = userID
+			hasil = peserta
 			return nil
 		}
-		if akunPeserta.Valid {
-			return fmt.Errorf("%w: peserta %s sudah tertaut akun %s", ErrAlreadyLinked, personID, akunPeserta.String)
+		if peserta.AccountUserID != "" {
+			return fmt.Errorf("%w: peserta %s sudah tertaut akun %s", ErrAlreadyLinked, personID, peserta.AccountUserID)
 		}
 
 		var pesertaLain sql.NullString
@@ -318,12 +324,18 @@ func (s *Store) LinkPersonAccount(ctx context.Context, actorID, personID, userID
 			userID, formatWaktu(s.waktuSekarang()), personID,
 		); err != nil {
 			if isUniqueViolation(err) {
-				return fmt.Errorf("%w: akun %s sudah tertaut peserta lain", ErrAlreadyLinked, userID)
+				return fmt.Errorf("%w: akun %s sudah tertaut peserta lain", ErrConflict, userID)
 			}
 			return fmt.Errorf("auth: gagal mengaitkan peserta %s dengan akun %s: %w", personID, userID, err)
 		}
-		hasil.AccountUserID = userID
-		return nil
+
+		if err := s.auditTx(ctx, conn, actorID, "person.account_linked", "person", personID,
+			"Akun mahasiswa ditautkan ke baris peserta",
+			map[string]string{"count": "1"}); err != nil {
+			return err
+		}
+		hasil, err = personByIDTx(ctx, conn, personID)
+		return err
 	})
 	if err != nil {
 		return Person{}, err
@@ -332,8 +344,8 @@ func (s *Store) LinkPersonAccount(ctx context.Context, actorID, personID, userID
 }
 
 // UnlinkPersonAccount melepas pengaitan akun dari satu peserta. Peserta yang
-// tidak ada dikembalikan sebagai ErrNotFound; peserta yang memang belum tertaut
-// tidak menghasilkan galat karena hasil akhirnya sama.
+// tidak ada menghasilkan ErrNotFound; peserta tanpa tautan menghasilkan
+// ErrNotLinked sesuai kontrak §5.2.
 func (s *Store) UnlinkPersonAccount(ctx context.Context, actorID, personID string) error {
 	actorID, personID = teks(actorID), teks(personID)
 	if actorID == "" || personID == "" {
@@ -341,7 +353,7 @@ func (s *Store) UnlinkPersonAccount(ctx context.Context, actorID, personID strin
 	}
 
 	return s.immediateTx(ctx, func(ctx context.Context, conn *sql.Conn) error {
-		if _, err := userByIDTx(ctx, conn, actorID); err != nil {
+		if err := requireActiveAdminTx(ctx, conn, actorID); err != nil {
 			return err
 		}
 		if err := pastikanPesertaAda(ctx, conn, personID); err != nil {
@@ -367,12 +379,15 @@ func (s *Store) UnlinkPersonAccount(ctx context.Context, actorID, personID strin
 		); err != nil {
 			return fmt.Errorf("auth: gagal melepas pengaitan peserta %s: %w", personID, err)
 		}
-		return nil
+		return s.auditTx(ctx, conn, actorID, "person.account_unlinked", "person", personID,
+			"Tautan akun peserta dilepas", nil)
 	})
 }
 
-// PersonForUser mengembalikan id peserta yang tertaut ke satu akun. Nilai kedua
-// bernilai false bila akun belum tertaut peserta mana pun.
+// PersonForUser mengembalikan id peserta aktif yang tertaut ke satu akun. Nilai
+// kedua bernilai false bila akun belum tertaut peserta mana pun, peserta sudah
+// dihapus, atau peserta berstatus inactive. Pemeriksaan status dilakukan di
+// sini agar akun yang tertaut ke peserta nonaktif tidak memperoleh akses /me.
 func (s *Store) PersonForUser(ctx context.Context, userID string) (string, bool, error) {
 	userID = teks(userID)
 	if userID == "" {
@@ -380,11 +395,14 @@ func (s *Store) PersonForUser(ctx context.Context, userID string) (string, bool,
 	}
 
 	var personID string
-	// Tidak menyaring `deleted_at`: pengaitan adalah keadaan baris peserta, dan
-	// slot unik tetap dipegang baris yang dihapus lunak. Pemanggil yang hanya
-	// ingin peserta aktif menyaringnya sendiri lewat status peserta.
 	if err := s.db.QueryRowContext(ctx,
-		`SELECT id FROM people WHERE account_user_id = ?`, userID).Scan(&personID); err != nil {
+		`SELECT p.id FROM people p
+		   JOIN users u ON u.id = p.account_user_id
+		  WHERE p.account_user_id = ? AND p.deleted_at IS NULL AND p.status = 'active'
+		    AND p.identity_reference IS NOT NULL AND trim(p.identity_reference) <> ''
+		    AND p.identity_verified_at IS NOT NULL
+		    AND u.role = 'mahasiswa' AND u.status = 'active'`,
+		userID).Scan(&personID); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return "", false, nil
 		}

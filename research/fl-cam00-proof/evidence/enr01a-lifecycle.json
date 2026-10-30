@@ -1,0 +1,84 @@
+{
+  "initialColdStart": "Starting: Intent { cmp=ai.facelink.cam00proof/.MainActivity }\r\nStatus: ok\r\nLaunchState: COLD\r\nActivity: ai.facelink.cam00proof/.MainActivity\r\nTotalTime: 519\r\nWaitTime: 681\r\nComplete",
+  "background": {
+    "action": "KEYCODE_HOME after completed synthetic suite; not OS pause inside codec",
+    "pidRetained": true,
+    "events": [
+      {
+        "kind": "EVENT",
+        "cycle": 0,
+        "generation": 2,
+        "seq": 1,
+        "event": "CANCEL",
+        "frameId": null,
+        "state": "CANCELLED",
+        "reason": "BACKGROUND",
+        "source": null,
+        "clock": "monotonic_js",
+        "count": 0,
+        "stableMs": 0,
+        "samples": 0,
+        "elapsedMs": 49101962.36531,
+        "captureTriggerCount": 0,
+        "nativeAcquireToEmitMs": null,
+        "nativeCode": null
+      }
+    ]
+  },
+  "resume": {
+    "launch": "Starting: Intent { cmp=ai.facelink.cam00proof/.MainActivity }\r\nWarning: Activity not started, its current task has been brought to the front\r\nStatus: ok\r\nLaunchState: UNKNOWN (0)\r\nActivity: ai.facelink.cam00proof/.MainActivity\r\nWaitTime: 41\r\nComplete",
+    "ui": [
+      {
+        "id": "cam02-source",
+        "text": "KAMERA OFF · belum ada observasi live",
+        "bounds": "[76,545][1006,582]"
+      },
+      {
+        "id": "cam02-state",
+        "text": "CANCELLED · BACKGROUND",
+        "bounds": "[70,1851][1010,1895]"
+      }
+    ]
+  },
+  "cameraOpened": false,
+  "firstProcessCrashLogLines": 0,
+  "forceStop": {
+    "processGone": true,
+    "afterCompletedSuite": true,
+    "notDuringActiveCodec": true
+  },
+  "coldRestart": {
+    "launch": "Starting: Intent { cmp=ai.facelink.cam00proof/.MainActivity }\r\nStatus: ok\r\nLaunchState: COLD\r\nActivity: ai.facelink.cam00proof/.MainActivity\r\nTotalTime: 419\r\nWaitTime: 432\r\nComplete",
+    "newProcess": true,
+    "ui": [
+      {
+        "id": "cam02-source",
+        "text": "KAMERA OFF · belum ada observasi live"
+      },
+      {
+        "id": "cam02-state",
+        "text": "IDLE · OFF"
+      }
+    ]
+  },
+  "installedApkSha256": "03bcf25e56e1004c5a5506c949051e55107e69862d5509531dacdda9d9f71f26",
+  "secondProcessCrashLogLines": 0,
+  "end": {
+    "settings": {
+      "screen_brightness": "4",
+      "screen_brightness_mode": "0",
+      "screen_off_timeout": "1800000",
+      "stay_on_while_plugged_in": "15",
+      "accelerometer_rotation": "0",
+      "user_rotation": "0"
+    },
+    "prototypePid": "",
+    "mainPid": "",
+    "systemSettingWritesByTask": 0,
+    "cameraStartedByTask": false,
+    "apkUninstalled": false,
+    "logReaderStopped": true,
+    "temporaryUiXmlRemoved": true,
+    "settingsUnchanged": true
+  }
+}

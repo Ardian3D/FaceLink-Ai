@@ -550,11 +550,12 @@ func (h *harnessAuth) buatKelas(kode, judul string) string {
 	return id
 }
 
-// buatPeserta menyisipkan baris peserta.
+// buatPeserta menyisipkan identitas sintetis dengan bukti roster nonbiometrik.
 func (h *harnessAuth) buatPeserta(kodeEksternal, nama string) string {
 	h.t.Helper()
 	id := ids.New()
-	h.execSQL(`INSERT INTO people (id, external_code, display_name) VALUES (?, ?, ?)`, id, kodeEksternal, nama)
+	h.execSQL(`INSERT INTO people (id, external_code, display_name, identity_reference, identity_verified_at) VALUES (?, ?, ?, ?, ?)`,
+		id, kodeEksternal, nama, "fixture-roster-"+kodeEksternal, audit.FormatWaktu(h.clk.Now()))
 	return id
 }
 
@@ -958,11 +959,15 @@ func TestTokenAksesKedaluwarsaDitolak(t *testing.T) {
 	h.harapGalat(r, http.StatusUnauthorized, codeTokenExpired)
 }
 
-// TestPenyegaranMemutarToken membuktikan penyegaran menerbitkan pasangan token
-// baru dan token akses lama langsung tidak berlaku.
+// TestPenyegaranMemutarToken membuktikan token akses yang ditolak karena
+// kedaluwarsa dapat dipulihkan lewat rotasi, tanpa login Google ulang.
 func TestPenyegaranMemutarToken(t *testing.T) {
 	h := newHarnessAuth(t)
 	_, sesi1 := h.adminPertama("admin@kampus.example")
+
+	h.clk.Advance(61 * time.Minute)
+	kedaluwarsa := h.kirim(http.MethodGet, "/api/v1/me", nil, sesi1.Access)
+	h.harapGalat(kedaluwarsa, http.StatusUnauthorized, codeTokenExpired)
 
 	r := h.kirim(http.MethodPost, "/api/v1/auth/refresh",
 		map[string]any{"refresh_token": sesi1.Refresh}, "")
@@ -976,6 +981,9 @@ func TestPenyegaranMemutarToken(t *testing.T) {
 	}
 	if sesi2.SesiID != sesi1.SesiID {
 		t.Fatalf("id sesi berubah dari %s menjadi %s", sesi1.SesiID, sesi2.SesiID)
+	}
+	if sesi2.UserID != sesi1.UserID || sesi2.Role != sesi1.Role {
+		t.Fatal("identitas pengguna berubah setelah penyegaran token kedaluwarsa")
 	}
 
 	h.harapSukses(h.kirim(http.MethodGet, "/api/v1/me", nil, sesi2.Access), http.StatusOK)
@@ -1124,13 +1132,32 @@ func TestPerubahanEmailGoogleTidakMengalihkanAkunSaatSudahTertaut(t *testing.T) 
 	}
 }
 
+func TestLogoutExpiredAccessWithRefreshRevokesSession(t *testing.T) {
+	h := newHarnessAuth(t)
+	_, sesi := h.adminPertama("admin@kampus.example")
+	h.clk.Advance(time.Hour)
+	h.harapGalat(h.kirim(http.MethodGet, "/api/v1/me", nil, sesi.Access),
+		http.StatusUnauthorized, codeTokenExpired)
+
+	logout := h.kirim(http.MethodPost, "/api/v1/auth/logout",
+		map[string]any{"refresh_token": sesi.Refresh}, "")
+	if logout.Status != http.StatusNoContent {
+		t.Fatalf("logout dengan access kedaluwarsa = %d, ingin 204; badan: %s", logout.Status, logout.Rec.Body.String())
+	}
+	h.harapGalat(h.kirim(http.MethodPost, "/api/v1/auth/refresh",
+		map[string]any{"refresh_token": sesi.Refresh}, ""), http.StatusUnauthorized, codeUnauthenticated)
+	if n := h.hitung(`SELECT COUNT(*) FROM session_tokens WHERE id = ? AND revoked_at IS NOT NULL AND revoked_reason = 'logout'`, sesi.SesiID); n != 1 {
+		t.Fatalf("sesi benar-benar dicabut = %d, ingin 1", n)
+	}
+}
+
 // TestLogoutIdempoten membuktikan logout mencabut sesi dan panggilan kedua
 // dengan token yang sama tetap menjawab 204 (kontrak §5.1).
 func TestLogoutIdempoten(t *testing.T) {
 	h := newHarnessAuth(t)
 	_, sesi := h.adminPertama("admin@kampus.example")
 
-	pertama := h.kirim(http.MethodPost, "/api/v1/auth/logout", nil, sesi.Access)
+	pertama := h.kirim(http.MethodPost, "/api/v1/auth/logout", map[string]any{"refresh_token": sesi.Refresh}, "")
 	if pertama.Status != http.StatusNoContent {
 		t.Fatalf("logout pertama = %d, ingin 204; badan: %s", pertama.Status, pertama.Rec.Body.String())
 	}
@@ -1138,7 +1165,11 @@ func TestLogoutIdempoten(t *testing.T) {
 	ditolak := h.kirim(http.MethodGet, "/api/v1/me", nil, sesi.Access)
 	h.harapGalat(ditolak, http.StatusUnauthorized, codeSessionRevoked)
 
-	kedua := h.kirim(http.MethodPost, "/api/v1/auth/logout", nil, sesi.Access)
+	segarkan := h.kirim(http.MethodPost, "/api/v1/auth/refresh",
+		map[string]any{"refresh_token": sesi.Refresh}, "")
+	h.harapGalat(segarkan, http.StatusUnauthorized, codeUnauthenticated)
+
+	kedua := h.kirim(http.MethodPost, "/api/v1/auth/logout", map[string]any{"refresh_token": sesi.Refresh}, "")
 	if kedua.Status != http.StatusNoContent {
 		t.Fatalf("logout kedua = %d, ingin 204; badan: %s", kedua.Status, kedua.Rec.Body.String())
 	}
@@ -1409,5 +1440,87 @@ func TestDaftarSesiHanyaSesiAktifDanBermuatanRole(t *testing.T) {
 		h.kirim(http.MethodGet, "/api/v1/auth/sessions?user_id="+dosenID, nil, sesiAdmin.Access), http.StatusOK)
 	if len(kosong) != 0 {
 		t.Fatalf("sesi tercabut masih terdaftar: %v", kosong)
+	}
+}
+
+func TestLogoutRejectsInvalidRefreshCredential(t *testing.T) {
+	h := newHarnessAuth(t)
+	_, sesi := h.adminPertama("admin@kampus.example")
+	for _, tc := range []struct {
+		name   string
+		body   any
+		status int
+		code   string
+	}{
+		{"access_only_legacy", nil, http.StatusBadRequest, codeValidationFailed},
+		{"missing", map[string]any{}, http.StatusBadRequest, codeMissingField},
+		{"blank", map[string]any{"refresh_token": " "}, http.StatusBadRequest, codeMissingField},
+		{"wrong_type", map[string]any{"refresh_token": 7}, http.StatusBadRequest, codeValidationFailed},
+		{"unknown", map[string]any{"refresh_token": "unknown"}, http.StatusUnauthorized, codeUnauthenticated},
+		{"access_as_refresh", map[string]any{"refresh_token": sesi.Access}, http.StatusUnauthorized, codeUnauthenticated},
+		{"session_id", map[string]any{"refresh_token": sesi.Refresh, "session_id": sesi.SesiID}, http.StatusBadRequest, codeValidationFailed},
+		{"user_id", map[string]any{"refresh_token": sesi.Refresh, "user_id": sesi.UserID}, http.StatusBadRequest, codeValidationFailed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h.harapGalat(h.kirim(http.MethodPost, "/api/v1/auth/logout", tc.body, sesi.Access), tc.status, tc.code)
+		})
+	}
+	h.harapSukses(h.kirim(http.MethodGet, "/api/v1/me", nil, sesi.Access), http.StatusOK)
+	if n := h.hitung(`SELECT COUNT(*) FROM audit_events WHERE action = 'auth.logout'`); n != 0 {
+		t.Fatalf("audit kredensial ditolak = %d", n)
+	}
+	h.clk.Advance(30 * 24 * time.Hour)
+	h.harapGalat(h.kirim(http.MethodPost, "/api/v1/auth/logout",
+		map[string]any{"refresh_token": sesi.Refresh}, ""), http.StatusUnauthorized, codeUnauthenticated)
+}
+
+func TestLogoutPreviousCredentialScopesSessionNotBearer(t *testing.T) {
+	h := newHarnessAuth(t)
+	_, admin := h.adminPertama("admin@kampus.example")
+	userID, owner := h.undangDanMasuk(admin.Access, "dosen.logout@kampus.example", "Dosen Logout", "dosen")
+	otherDevice, err := h.srv.Sessions.Issue(context.Background(), userID, "perangkat-lain")
+	if err != nil {
+		t.Fatal(err)
+	}
+	refreshed := h.sesiDariSegarkan(h.harapSukses(h.kirim(http.MethodPost, "/api/v1/auth/refresh",
+		map[string]any{"refresh_token": owner.Refresh}, ""), http.StatusOK), owner)
+	for _, token := range []string{owner.Refresh, owner.Refresh, refreshed.Refresh} {
+		// Bearer akun lain tidak menentukan sesi yang dicabut.
+		r := h.kirim(http.MethodPost, "/api/v1/auth/logout", map[string]any{"refresh_token": token}, admin.Access)
+		if r.Status != http.StatusNoContent || r.Rec.Body.Len() != 0 {
+			t.Fatalf("logout previous/current = %d %s, ingin 204 kosong", r.Status, r.Rec.Body.String())
+		}
+	}
+	h.harapGalat(h.kirim(http.MethodGet, "/api/v1/me", nil, refreshed.Access), http.StatusUnauthorized, codeSessionRevoked)
+	for _, token := range []string{owner.Refresh, refreshed.Refresh} {
+		h.harapGalat(h.kirim(http.MethodPost, "/api/v1/auth/refresh",
+			map[string]any{"refresh_token": token}, ""), http.StatusUnauthorized, codeUnauthenticated)
+	}
+	h.harapSukses(h.kirim(http.MethodGet, "/api/v1/me", nil, otherDevice.AccessToken), http.StatusOK)
+	h.harapSukses(h.kirim(http.MethodGet, "/api/v1/me", nil, admin.Access), http.StatusOK)
+	if n := h.hitung(`SELECT COUNT(*) FROM audit_events WHERE action = 'auth.logout' AND actor_id = ? AND entity_id = ?`,
+		userID, owner.SesiID); n != 1 {
+		t.Fatalf("audit pemilik sesi = %d, ingin 1", n)
+	}
+	if n := h.hitung(`SELECT COUNT(*) FROM audit_events WHERE action = 'auth.session.reuse_detected'`); n != 0 {
+		t.Fatalf("logout previous menjalankan deteksi reuse: %d", n)
+	}
+}
+
+func TestLogoutAuditFailureReturns500WithoutPartialRevocation(t *testing.T) {
+	h := newHarnessAuth(t)
+	_, sesi := h.adminPertama("admin@kampus.example")
+	h.execSQL(`CREATE TRIGGER fail_logout_audit BEFORE INSERT ON audit_events
+		WHEN NEW.action = 'auth.logout' BEGIN SELECT RAISE(ABORT, 'injected audit failure'); END`)
+	h.harapGalat(h.kirim(http.MethodPost, "/api/v1/auth/logout",
+		map[string]any{"refresh_token": sesi.Refresh}, ""), http.StatusInternalServerError, codeInternalError)
+	h.harapSukses(h.kirim(http.MethodGet, "/api/v1/me", nil, sesi.Access), http.StatusOK)
+	if n := h.hitung(`SELECT COUNT(*) FROM session_tokens WHERE id = ? AND revoked_at IS NOT NULL`, sesi.SesiID); n != 0 {
+		t.Fatalf("pencabutan parsial = %d", n)
+	}
+	h.execSQL(`DROP TRIGGER fail_logout_audit`)
+	if r := h.kirim(http.MethodPost, "/api/v1/auth/logout",
+		map[string]any{"refresh_token": sesi.Refresh}, ""); r.Status != http.StatusNoContent {
+		t.Fatalf("retry logout = %d %s", r.Status, r.Rec.Body.String())
 	}
 }

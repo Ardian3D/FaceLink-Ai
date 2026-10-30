@@ -40,6 +40,21 @@ var (
 	// ErrNotLinked dipakai bila operasi pelepasan diminta untuk peserta yang
 	// memang belum tertaut ke akun mana pun (kontrak §5.2).
 	ErrNotLinked = errors.New("auth: peserta belum tertaut akun")
+	// ErrPolicyConflict dipakai bila operasi akan menghapus data yang masih
+	// dirujuk riwayat kehadiran (kontrak DELETE /people).
+	ErrPolicyConflict = errors.New("auth: konflik kebijakan retensi")
+	// ErrDuplicateExternalCode dipakai bila NIM/kode peserta sudah pernah
+	// dipakai, termasuk oleh baris yang sudah dihapus lunak.
+	ErrDuplicateExternalCode = errors.New("auth: kode peserta sudah dipakai")
+	// ErrIdentityNotVerified dipakai bila penautan akun diminta untuk peserta
+	// yang belum dicatat dari roster oleh admin.
+	ErrIdentityNotVerified = errors.New("auth: identitas peserta belum diverifikasi")
+	// ErrSubjectInactive dipakai bila peserta berstatus inactive atau dihapus.
+	ErrSubjectInactive = errors.New("auth: peserta tidak aktif")
+	// ErrAccountInactive dipakai bila akun mahasiswa belum/tidak lagi aktif.
+	ErrAccountInactive = errors.New("auth: akun tidak aktif")
+	// ErrActorUnauthorized menolak mutasi roster oleh selain admin aktif.
+	ErrActorUnauthorized = errors.New("auth: aktor bukan admin aktif")
 )
 
 // isUniqueViolation memeriksa galat batasan unik SQLite. Indeks unik adalah

@@ -287,10 +287,11 @@ describe("penyegaran token", () => {
       },
       api: { segarkan: async () => ({ ok: false, error: { kind: "network" } }) },
     });
+    const tersimpan = { ...store.isi };
     await alur.pulihkan();
 
     expect(alur.keadaan().status).toBe("signedOut");
-    expect(store.isi?.refreshToken).toBe("refresh-lama");
+    expect(store.isi).toEqual(tersimpan);
     expect(store.hitungHapus).toBe(0);
   });
 });
@@ -343,6 +344,27 @@ describe("pemulihan sesi", () => {
     expect(store.isi).toBeNull();
   });
 
+  it("menghapus sesi tersimpan bila /me menyatakan sesi dicabut", async () => {
+    const { alur, store, catatanApi } = rakit({
+      penyimpanan: {
+        accessToken: "akses-tersimpan",
+        refreshToken: "refresh-tersimpan",
+        expiresAtMs: Date.now() + 3_600_000,
+      },
+      api: { saya: async () => ({ ok: false, error: { kind: "sessionEnded" } }) },
+    });
+    await alur.pulihkan();
+
+    expect(catatanApi.segarkan).toBe(0);
+    expect(catatanApi.saya).toEqual(["akses-tersimpan"]);
+    expect(alur.keadaan().status).toBe("signedOut");
+    expect(alur.keadaan().error?.kind).toBe("sessionEnded");
+    expect(alur.keadaan().session).toBeNull();
+    expect(store.isi).toBeNull();
+    expect(store.hitungHapus).toBe(1);
+    expect(await alur.tokenAkses()).toBeNull();
+  });
+
   it("kembali ke layar masuk tanpa menghapus token saat backend mati", async () => {
     const { alur, store } = rakit({
       penyimpanan: {
@@ -352,11 +374,13 @@ describe("pemulihan sesi", () => {
       },
       api: { saya: async () => ({ ok: false, error: { kind: "network" } }) },
     });
+    const tersimpan = { ...store.isi };
     await alur.pulihkan();
 
     expect(alur.keadaan().status).toBe("signedOut");
     expect(alur.keadaan().error?.kind).toBe("network");
-    expect(store.isi?.refreshToken).toBe("refresh-tersimpan");
+    expect(store.isi).toEqual(tersimpan);
+    expect(store.hitungHapus).toBe(0);
   });
 
   it("memulihkan tanpa token tersimpan berarti belum masuk", async () => {
@@ -380,7 +404,7 @@ describe("keluar", () => {
     expect(alur.keadaan().status).toBe("signedOut");
     expect(alur.keadaan().session).toBeNull();
     expect(store.isi).toBeNull();
-    expect(catatanApi.keluar).toEqual(["access-1"]);
+    expect(catatanApi.keluar).toEqual(["refresh-1"]);
     expect(catatanGoogle.lupakan).toBe(1);
     // Setelah keluar, tidak ada token yang dapat dipakai lagi.
     expect(await alur.tokenAkses()).toBeNull();
@@ -400,6 +424,177 @@ describe("keluar", () => {
     // Kegagalan pencabutan tidak boleh menghalangi penghapusan token lokal.
     await expect(alur.keluar()).resolves.toBeUndefined();
     expect(store.isi).toBeNull();
+    expect(alur.keadaan().error).toEqual({
+      kind: "signOutIncomplete", localCleared: true, remoteRevoked: false,
+    });
     expect(catatan.keluar).toHaveLength(0);
+  });
+
+  it("does not resurrect a late refresh after logout and keeps remote failure visible", async () => {
+    const { api } = apiTiruan();
+    const { google } = googleTiruan();
+    const store = penyimpananTiruan();
+    const alur = new AuthFlow(api, google, store, () => {});
+    await alur.pulihkan();
+    await alur.masuk();
+    store.masihBerlaku = () => false;
+    const rotation = Promise.withResolvers<Awaited<ReturnType<typeof api.segarkanSesi>>>();
+    api.segarkanSesi = () => rotation.promise;
+    api.keluarSesi = async () => ({ ok: false, error: { kind: "network" } });
+    const refreshing = alur.tokenAkses();
+    const logout = alur.keluar();
+    rotation.resolve({ ok: true, data: {
+      accessToken: "rotated-access", refreshToken: "rotated-refresh",
+      expiresAtMs: Date.now() + 3_600_000,
+    } });
+    await logout;
+    expect(await refreshing).toBeNull();
+    expect(await alur.tokenAkses()).toBeNull();
+    expect(store.isi).toBeNull();
+    expect(alur.keadaan()).toMatchObject({
+      status: "signedOut", session: null,
+      error: { kind: "signOutIncomplete", localCleared: true, remoteRevoked: false },
+    });
+  });
+
+  it("drains an already-started credential write before final deletion", async () => {
+    const { api } = apiTiruan();
+    const { google } = googleTiruan();
+    const store = penyimpananTiruan();
+    const alur = new AuthFlow(api, google, store, () => {});
+    await alur.pulihkan();
+    await alur.masuk();
+    store.masihBerlaku = () => false;
+    const write = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<void>();
+    store.simpan = async sesi => {
+      started.resolve();
+      await write.promise;
+      store.isi = sesi;
+    };
+    const refreshing = alur.tokenAkses();
+    await started.promise;
+    const logout = alur.keluar();
+    write.resolve();
+    await logout;
+    expect(await refreshing).toBeNull();
+    expect(store.isi).toBeNull();
+    expect(alur.keadaan()).toMatchObject({ status: "signedOut", session: null, error: null });
+  });
+
+  it("reports a failed SecureStore deletion without claiming the device is clean", async () => {
+    const s = rakit();
+    await s.alur.pulihkan();
+    await s.alur.masuk();
+    s.store.hapus = async () => { throw Error("Keystore locked"); };
+    await s.alur.keluar();
+    expect(await s.alur.tokenAkses()).toBeNull();
+    expect(s.alur.keadaan()).toMatchObject({
+      status: "signedOut", session: null,
+      error: { kind: "signOutIncomplete", localCleared: false, remoteRevoked: true },
+    });
+  });
+
+  it.each(["exchange", "write"] as const)("drains pending Google %s before completing logout", async boundary => {
+    const { api } = apiTiruan();
+    const { google } = googleTiruan();
+    const store = penyimpananTiruan();
+    const alur = new AuthFlow(api, google, store, () => {});
+    await alur.pulihkan();
+    const gate = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<void>();
+    if (boundary === "exchange") {
+      api.tukarIdToken = async () => {
+        started.resolve();
+        await gate.promise;
+        return { ok: true, data: sesiUntuk(MAHASISWA) };
+      };
+    } else {
+      store.simpan = async value => {
+        started.resolve();
+        await gate.promise;
+        store.isi = value;
+      };
+    }
+    api.keluarSesi = async () => ({ ok: false, error: { kind: "network" } });
+    const login = alur.masuk();
+    await started.promise;
+    let completed = false;
+    const logout = alur.keluar().then(() => { completed = true; });
+    await jeda();
+    expect(completed).toBe(false);
+    gate.resolve();
+    await Promise.all([login, logout]);
+    expect(store.isi).toBeNull();
+    expect(await alur.tokenAkses()).toBeNull();
+    expect(alur.keadaan()).toMatchObject({
+      status: "signedOut", error: { kind: "signOutIncomplete", remoteRevoked: false, localCleared: true },
+    });
+  });
+
+  it("revokes the new refresh proof and deletes obsolete storage when rotation persistence fails", async () => {
+    const { alur, store, catatanApi } = rakit();
+    await alur.pulihkan();
+    await alur.masuk();
+    store.masihBerlaku = () => false;
+    store.simpanGagal = true;
+    expect(await alur.tokenAkses()).toBeNull();
+    expect(store.isi).toBeNull();
+    expect(catatanApi.keluar).toEqual(["refresh-baru-1"]);
+    expect(alur.keadaan()).toMatchObject({ status: "signedOut", error: { kind: "storage" } });
+  });
+
+  it("does not erase unconfirmed remote revocation on a second local logout", async () => {
+    const { api } = apiTiruan();
+    api.keluarSesi = async () => ({ ok: false, error: { kind: "network" } });
+    const { google } = googleTiruan();
+    const store = penyimpananTiruan();
+    const alur = new AuthFlow(api, google, store, () => {});
+    await alur.pulihkan();
+    await alur.masuk();
+    await alur.keluar();
+    await alur.keluar();
+    expect(alur.keadaan()).toMatchObject({
+      status: "signedOut", error: { kind: "signOutIncomplete", localCleared: true, remoteRevoked: false },
+    });
+  });
+
+  it("reports remote revocation as unconfirmed when logout beats the initial restore read", async () => {
+    const { api, catatan } = apiTiruan();
+    const { google } = googleTiruan();
+    const store = penyimpananTiruan();
+    const pending = Promise.withResolvers<Awaited<ReturnType<typeof store.muat>>>();
+    store.muat = () => pending.promise;
+    const alur = new AuthFlow(api, google, store, () => {});
+    const restoring = alur.pulihkan();
+    await alur.keluar();
+    pending.resolve({ accessToken: "old", refreshToken: "old-refresh", expiresAtMs: Date.now() + 3_600_000 });
+    await restoring;
+    expect(catatan.keluar).toEqual([]);
+    expect(await alur.tokenAkses()).toBeNull();
+    expect(alur.keadaan()).toMatchObject({
+      status: "signedOut", error: { kind: "signOutIncomplete", localCleared: true, remoteRevoked: false },
+    });
+  });
+
+  it("drains an aborted email acceptance write and reports failed compensating revocation", async () => {
+    const { api } = apiTiruan({ email: async () => ({ ok: true, data: sesiUntuk(MAHASISWA) }) });
+    const { google } = googleTiruan();
+    const store = penyimpananTiruan();
+    const alur = new AuthFlow(api, google, store, () => {});
+    await alur.pulihkan();
+    const gate = Promise.withResolvers<void>();
+    const started = Promise.withResolvers<void>();
+    store.simpan = async value => { started.resolve(); await gate.promise; store.isi = value; };
+    api.keluarSesi = async () => ({ ok: false, error: { kind: "network" } });
+    const login = alur.masukEmail("synthetic-challenge", "00000000", new AbortController().signal);
+    await started.promise;
+    const logout = alur.keluar();
+    gate.resolve();
+    await Promise.all([login, logout]);
+    expect(store.isi).toBeNull();
+    expect(alur.keadaan()).toMatchObject({
+      status: "signedOut", error: { kind: "signOutIncomplete", localCleared: true, remoteRevoked: false },
+    });
   });
 });

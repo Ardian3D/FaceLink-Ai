@@ -1,0 +1,124 @@
+{
+  "native": {
+    "caps": {
+      "consumeTimeoutMs": 5000,
+      "readyTtlMs": 5000,
+      "encodeTimeoutMs": 5000,
+      "maxJpegBytes": 4194304,
+      "freshnessMs": 400,
+      "maxOwnedBytes": 16777216,
+      "maxPixels": 2073600
+    },
+    "peakOwnedBytes": 0,
+    "lastError": null,
+    "lastResult": "IDLE",
+    "uidTraffic": {
+      "txPackets": 2014,
+      "scope": "uid_lifetime_including_historical_debug",
+      "uid": 10002,
+      "rxBytes": 8470177,
+      "txBytes": 399794,
+      "rxPackets": 2698
+    },
+    "previewGeometry": null,
+    "heldFrames": 0,
+    "busy": false,
+    "sandboxWatch": {
+      "paths": [],
+      "coverage": "bounded_private_directory_events_not_forensic_guarantee",
+      "directoriesTruncated": false,
+      "baselineTruncated": false,
+      "deleteCount": 0,
+      "watchedDirectories": 0,
+      "registrationErrors": 0,
+      "overflowCount": 0,
+      "createCount": 0,
+      "baselineEntries": 0,
+      "pathsTruncated": false,
+      "moveCount": 0,
+      "closeWriteCount": 0,
+      "stoppedAtMs": 0,
+      "startedAtMs": 0,
+      "active": false
+    },
+    "foreground": true,
+    "syntheticRunning": false,
+    "ownedBytes": 0,
+    "phase": "IDLE",
+    "generation": 0
+  },
+  "inventory": {
+    "count": 11,
+    "bytes": 4887772,
+    "page": 1,
+    "pages": 2,
+    "files": [
+      {
+        "path": "files/BridgelessReactNativeDevBundle.js",
+        "bytes": 4116651,
+        "modifiedAt": 1792886948000,
+        "imageType": "not-image / unknown"
+      },
+      {
+        "path": "files/profileInstalled",
+        "bytes": 24,
+        "modifiedAt": 1792932633000,
+        "imageType": "not-image / unknown"
+      },
+      {
+        "path": "cache/oat_primary/arm64/base.art",
+        "bytes": 704768,
+        "modifiedAt": 1792932632000,
+        "imageType": "not-image / unknown"
+      },
+      {
+        "path": "cache/http-cache/journal",
+        "bytes": 36,
+        "modifiedAt": 1792886525000,
+        "imageType": "not-image / unknown"
+      },
+      {
+        "path": "cache/image_cache/v2.ols100.1/8.0/vmYuN2Tf2zQJBNPh_9xpXzOkGlo.cnt",
+        "bytes": 187,
+        "modifiedAt": 1792886949000,
+        "imageType": "png"
+      },
+      {
+        "path": "databases/com.google.android.datatransport.events-journal",
+        "bytes": 0,
+        "modifiedAt": 1792886524000,
+        "imageType": "not-image / unknown"
+      },
+      {
+        "path": "databases/com.google.android.datatransport.events",
+        "bytes": 65536,
+        "modifiedAt": 1792887045000,
+        "imageType": "not-image / unknown"
+      },
+      {
+        "path": "sharedPrefs/visioncamera.permissions.xml",
+        "bytes": 224,
+        "modifiedAt": 1792903766000,
+        "imageType": "not-image / unknown"
+      },
+      {
+        "path": "sharedPrefs/com.google.mlkit.internal.xml",
+        "bytes": 154,
+        "modifiedAt": 1792886525000,
+        "imageType": "not-image / unknown"
+      },
+      {
+        "path": "sharedPrefs/WebViewChromiumPrefs.xml",
+        "bytes": 127,
+        "modifiedAt": 1792886524000,
+        "imageType": "not-image / unknown"
+      },
+      {
+        "path": "sharedPrefs/expo.modules.kotlin.PersistentDataManager.xml",
+        "bytes": 65,
+        "modifiedAt": 1792903529000,
+        "imageType": "not-image / unknown"
+      }
+    ]
+  }
+}

@@ -31,6 +31,8 @@ credentials/
 credentials.json
 service-account*.json
 *.token
+*.secret
+smtp.config.json
 device-tokens.json
 operator-tokens.json
 
@@ -46,6 +48,11 @@ data/faces/
 data/biometric/
 data/participants/
 enrollment/
+# Pengecualian sempit: paket Go domain enrollment bukan data biometrik.
+!backend/internal/enrollment/
+!backend/internal/enrollment/**
+!apps/mobile/src/features/enrollment/
+!apps/mobile/src/features/enrollment/**
 captures/
 faces/
 samples/
@@ -64,6 +71,18 @@ samples/
 *.emb
 embeddings/
 templates/
+# Pengecualian sempit: template source staging, bukan template biometrik.
+!research/fl-enr02a-host/templates/
+!research/fl-enr02a-host/templates/**
+# FL-GIT02: hanya enam template source CAM03 yang ditinjau, bukan data template.
+!research/fl-cam03-host/templates/
+research/fl-cam03-host/templates/*
+!research/fl-cam03-host/templates/cam03-host-regression.test.ts
+!research/fl-cam03-host/templates/cam03-metro-overlay.cjs
+!research/fl-cam03-host/templates/cam03-native-check.tsx
+!research/fl-cam03-host/templates/cam03-playback-metadata.test.ts
+!research/fl-cam03-host/templates/cam03-playback-metadata.ts
+!research/fl-cam03-host/templates/cam03-video-observer.ts
 *.face
 *.faceenc
 

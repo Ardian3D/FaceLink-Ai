@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { Session, SessionError } from "@/types";
-import { ambilSaya, keluarSesi, mintaNonce, segarkanSesi, tukarIdToken } from "./authApi";
+import { ambilSaya, keluarSesi, mintaNonce, segarkanSesi, tukarIdToken, verifikasiKodeEmail, type HasilEmail } from "./authApi";
 import { AuthFlow, type AuthState, type AuthStatus, type TahapMasuk } from "./authFlow";
 import { lupakanGoogle, masukDenganGoogle, periksaDukungan } from "./googleSignIn";
 import {
@@ -33,8 +33,11 @@ export type { AuthStatus, TahapMasuk };
 export type SessionContextValue = AuthState & {
   /** Titik masuk tombol "Continue with Google". */
   startSignIn: () => Promise<void>;
+  signInEmail: (challengeId: string, code: string, signal: AbortSignal) => Promise<HasilEmail<void>>;
   /** Mengulang pemulihan sesi tersimpan tanpa mengulang Google Sign-In. */
   ulangiPemulihan: () => Promise<void>;
+  /** Token akses untuk modul fitur yang tidak memegang AuthFlow; tidak masuk state React. */
+  getAccessToken: () => Promise<string | null>;
   /** Menutup sesi: hapus token lokal, cabut di server, lupakan akun Google. */
   signOut: () => Promise<void>;
 };
@@ -57,7 +60,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [alur] = useState(
     () =>
       new AuthFlow(
-        { mintaNonce, tukarIdToken, segarkanSesi, ambilSaya, keluarSesi },
+        { mintaNonce, tukarIdToken, segarkanSesi, ambilSaya, keluarSesi, verifikasiKodeEmail },
         { periksaDukungan, masukDenganGoogle, lupakanGoogle },
         {
           muat: muatSesiTersimpan,
@@ -79,7 +82,9 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     () => ({
       ...state,
       startSignIn: () => alur.masuk(),
+      signInEmail: (challengeId, code, signal) => alur.masukEmail(challengeId, code, signal),
       ulangiPemulihan: () => alur.pulihkan(),
+      getAccessToken: () => alur.tokenAkses(),
       signOut: () => alur.keluar(),
     }),
     [alur, state]

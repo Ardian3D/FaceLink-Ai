@@ -1,0 +1,85 @@
+{
+  "launch": "Starting: Intent { cmp=ai.facelink.cam03host/ai.facelink.mobile.MainActivity }\r\nStatus: ok\r\nLaunchState: COLD\r\nActivity: ai.facelink.cam03host/ai.facelink.mobile.MainActivity\r\nTotalTime: 1024\r\nWaitTime: 1043\r\nComplete",
+  "pid": "25593",
+  "packageExpected": "ai.facelink.cam03host",
+  "visible": [
+    "Continue with FaceLink",
+    "Continue with Google",
+    "FaceLink"
+  ],
+  "googleDisabled": [
+    {
+      "text": "",
+      "desc": "Continue with Google",
+      "enabled": "false",
+      "clickable": "true"
+    },
+    {
+      "text": "Continue with Google",
+      "desc": "",
+      "enabled": "true",
+      "clickable": "false"
+    }
+  ],
+  "emailCta": [
+    {
+      "text": "",
+      "desc": "FaceLink Ai",
+      "id": "",
+      "enabled": "true",
+      "clickable": "false",
+      "bounds": "[203,961][877,1448]"
+    },
+    {
+      "text": "FaceLink",
+      "desc": "",
+      "id": "",
+      "enabled": "true",
+      "clickable": "false",
+      "bounds": "[203,1307][732,1448]"
+    },
+    {
+      "text": "",
+      "desc": "Continue with FaceLink",
+      "id": "",
+      "enabled": "true",
+      "clickable": "true",
+      "bounds": "[65,1577][1015,1707]"
+    },
+    {
+      "text": "Continue with FaceLink",
+      "desc": "",
+      "id": "",
+      "enabled": "true",
+      "clickable": "false",
+      "bounds": "[323,1609][839,1674]"
+    },
+    {
+      "text": "",
+      "desc": "Continue with Google",
+      "id": "",
+      "enabled": "false",
+      "clickable": "true",
+      "bounds": "[65,1739][1015,1896]"
+    },
+    {
+      "text": "Continue with Google",
+      "desc": "",
+      "id": "",
+      "enabled": "true",
+      "clickable": "false",
+      "bounds": "[343,1785][829,1850]"
+    },
+    {
+      "text": "Masuk memerlukan internet. Role akun ditentukan backend FaceLink AI, bukan oleh aplikasi.",
+      "desc": "",
+      "id": "",
+      "enabled": "true",
+      "clickable": "false",
+      "bounds": "[65,1928][1017,2016]"
+    }
+  ],
+  "nodeCount": 10,
+  "cameraPermissionPrompt": false,
+  "screenshotTaken": false
+}

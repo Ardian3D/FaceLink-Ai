@@ -33,7 +33,7 @@ export function StepTracker({ langkah }: { langkah: Langkah[] }) {
   const lebarPenghubung = Math.max(8, Math.min(36, Math.round(lebarItem * 0.35)));
 
   return (
-    <View style={styles.baris} accessibilityRole="progressbar">
+    <View style={styles.baris}>
       {langkah.map((l, i) => {
         const berjalan = l.status === "berjalan";
         const selesai = l.status === "selesai";

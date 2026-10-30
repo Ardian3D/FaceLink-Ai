@@ -8,7 +8,7 @@
  */
 import type { CurrentUser, SessionError } from "@/types";
 import type { ApiAuth, GoogleAuth, PenyimpananSesi, SesiPerangkat } from "@/features/auth/authFlow";
-import type { HasilAuth, SesiBackend } from "@/features/auth/authApi";
+import type { HasilAuth, HasilEmail, SesiBackend } from "@/features/auth/authApi";
 import type { HasilGoogle } from "@/features/auth/googleSignIn";
 
 export const MAHASISWA: CurrentUser = {
@@ -67,6 +67,7 @@ export function apiTiruan(
   jawaban: {
     nonce?: () => Promise<HasilAuth<string>>;
     tukar?: () => Promise<HasilAuth<SesiBackend>>;
+    email?: (challengeId: string, code: string, signal?: AbortSignal) => Promise<HasilEmail<SesiBackend>>;
     segarkan?: () => Promise<
       HasilAuth<{ accessToken: string; refreshToken: string; expiresAtMs: number }>
     >;
@@ -83,6 +84,10 @@ export function apiTiruan(
     async tukarIdToken(idToken, nonce, email) {
       catatan.tukar.push({ idToken, nonce, email });
       return jawaban.tukar ? jawaban.tukar() : { ok: true, data: sesiUntuk(MAHASISWA) };
+    },
+    async verifikasiKodeEmail(challengeId, code, signal) {
+      return jawaban.email ? jawaban.email(challengeId, code, signal)
+        : { ok: false, error: { kind: "otpInvalid" } };
     },
     async segarkanSesi() {
       catatan.segarkan += 1;
@@ -104,6 +109,7 @@ export function apiTiruan(
     },
     async keluarSesi(token) {
       catatan.keluar.push(token);
+      return { ok: true, data: undefined };
     },
   };
   return { api, catatan };

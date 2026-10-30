@@ -12,7 +12,7 @@
  *
  * **Aturan yang ditegakkan di sini:**
  *
- *  1. Sesi hanya terbit setelah backend menukar ID token (`POST /auth/google`).
+ *  1. Sesi hanya terbit setelah backend memverifikasi Google atau Email OTP.
  *     Role tidak pernah ditetapkan di sini; ia hanya disalin dari jawaban.
  *  2. Token hanya ditulis lewat `PenyimpananSesi` (SecureStore pada produksi).
  *     ID token Google tidak pernah disimpan.
@@ -26,7 +26,7 @@
  *     tokennya dibuang.
  */
 import type { CurrentUser, SessionError } from "@/types";
-import type { HasilAuth, SesiBackend } from "./authApi";
+import type { HasilAuth, HasilEmail, SesiBackend } from "./authApi";
 import type { HasilGoogle } from "./googleSignIn";
 
 export type AuthStatus =
@@ -75,7 +75,10 @@ export type ApiAuth = {
     refreshToken: string
   ) => Promise<HasilAuth<{ accessToken: string; refreshToken: string; expiresAtMs: number }>>;
   ambilSaya: (accessToken: string) => Promise<HasilAuth<CurrentUser>>;
-  keluarSesi: (accessToken: string) => Promise<void>;
+  keluarSesi: (refreshToken: string) => Promise<HasilAuth<void>>;
+  verifikasiKodeEmail: (
+    challengeId: string, code: string, signal?: AbortSignal
+  ) => Promise<HasilEmail<SesiBackend>>;
 };
 
 /** Google Sign-In di perangkat. */
@@ -115,6 +118,11 @@ export class AuthFlow {
   private segarkanSedang: Promise<string | null> | null = null;
   private sedangMasuk = false;
   private sedangPulihkan = false;
+  private emailSedang: AbortController | null = null;
+  private keluarSedang: Promise<void> | null = null;
+  private generasi = 0;
+  private penerimaanSedang: Promise<unknown> | null = null;
+  private remoteTidakPasti = false;
 
   constructor(
     private readonly api: ApiAuth,
@@ -140,26 +148,38 @@ export class AuthFlow {
    * penulisan gagal, pengguna tidak boleh melihat dashboard yang sesinya akan
    * hilang saat aplikasi dibuka ulang.
    */
-  private async terapkan(sesi: SesiBackend): Promise<void> {
+  private async terapkan(sesi: SesiBackend, generasi: number, signal?: AbortSignal): Promise<HasilAuth<void>> {
     const baru: SesiPerangkat = {
       accessToken: sesi.accessToken,
       refreshToken: sesi.refreshToken,
       expiresAtMs: sesi.expiresAtMs,
     };
+    if (signal?.aborted || generasi !== this.generasi) {
+      await this.cabut(sesi.refreshToken);
+      return { ok: false, error: { kind: "cancelled" } };
+    }
     try {
       await this.store.simpan(baru);
-    } catch (galat) {
+    } catch {
+      await this.store.hapus().catch(() => {});
+      await this.cabut(sesi.refreshToken);
+      if (signal?.aborted || generasi !== this.generasi) return { ok: false, error: { kind: "cancelled" } };
       this.sesi = null;
       this.set({
         status: "failed",
         session: null,
-        error: {
-          kind: "storage",
-          message: galat instanceof Error ? galat.message : String(galat),
-        },
+        error: { kind: "storage", message: "Penyimpanan sesi perangkat gagal." },
         tahap: "menganggur",
       });
-      return;
+      return { ok: false, error: { kind: "storage", message: "Penyimpanan sesi perangkat gagal." } };
+    }
+    if (signal?.aborted || generasi !== this.generasi) {
+      try {
+        await this.store.hapus();
+      } finally {
+        await this.cabut(sesi.refreshToken);
+      }
+      return { ok: false, error: { kind: "cancelled" } };
     }
     this.sesi = baru;
     this.set({
@@ -168,13 +188,39 @@ export class AuthFlow {
       error: null,
       tahap: "selesai",
     });
+    return { ok: true, data: undefined };
   }
 
-  /** Membuang sesi lokal tanpa menghubungi server. */
+  private async cabut(refreshToken: string): Promise<boolean> {
+    let revoked = false;
+    try {
+      revoked = (await this.api.keluarSesi(refreshToken)).ok;
+    } catch {
+      revoked = false;
+    }
+    if (!revoked) this.remoteTidakPasti = true;
+    return revoked;
+  }
+
+  /** Clear local credentials and preserve an honest revocation result. */
   private async buang(alasan: SessionError): Promise<void> {
+    const sesi = this.sesi;
     this.sesi = null;
-    await this.store.hapus();
-    this.set({ status: "signedOut", session: null, error: alasan, tahap: "menganggur" });
+    let localCleared = false;
+    let remoteRevoked = !this.remoteTidakPasti;
+    try {
+      await this.store.hapus();
+      localCleared = true;
+    } catch {
+      localCleared = false;
+    }
+    if (sesi) remoteRevoked = await this.cabut(sesi.refreshToken);
+    remoteRevoked = remoteRevoked && !this.remoteTidakPasti;
+    this.set({
+      status: "signedOut", session: null, tahap: "menganggur",
+      error: localCleared && remoteRevoked ? alasan
+        : { kind: "signOutIncomplete", localCleared, remoteRevoked },
+    });
   }
 
   /**
@@ -202,6 +248,9 @@ export class AuthFlow {
 
   private async lakukanSegarkan(sesi: SesiPerangkat): Promise<string | null> {
     const hasil = await this.api.segarkanSesi(sesi.refreshToken);
+    // Logout owns cleanup once it detaches this session. A late rotation must
+    // never restore credentials or overwrite the signed-out result.
+    if (this.sesi !== sesi) return null;
     if (!hasil.ok) {
       if (sementara(hasil.error)) {
         // Token dipertahankan: sesi belum terbukti tidak sah.
@@ -214,17 +263,13 @@ export class AuthFlow {
     // tersimpan di perangkat: pakai token baru hanya setelah tersimpan.
     try {
       await this.store.simpan(hasil.data);
-    } catch (galat) {
-      this.sesi = null;
-      this.set({
-        status: "failed",
-        session: null,
-        error: {
-          kind: "storage",
-          message: galat instanceof Error ? galat.message : String(galat),
-        },
-        tahap: "menganggur",
-      });
+      if (this.sesi !== sesi) return null;
+    } catch {
+      if (this.sesi !== sesi) return null;
+      // R0 on disk would trigger replay detection after restart. R1 proves
+      // ownership even when its persistence failed; revoke and remove R0.
+      this.sesi = hasil.data;
+      await this.buang({ kind: "storage", message: "Penyimpanan sesi perangkat gagal." });
       return null;
     }
     this.sesi = hasil.data;
@@ -238,10 +283,12 @@ export class AuthFlow {
    * ulang lewat `GET /me`.
    */
   async pulihkan(): Promise<void> {
-    if (this.sedangPulihkan) return;
+    if (this.sedangPulihkan || this.keluarSedang) return;
+    const generasi = this.generasi;
     this.sedangPulihkan = true;
     try {
       const tersimpan = await this.store.muat();
+      if (generasi !== this.generasi) return;
       if (tersimpan === null) {
         this.sesi = null;
         this.set({ status: "signedOut", session: null, error: null, tahap: "menganggur" });
@@ -250,6 +297,7 @@ export class AuthFlow {
       this.sesi = tersimpan;
       this.set({ status: "memulihkan", error: null });
       const token = await this.tokenAkses();
+      if (generasi !== this.generasi) return;
       if (token === null) {
         // `buang()` sudah mengubah status bila backend menolak. Kalau tidak,
         // penyebabnya sementara dan token tetap tersimpan.
@@ -264,6 +312,7 @@ export class AuthFlow {
         return;
       }
       const saya = await this.api.ambilSaya(token);
+      if (generasi !== this.generasi) return;
       if (!saya.ok) {
         if (saya.error.kind === "notGranted") {
           // Akun ini kehilangan akses: sisa token tidak boleh tinggal di
@@ -320,7 +369,15 @@ export class AuthFlow {
    * pengguna melihat kegagalan yang tidak ia sebabkan.
    */
   async masuk(): Promise<void> {
-    if (this.sedangMasuk) return;
+    if (this.sedangMasuk || this.keluarSedang) return;
+    const jalan = this.lakukanMasuk(this.generasi);
+    this.penerimaanSedang = jalan;
+    try { await jalan; } finally {
+      if (this.penerimaanSedang === jalan) this.penerimaanSedang = null;
+    }
+  }
+
+  private async lakukanMasuk(generasi: number): Promise<void> {
     const penghalang = this.google.periksaDukungan();
     if (penghalang !== null) {
       this.set({
@@ -335,6 +392,7 @@ export class AuthFlow {
     try {
       this.set({ status: "checking", session: null, error: null, tahap: "google" });
       const nonce = await this.api.mintaNonce();
+      if (generasi !== this.generasi) return;
       if (!nonce.ok) {
         this.set({
           status: "failed",
@@ -345,6 +403,7 @@ export class AuthFlow {
         return;
       }
       const google = await this.google.masukDenganGoogle(nonce.data);
+      if (generasi !== this.generasi) return;
       if (!google.ok) {
         // Pembatalan bukan kegagalan: layar kembali tenang tanpa pesan.
         const batal = google.error.kind === "cancelled";
@@ -358,6 +417,10 @@ export class AuthFlow {
       }
       this.set({ tahap: "menukar" });
       const tukar = await this.api.tukarIdToken(google.idToken, nonce.data, google.email);
+      if (generasi !== this.generasi) {
+        if (tukar.ok) await this.cabut(tukar.data.refreshToken);
+        return;
+      }
       if (!tukar.ok) {
         if (tukar.error.kind === "notGranted") {
           this.set({
@@ -377,41 +440,93 @@ export class AuthFlow {
         return;
       }
       this.set({ tahap: "menyiapkan" });
-      await this.terapkan(tukar.data);
+      await this.terapkan(tukar.data, generasi);
     } finally {
       this.sedangMasuk = false;
     }
   }
 
+  /** Email OTP shares the same storage-before-session acceptance as Google. */
+  async masukEmail(challengeId: string, code: string, signal: AbortSignal): Promise<HasilEmail<void>> {
+    if (signal.aborted || this.sedangMasuk || this.sedangPulihkan || this.keluarSedang || this.state.status === "signedIn") {
+      return { ok: false, error: { kind: "cancelled" } };
+    }
+    const jalan = this.lakukanMasukEmail(challengeId, code, signal, this.generasi);
+    this.penerimaanSedang = jalan;
+    try { return await jalan; } finally {
+      if (this.penerimaanSedang === jalan) this.penerimaanSedang = null;
+    }
+  }
+
+  private async lakukanMasukEmail(challengeId: string, code: string, signal: AbortSignal, generasi: number): Promise<HasilEmail<void>> {
+    this.sedangMasuk = true;
+    const kendali = new AbortController();
+    this.emailSedang = kendali;
+    const batalkan = () => kendali.abort();
+    signal.addEventListener("abort", batalkan);
+    try {
+      const hasil = await this.api.verifikasiKodeEmail(challengeId, code, kendali.signal);
+      if (!hasil.ok) return kendali.signal.aborted
+        ? { ok: false, error: { kind: "cancelled" } }
+        : hasil;
+      return await this.terapkan(hasil.data, generasi, kendali.signal);
+    } catch {
+      return { ok: false, error: kendali.signal.aborted ? { kind: "cancelled" } : { kind: "network" } };
+    } finally {
+      signal.removeEventListener("abort", batalkan);
+      this.emailSedang = null;
+      this.sedangMasuk = false;
+    }
+  }
+
   /**
-   * Keluar: bersihkan lokal lebih dahulu, lalu cabut di server.
-   *
-   * Urutan itu disengaja. Bila pencabutan server gagal (jaringan mati), token
-   * di perangkat sudah tidak ada — yang paling mendesak adalah memastikan
-   * perangkat berhenti memegang kredensial.
+   * Detach credentials immediately. Drain an already-started rotation before
+   * the final SecureStore deletion; revoke with the captured refresh proof.
    */
   async keluar(): Promise<void> {
-    const sesi = this.sesi;
-    this.sesi = null;
-    // `try` di sini bukan formalitas: `hapus` menyentuh Keystore dan
-    // `keluarSesi` menyentuh jaringan. Kegagalan keduanya tidak boleh membuat
-    // pengguna tetap terlihat masuk — keadaan lokal adalah yang paling mendesak.
+    if (this.keluarSedang) return this.keluarSedang;
+    const jalan = this.lakukanKeluar();
+    this.keluarSedang = jalan;
     try {
-      await this.store.hapus();
-    } catch {
-      // Penyimpanan yang menolak menghapus tetap membuat token di memori
-      // hilang; sisa di perangkat akan dibersihkan pada peluncuran berikutnya
-      // lewat pemulihan yang ditolak backend.
+      await jalan;
+    } finally {
+      if (this.keluarSedang === jalan) this.keluarSedang = null;
     }
-    if (sesi !== null) {
+  }
+
+  private async lakukanKeluar(): Promise<void> {
+    this.generasi += 1;
+    this.emailSedang?.abort();
+    const sesi = this.sesi;
+    const rotasi = this.segarkanSedang;
+    const penerimaan = this.penerimaanSedang;
+    // Until the initial secure read settles, no proof is available to revoke.
+    // Deletion fences the read but is not proof of server revocation.
+    if (this.sedangPulihkan && sesi === null) this.remoteTidakPasti = true;
+    this.sesi = null;
+    let localCleared = false;
+    let remoteRevoked = !this.remoteTidakPasti;
+    const hapus = async () => {
       try {
-        await this.api.keluarSesi(sesi.accessToken);
+        await this.store.hapus();
+        localCleared = true;
       } catch {
-        // Sesi di server akan kedaluwarsa sendiri (akses 60 menit). Yang harus
-        // dipastikan di sini adalah perangkat berhenti memegang kredensial.
+        localCleared = false;
       }
+    };
+    await hapus();
+    if (rotasi || penerimaan) {
+      // Drain pending native writes before declaring the device clean.
+      await Promise.allSettled([rotasi, penerimaan]);
+      await hapus();
     }
+    if (sesi !== null) remoteRevoked = await this.cabut(sesi.refreshToken);
+    remoteRevoked = remoteRevoked && !this.remoteTidakPasti;
     await this.google.lupakanGoogle();
-    this.set({ status: "signedOut", session: null, error: null, tahap: "menganggur" });
+    this.set({
+      status: "signedOut", session: null, tahap: "menganggur",
+      error: localCleared && remoteRevoked
+        ? null : { kind: "signOutIncomplete", localCleared, remoteRevoked },
+    });
   }
 }

@@ -1,0 +1,17 @@
+node_modules/
+android/
+# FL-GIT02: hand-authored bridge source only; generated android stays ignored.
+!/plugins/android/
+/plugins/android/*
+!/plugins/android/Cam01PrivacyModule.kt
+!/plugins/android/Cam01PrivacyPackage.kt
+!/plugins/android/FaceLinkCaptureModule.kt
+ios/
+.expo/
+dist/
+*.apk
+*.aab
+*.jpg
+*.jpeg
+*.png
+*.mp4

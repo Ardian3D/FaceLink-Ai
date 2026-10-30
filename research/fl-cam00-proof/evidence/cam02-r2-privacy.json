@@ -1,0 +1,220 @@
+{
+  "apkSha256": "e97cac1916731ab9c1ab544b32fb06aab557d155cb16d66def002d28fd225acb",
+  "coldStart": "Starting: Intent { cmp=ai.facelink.cam00proof/.MainActivity }\r\nStatus: ok\r\nLaunchState: COLD\r\nActivity: ai.facelink.cam00proof/.MainActivity\r\nTotalTime: 436\r\nWaitTime: 443\r\nComplete\r\n",
+  "afterForceColdStart": "Starting: Intent { cmp=ai.facelink.cam00proof/.MainActivity }\r\nStatus: ok\r\nLaunchState: COLD\r\nActivity: ai.facelink.cam00proof/.MainActivity\r\nTotalTime: 343\r\nWaitTime: 352\r\nComplete\r\n",
+  "preCapture": {
+    "sandboxWatch": {
+      "paths": [],
+      "coverage": "bounded_private_directory_events_not_forensic_guarantee",
+      "directoriesTruncated": false,
+      "baselineTruncated": false,
+      "deleteCount": 0,
+      "watchedDirectories": 0,
+      "registrationErrors": 0,
+      "overflowCount": 0,
+      "createCount": 0,
+      "baselineEntries": 0,
+      "pathsTruncated": false,
+      "moveCount": 0,
+      "closeWriteCount": 0,
+      "stoppedAtMs": 0,
+      "startedAtMs": 0,
+      "active": false
+    },
+    "lastResult": "IDLE",
+    "busy": false,
+    "uidTraffic": {
+      "txPackets": 2014,
+      "scope": "uid_lifetime_including_historical_debug",
+      "uid": 10002,
+      "rxBytes": 8470177,
+      "txBytes": 399794,
+      "rxPackets": 2698
+    },
+    "ownedBytes": 0,
+    "peakOwnedBytes": 0,
+    "foreground": true,
+    "displayed": false,
+    "heldFrames": 0,
+    "caps": {
+      "previewTtlMs": 15000,
+      "freshnessMs": 400,
+      "maxOwnedBytes": 16777216,
+      "maxJpegBytes": 4194304,
+      "maxPixels": 2073600
+    },
+    "generation": null
+  },
+  "postJpegTtl": {
+    "foreground": true,
+    "sandboxWatch": {
+      "paths": [],
+      "coverage": "bounded_private_directory_events_not_forensic_guarantee",
+      "directoriesTruncated": false,
+      "baselineTruncated": false,
+      "deleteCount": 0,
+      "watchedDirectories": 15,
+      "registrationErrors": 0,
+      "overflowCount": 0,
+      "createCount": 0,
+      "baselineEntries": 25,
+      "pathsTruncated": false,
+      "moveCount": 0,
+      "closeWriteCount": 0,
+      "stoppedAtMs": 30047027,
+      "startedAtMs": 30032360,
+      "active": false
+    },
+    "lastResult": "JPEG_READY",
+    "uidTraffic": {
+      "txPackets": 2014,
+      "scope": "uid_lifetime_including_historical_debug",
+      "uid": 10002,
+      "rxBytes": 8470177,
+      "txBytes": 399794,
+      "rxPackets": 2698
+    },
+    "previewGeometry": {
+      "cropBottom": 960,
+      "cropRight": 1280,
+      "maxY": 960.0000610351562,
+      "cropLeft": 0,
+      "minY": 0,
+      "inputWidth": 1280,
+      "maxX": 1251.4739990234375,
+      "minX": 28.525840759277344,
+      "rotationDegrees": 270,
+      "cropTop": 0,
+      "inputHeight": 960,
+      "generation": 3
+    },
+    "heldFrames": 0,
+    "busy": false,
+    "displayed": false,
+    "ownedBytes": 0,
+    "peakOwnedBytes": 10635904,
+    "caps": {
+      "previewTtlMs": 15000,
+      "freshnessMs": 400,
+      "maxOwnedBytes": 16777216,
+      "maxJpegBytes": 4194304,
+      "maxPixels": 2073600
+    },
+    "generation": 3
+  },
+  "afterForceRestart": {
+    "foreground": true,
+    "sandboxWatch": {
+      "paths": [],
+      "coverage": "bounded_private_directory_events_not_forensic_guarantee",
+      "directoriesTruncated": false,
+      "baselineTruncated": false,
+      "deleteCount": 0,
+      "watchedDirectories": 0,
+      "registrationErrors": 0,
+      "overflowCount": 0,
+      "createCount": 0,
+      "baselineEntries": 0,
+      "pathsTruncated": false,
+      "moveCount": 0,
+      "closeWriteCount": 0,
+      "stoppedAtMs": 0,
+      "startedAtMs": 0,
+      "active": false
+    },
+    "lastResult": "IDLE",
+    "uidTraffic": {
+      "txPackets": 2014,
+      "scope": "uid_lifetime_including_historical_debug",
+      "uid": 10002,
+      "rxBytes": 8470177,
+      "txBytes": 399794,
+      "rxPackets": 2698
+    },
+    "previewGeometry": null,
+    "heldFrames": 0,
+    "busy": false,
+    "displayed": false,
+    "ownedBytes": 0,
+    "peakOwnedBytes": 0,
+    "caps": {
+      "previewTtlMs": 15000,
+      "freshnessMs": 400,
+      "maxOwnedBytes": 16777216,
+      "maxJpegBytes": 4194304,
+      "maxPixels": 2073600
+    },
+    "generation": null
+  },
+  "releaseBaselineInventory": [
+    "files/BridgelessReactNativeDevBundle.js · 4116651 B · modifiedAt 1792886948000 · signature not-image / unknown",
+    "files/profileInstalled · 24 B · modifiedAt 1792909174000 · signature not-image / unknown",
+    "cache/oat_primary/arm64/base.art · 704784 B · modifiedAt 1792909173000 · signature not-image / unknown",
+    "cache/http-cache/journal · 36 B · modifiedAt 1792886525000 · signature not-image / unknown",
+    "cache/image_cache/v2.ols100.1/8.0/vmYuN2Tf2zQJBNPh_9xpXzOkGlo.cnt · 187 B · modifiedAt 1792886949000 · signature png",
+    "databases/com.google.android.datatransport.events-journal · 0 B · modifiedAt 1792886524000 · signature not-image / unknown",
+    "databases/com.google.android.datatransport.events · 65536 B · modifiedAt 1792887045000 · signature not-image / unknown",
+    "sharedPrefs/visioncamera.permissions.xml · 224 B · modifiedAt 1792903766000 · signature not-image / unknown",
+    "sharedPrefs/com.google.mlkit.internal.xml · 154 B · modifiedAt 1792886525000 · signature not-image / unknown",
+    "sharedPrefs/WebViewChromiumPrefs.xml · 127 B · modifiedAt 1792886524000 · signature not-image / unknown",
+    "sharedPrefs/expo.modules.kotlin.PersistentDataManager.xml · 65 B · modifiedAt 1792903529000 · signature not-image / unknown"
+  ],
+  "finalInventory": [
+    "files/BridgelessReactNativeDevBundle.js · 4116651 B · modifiedAt 1792886948000 · signature not-image / unknown",
+    "files/profileInstalled · 24 B · modifiedAt 1792912478000 · signature not-image / unknown",
+    "cache/oat_primary/arm64/base.art · 100032 B · modifiedAt 1792911061000 · signature not-image / unknown",
+    "cache/http-cache/journal · 36 B · modifiedAt 1792886525000 · signature not-image / unknown",
+    "cache/image_cache/v2.ols100.1/8.0/vmYuN2Tf2zQJBNPh_9xpXzOkGlo.cnt · 187 B · modifiedAt 1792886949000 · signature png",
+    "databases/com.google.android.datatransport.events-journal · 0 B · modifiedAt 1792886524000 · signature not-image / unknown",
+    "databases/com.google.android.datatransport.events · 65536 B · modifiedAt 1792887045000 · signature not-image / unknown",
+    "sharedPrefs/visioncamera.permissions.xml · 224 B · modifiedAt 1792903766000 · signature not-image / unknown",
+    "sharedPrefs/com.google.mlkit.internal.xml · 154 B · modifiedAt 1792886525000 · signature not-image / unknown",
+    "sharedPrefs/WebViewChromiumPrefs.xml · 127 B · modifiedAt 1792886524000 · signature not-image / unknown",
+    "sharedPrefs/expo.modules.kotlin.PersistentDataManager.xml · 65 B · modifiedAt 1792903529000 · signature not-image / unknown"
+  ],
+  "finalInventoryTotalBytes": 4283036,
+  "screenshot": {
+    "width": 1080,
+    "height": 2460,
+    "centralMaxRgb": 0
+  },
+  "liveMemorySnapshot": [
+    "           TOTAL PSS:   170940            TOTAL RSS:   278865       TOTAL SWAP PSS:    37874\r"
+  ],
+  "cameraBeforeForceStop": [
+    "(Camera ID: 1, Cost: 100, PID: 29781, Score: 0, State: 2User Id: 0, Client Package Name: ai.facelink.cam00proof, Conflicting Client Devices: {})\r"
+  ],
+  "settingsBefore": {
+    "screen_brightness": "4",
+    "screen_brightness_mode": "0",
+    "screen_off_timeout": "1800000",
+    "stay_on_while_plugged_in": "15",
+    "accelerometer_rotation": "0",
+    "user_rotation": "0"
+  },
+  "settingsAfter": {
+    "screen_brightness": "4",
+    "screen_brightness_mode": "0",
+    "screen_off_timeout": "15000",
+    "stay_on_while_plugged_in": "15",
+    "accelerometer_rotation": "0",
+    "user_rotation": "0"
+  },
+  "deviceSettingsNote": "No settings writes issued. screen_off_timeout differs (1800000 -> 15000); origin unestablished, not restored without permission.",
+  "backgroundAtJpegAttempts": {
+    "completed": 0,
+    "results": [],
+    "note": "No actual JPEG-to-HOME action observed; timeouts not counted as codec interruption PASS."
+  },
+  "userVisualR2": "JPEG dummy matches preview orientation/mirror/crop; user selected explicit confirmation",
+  "crashHeaders": [
+    "10-25 11:30:57.662 30592  5228 E AndroidRuntime: Process: ai.facelink.cam00proof, PID: 30592\r"
+  ],
+  "limits": [
+    "No forced crash or process kill precisely during encode/decode; force-stop observed with live camera client",
+    "FileObserver bounded and not forensic",
+    "UID counters historical; no packet capture or zero-telemetry claim",
+    "No gallery inventory; pipeline source has no MediaStore/file writer",
+    "16MiB cap covers own image buffers only"
+  ]
+}

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Ardian3D/FaceLink-Ai/backend/internal/smtpemail"
 )
 
 func envFrom(pairs map[string]string) EnvLookup {
@@ -208,7 +210,7 @@ func TestLoadFromMenolakKonfigurasiTidakValid(t *testing.T) {
 		{"alamat host kosong", map[string]string{EnvAddr: ":8080"}, "semua antarmuka"},
 		{"alamat IP LAN", map[string]string{EnvAddr: "192.168.1.10:8080"}, "loopback"},
 		{"basis data kosong", map[string]string{EnvDatabasePath: "   "}, EnvDatabasePath},
-		{"basis data di OneDrive", map[string]string{EnvDatabasePath: "C:/Users/X/OneDrive/data/facelink.db"}, "tersinkronisasi"},
+		{"basis data di OneDrive", map[string]string{EnvDatabasePath: "C:/Users/test-user/OneDrive/data/facelink.db"}, "tersinkronisasi"},
 		{"basis data jalur UNC", map[string]string{EnvDatabasePath: "//server/data/facelink.db"}, "lokal"},
 		{"migrasi kosong", map[string]string{EnvMigrationsDir: ""}, EnvMigrationsDir},
 		{"url AI bukan loopback", map[string]string{EnvAIEngineURL: "http://192.168.1.20:8001"}, "loopback"},
@@ -351,5 +353,105 @@ func TestLoadMemakaiLingkunganProses(t *testing.T) {
 	}
 	if cfg.LogLevel != "warn" {
 		t.Errorf("LogLevel = %q, ingin %q", cfg.LogLevel, "warn")
+	}
+}
+
+func TestEmailOTPConfigFailClosed(t *testing.T) {
+	dir := t.TempDir()
+	certPath := filepath.Join(dir, "server.pem")
+	keyPath := filepath.Join(dir, "server-key.pem")
+	for _, p := range []string{certPath, keyPath} {
+		if err := os.WriteFile(p, []byte("x"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tlsEnv := map[string]string{EnvTLSCert: certPath, EnvTLSKey: keyPath}
+
+	// Semua kosong: OTP tidak tersedia, bukan konfigurasi setengah jadi.
+	cfg, err := LoadFrom(envFrom(nil))
+	if err != nil {
+		t.Fatalf("konfigurasi bawaan harus sah: %v", err)
+	}
+	if len(cfg.OTPHMACKey) != 0 || cfg.SMTP.Host != "" {
+		t.Fatal("konfigurasi kosong mengaktifkan Email OTP")
+	}
+
+	full := map[string]string{
+		"SMTP_HOST":        "smtp.gmail.com",
+		"SMTP_PORT":        "587",
+		"SMTP_USERNAME":    "smtp-sender@example.test",
+		"SMTP_AUTH_SECRET": "rahasia-yang-tidak-boleh-bocor",
+		"SMTP_FROM":        "smtp-sender@example.test",
+	}
+	// SMTP lengkap tanpa HTTPS backend dan konfigurasi parsial harus ditolak.
+	if _, err := LoadFrom(envFrom(full)); err == nil {
+		t.Fatal("SMTP lengkap tanpa HTTPS backend diterima")
+	}
+	if _, err := LoadFrom(envFrom(map[string]string{"SMTP_HOST": "smtp.gmail.com"})); err == nil {
+		t.Fatal("SMTP parsial diterima")
+	}
+
+	// Alias From hanya sah dengan allowlist domain yang eksplisit.
+	alias := map[string]string{EnvSMTPAllowedFromDomains: "facelink.online"}
+	for k, v := range full {
+		alias[k] = v
+	}
+	alias["SMTP_FROM"] = "support@facelink.online"
+	for k, v := range tlsEnv {
+		alias[k] = v
+	}
+	if _, err := LoadFrom(envFrom(alias)); err == nil {
+		t.Fatal("alias tanpa key OTP diterima")
+	} else if strings.Contains(err.Error(), "SMTP_ALLOWED_FROM_DOMAINS") {
+		t.Fatalf("allowlist tidak terbaca oleh loader: %v", err)
+	}
+	tanpaAllowlist := map[string]string{}
+	for k, v := range alias {
+		tanpaAllowlist[k] = v
+	}
+	delete(tanpaAllowlist, EnvSMTPAllowedFromDomains)
+	if _, err := LoadFrom(envFrom(tanpaAllowlist)); err == nil || !strings.Contains(err.Error(), "SMTP_ALLOWED_FROM_DOMAINS") {
+		t.Fatalf("alias tanpa allowlist tidak ditolak dengan jelas: %v", err)
+	}
+
+	// Key plaintext/in-repo tidak boleh lolos sebagai key HMAC.
+	keyFile := filepath.Join(dir, "otp.key")
+	if err := os.WriteFile(keyFile, []byte("bukan-key-dpapi"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := map[string]string{EnvOTPHMACKeyFile: keyFile}
+	for k, v := range full {
+		env[k] = v
+	}
+	for k, v := range tlsEnv {
+		env[k] = v
+	}
+	_, err = LoadFrom(envFrom(env))
+	if err == nil {
+		t.Fatal("key OTP yang tidak terlindungi diterima")
+	}
+	if strings.Contains(err.Error(), full["SMTP_AUTH_SECRET"]) {
+		t.Fatal("galat konfigurasi membocorkan SMTP secret")
+	}
+
+	// Redacted tidak boleh memuat secret, jalur key, atau nama field secret.
+	redacted, err := json.Marshal(Config{
+		SMTP: smtpemail.Config{
+			Host: "smtp.gmail.com", Port: 587,
+			Username: "smtp-sender@example.test", AuthSecret: full["SMTP_AUTH_SECRET"],
+			From: "smtp-sender@example.test",
+		},
+		OTPHMACKey: make([]byte, 32),
+	}.Redacted())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{full["SMTP_AUTH_SECRET"], keyFile, "auth_secret"} {
+		if strings.Contains(string(redacted), forbidden) {
+			t.Fatalf("Redacted membocorkan %q: %s", forbidden, redacted)
+		}
+	}
+	if !strings.Contains(string(redacted), `"email_otp":true`) {
+		t.Errorf("Redacted tidak menandai OTP aktif: %s", redacted)
 	}
 }

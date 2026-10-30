@@ -5,6 +5,42 @@
 **Revisi FL-010V (16 Oktober 2026):** §4 ditambahi persyaratan **log akses harus mencatat status respons sebenarnya** (`503` batas waktu dan `500` panic) sebagai syarat tugas penguatan **FL-005S** (kini **SELESAI secara implementasi pada 16 Oktober 2026** — lihat revisi berikut); §8 ditambahi **GA-13..GA-18** (§8.3) dan **TA-23..TA-26** (§8.4); status audit pada §8.2 butir 5 dinaikkan menjadi **BERLAKU menurut D-036**. Seluruh skenario baru berstatus **BELUM TERVERIFIKASI**; matriks 53 endpoint, nama peran, nama tabel, dan kode kesalahan **tidak berubah**.
 **Revisi FL-005S (16 Oktober 2026):** §4 diperbarui — syarat **log akses mencatat status respons sebenarnya** kini **SUDAH DIPENUHI** oleh **FL-005S** (implementasi pada cabang `fix/fl-005s-http-access-logging`), dengan 12 skenario pada `backend/internal/httpapi/accesslog_test.go`. Status **BELUM TERVERIFIKASI** skenario pada §2, §7, dan §8.1–§8.4 (termasuk GA/TA) **tidak berubah**, dan matriks 53 endpoint, nama peran, nama tabel, serta kode kesalahan **tidak berubah**.
 
+**FL-STAB02 — diagnosis/lifecycle terbatas selesai (29 Oktober 2026):**
+controller auth/Admin/Student85/85PASS; middleware inspector aktual mengirim
+getPages tanpa debugger frontend. Release-like ARM64 build exit0, lalu diuji
+di TECNO setelah izin baru bersama kedua debug staging: OTP/session restore/
+logout, preview close dan offline ACTIVE-unverified. Fixture minimal real
+worker→AADv2 ACTIVE→withdraw→REVOKED/cleanup0; native identical replay202→200
+tanpa audit ganda. **Uncertainty/manual replay UI belum terdemonstrasi.**
+Satu fatal historis tetap,0 fatal baru teramati; root cause **UNRESOLVED**,
+bukan fixed atau PASS semua lifecycle. Attach WS berhasil, CDP round-trip belum
+terbukti. Enam package diinventaris, tidak uninstall. Staging/host/reverse ditutup.
+Bukti dan batas: `FL_STAB02_TECHNICAL_REPORT.md`; Fast-Track **PARTIAL**.
+
+**Bukti FL-ENR06-R1 (29 Oktober 2026):** positive Android chain satu submission
+PASS melalui dua package staging terisolasi di TECNO: consent→pending→Admin
+review/approval202→real YuNet/SFace→AADv2 ACTIVE→Student withdrawal→REVOKED/
+cleanup0. Form history-shift direproduksi dan fix minimal diverifikasi actual
+UI. Offline trust, preview close/logout, ETag412 dan response-loss duplicate200
+teramati; layar uncertain/manual replay Android tidak teramati. Satu crash
+native dev inspector masih terbuka: **verdict keseluruhan PARTIAL**, bukan PASS
+semua lifecycle/accessibility. Go18paket+vet exit0, Python exit0/satu skip,
+mobile229PASS/9SKIP+typecheck/lint. Runtime task dihentikan aman, hash artefak
+utama/model/video tetap. Laporan/batas A–L: `FL_ENR06_R1_TECHNICAL_REPORT.md`.
+**STOP tanpa task berikut/human/production/FL-UI01 otomatis.**
+Suite client opt-in terakhir236PASS/2SKIP; combined HTTPS dipanggil terpisah
+dengan environment eksplisit dan lulus2/2. Bukan klaim satu invocation238PASS.
+
+**Bukti FL-STAB01 (27 Oktober 2026):** F1 expired-access logout FAIL sebelum fix,
+PASS setelah refresh-proof revocation; persisted revoke/old-refresh401,
+idempotensi, isolation, concurrency, restart dan atomic audit rollback tercakup.
+F2 actual-source animation race FAIL sebelum fix dan PASS sesudah; native TECNO
+berizin menjalankan login/logout tiga role, restore, navigasi dan background.
+Final Go17+vet; main/stage219 PASS/6 skipped; HTTPS E2E Admin5/5 dan Mahasiswa1/1;
+stage ARM64 build sukses. Native proof bounded, F3 tetap terbuka.
+Laporan A–K dan batas: [`FL_STAB01_TECHNICAL_REPORT.md`](FL_STAB01_TECHNICAL_REPORT.md).
+
+
 ## 1. Tingkatan pengujian
 
 | Tingkat | Tujuan | Bukti |
@@ -280,3 +316,437 @@ Bagian ini menggantikan status "rencana" untuk butir yang **sudah dijalankan**. 
 2. **Tidak ada akun Google nyata yang dipakai.** Seluruh uji OIDC memakai issuer, JWKS, dan token simulasi terkontrol (`internal/oidc/verify_test.go`, `internal/oidc/jwks_test.go`, `internal/httpapi/authflow_test.go`). Perilaku nyata endpoint Google (mis. kapan `azp` dikirim) **tidak** dapat disimpulkan dari uji ini.
 3. **Pembatasan laju belum ada.** Kode `429 RATE_LIMITED` tidak pernah dihasilkan; ini dicatat sebagai kesenjangan pada `docs/API_CONTRACT.md` §10 dan bukan bagian dari skenario §8.
 4. **Smoke test bukan pengganti uji unit.** Smoke FL-011 menjalankan biner sungguhan dengan penyedia identitas tiruan di atas HTTPS ber-CA lokal, dan membuktikan jalur HTTP end-to-end; hasilnya dicatat pada `PROJECT_STATE.md` beserta tanggalnya.
+
+## 9. Bukti FL-CORE02 — sesi dan fallback manual (25 Oktober 2026)
+
+Seluruh baris berikut dijalankan pada database disposable dan autentikasi sintetis,
+bukan akun testing Product Owner. Face Recognition tetap mekanisme utama produk;
+tidak ada engine/camera/enrollment/template yang diaktifkan pada validasi ini.
+
+| Acceptance FL-CORE02 | Bukti konkret yang lulus |
+|---|---|
+| 1. Lifecycle valid | `TestCore02LifecycleThresholdsAndManualAlternative`: draft/open/closed dan waktu server; HTTP `TestCORE02HTTPManualLifecycleReplayAndPrivacy` |
+| 2. Concurrent open | `TestCore02IndependentHandlesProtectOpenClassAndDevice`: dua handle, tepat satu sesi open dan satu audit; kelas dan perangkat diuji |
+| 3. Close dan retry | `TestCore02ConcurrentCloseCommitsOneTransitionAndAudit`: satu sukses/satu ErrSessionClosed, satu audit sesuai aktor/alasan pemenang; retry HTTP `409 SESSION_CLOSED` |
+| 4. Roster member sah | `TestCore02LifecycleThresholdsAndManualAlternative`: insert manual sah dan batas tepat late_after |
+| 5. Nonmember | `TestCore02ManualSubjectEligibilityAndValidation` dan `TestCORE02HTTPTimeThresholdsAndStrictParsing`: `422 CLASS_MISMATCH` |
+| 6. Duplikasi | `TestCore02IndependentHandlesManualAndIdempotencyRaces`: satu record/audit; replay respons identik; `TestCore02DuplicateAcrossLateThresholdPreservesFirstTimestamp`: retry tetap `409`, bukan mengubah waktu/status |
+| 7. Closed check-in | `TestCore02ClosedExplicitCorrectionAndNoOp` dan `TestCore02ElapsedSessionBlocksImplicitWithoutAutoClosing`: check-in biasa ditolak setelah close/deadline |
+| 8. Koreksi beralasan | `TestCore02ClosedExplicitCorrectionAndNoOp`: explicit historical correction sah, no-op identik tanpa audit ganda, alasan lama tetap di audit |
+| 9. Unauthorized correction | `TestCORE02HTTPRolesScopeAndCacheAuthorization`: mahasiswa `403`, dosen kelas lain `404` |
+| 10. Audit rollback | `TestCore02AuditFailureRollsBackEveryMutation`: trigger audit gagal, create/open/close/insert/correction dan snapshot ikut rollback |
+| 11. Dosen out-of-scope | `TestCore02ActorScopeAndReplayReauthorization` serta HTTP replay reauthorization: penugasan dicabut menutup replay dan pembacaan |
+| 12. Mahasiswa bukan penulis | HTTP roles test dan smoke HTTPS: POST manual-checkins mahasiswa `403`, tidak menambah attendance |
+| 13. Tanpa biometric consent | Lifecycle dan availability test: manual berhasil dengan nol consent; peserta tanpa account binding juga teruji |
+| 14. Biometrik unavailable | `TestCORE02ManualRemainsAvailableWithoutBiometrics`: readiness manual ready/biometrics unavailable, manual berhasil, nol nonmanual write, recognition route tidak aktif |
+| 15. Upgrade disposable | `TestCORE02UpgradePreservesLedgerLegacyAttendanceAndForeignKeys` dan `TestCORE02FailedUpgradeRollsBackSchemaDataAndLedger`: schema 5→6 dengan data lama, uniqueness/FK/ledger utuh atau rollback |
+| 16. Go tests | `go test -count=1 ./...`: 14 paket uji lulus pada run final |
+| 17. Go vet | `go vet ./...`: exit 0 pada run final |
+| 18. HTTP integration | `internal/httpapi/core02_test.go` dan `core02_availability_test.go`: pagination/filter/ownership, strict input, ETag/304 setelah scope, status pending→absent |
+
+Smoke program sementara `go run ./cmd/core02-smoke` berjalan melalui socket HTTPS
+dengan sertifikat uji tepercaya: readiness `200`, create session dan replay
+`201/201` dengan UUID sama, open `200`, manual dan replay `201/201` dengan waktu
+sama, duplicate tanpa key `409`, self history `200`, mahasiswa POST `403`, close
+`200` lalu `409`, check-in biasa closed `409`, koreksi eksplisit closed `200`.
+Database schema 6 berakhir dengan satu attendance dan dua audit mutasi manual,
+nol consent/biometric writes. Program dan database sementara dibersihkan.
+
+Run awal menemukan dua kegagalan regresi: fixture CORE01 mengandalkan default
+session `open` lama, dan pola kebocoran menganggap kata `biometric` sendiri
+sebagai embedding. Fixture kini menyatakan sesi open secara eksplisit;
+assertion wording itu dihapus, pemeriksaan rahasia/path/database/stack tetap.
+Run final di atas lulus seluruh paket. Review independen juga menemukan TTL
+cleanup hanya same-key dan duplicate melewati late_after menjadi `422`;
+keduanya diperbaiki, regresi tersedia dan lulus, serta actual-code direview ulang.
+
+Race detector: **NOT_RUN**, Go 1.27.0 windows/amd64, `CGO_ENABLED=0`.
+Tes goroutine dengan dua handle SQLite bukan pengganti race detector.
+Tidak ada uji OTP/Android/KeyProvider/recognition production pada tugas ini.
+
+## 10. Bukti FL-ENR01B — backend enrollment sintetis (26 Oktober 2026)
+
+Seluruh bukti memakai database SQLite baru, direktori sementara, kunci DPAPI
+CurrentUser yang baru dibuat, dan JPEG pola sintetis. Tidak ada ADB, foto manusia,
+database Product Owner, akun testing, SMTP/DNS, OTP/session production, atau
+model YuNet/SFace nyata yang dipakai.
+
+| Acceptance FL-ENR01B | Bukti konkret |
+|---|---|
+| Consent self-service + notice | `TestSyntheticEnrollmentLifecycleAndEncryptedPayloads`, `TestConsentCASIdempotencyAndFreshGrant`; HTTP tampered/unknown field 400 |
+| Withdrawal + purge | Lifecycle dan `TestWithdrawalAuditFailureRollsBackAllPayloadDeletion`; HTTP withdraw 200 lalu status REVOKED, template 0 |
+| RBAC/ownership | `TestEnrollmentHTTPGuardsPreviewApprovalAndWithdrawal`: Dosen/Mahasiswa preview+approve 403; Admin review; role fence `TestRoleFencePreservesActiveTemplateButReadinessFalse` |
+| Idempotency/CAS | Submit replay 200 ID sama; changed JPEG `IDEMPOTENCY_CONFLICT`; stale/missing If-Match 412/428; weak/canonical guard test |
+| Double live attempt/race | `TestConcurrentSubmitOnlyOneLiveAttempt`, `TestDecisionRaceIsSingleImmutableCAS` (satu pemenang, nol duplikat) |
+| TTL 72 jam | `TestExpiryIs72HoursAndNeverExtendedByReplay`; replay 23 jam tidak memperpanjang; HTTP expiry tanpa scheduler |
+| Key/integrity failure | `TestKeyFailurePreservesCiphertextAndWithdrawalNeedsNoKey`, `TestRecoveredRetainedPhotoRetryIsFencedAndBounded`; key-loss tidak menghapus, retry terbatas 3 |
+| Extraction failures | `TestExtractionErrorsNeverActivateAndConservativelyPurge`: no-face/multiple/NaN/zero/norm/manifest tidak ACTIVE, foto biasa dipurge |
+| Reviewer/subject fences | `TestReviewerDemotionRestorationPermanentlyFencesApproval`, `TestAccountRosterAndLinkRestorationDoNotResurrectWork`, `TestPhotoExpiryDuringProcessorFencesLateActivation` |
+| Restart/reconciliation | `TestEncryptedFileCrashRecoveryAndOrphanCleanup`, `TestAbandonedRunningJobFailsOnRestart`, `TestRestartImmediatelyAfterBothPublicationTransitions` |
+| Audit atomicity | `TestAuditFailuresRollBackGrantPreviewDecisionAndActivation`; HTTP preview audit failure tidak mengirim JPEG |
+| JPEG safety | `TestNormalizeJPEGStripsMetadata`, `TestJPEGRejectsMalformedUnsafeAndOversize`, EXIF pointer/orientation tests, batas 2073600 pixel |
+| Crypto/storage | `TestEnvelopeAuthenticatesEveryTrustedField`, `TestTemplateAADPreservesD022Tuple`, DPAPI provisioning no-replacement, DACL/hardlink/root-replacement regressions |
+| Migration isolation | Default `migrations/` tetap schema 6 dan tanpa tabel biometrik; `TestENR01BUpgradeIsAdditiveAndPreservesPriorChecksums` dan rollback memakai salinan disposable schema 7 |
+| Reactivation after restart | `Reconcile` memulihkan staging/orphan dan menandai worker yatim; bukan bukti power-loss durability |
+| Manual fallback tanpa kunci | Smoke HTTPS: setelah kunci template diganti nama, status sintetis `template_ready=false`, satu template tetap ada, create/open/manual session 201/200/201 |
+| HTTP no-store/no-sniff | Preview test: `no-store`, `nosniff`, exact length, Range 400; log tidak memuat token/JPEG/key/embedding |
+
+Run final: `gofmt` seluruh paket yang disentuh, `go test -count=1 ./...` **16
+paket uji lulus**, `go vet ./...` exit 0. `go run ./cmd/enrollment-synthetic`
+mencetak schema 7, notice/grant/submit/replay/approve/active/withdraw sesuai,
+preview `403` untuk Dosen dan Mahasiswa, key-loss fail-closed, manual tanpa kunci
+`201`, lalu nol template dan nol ciphertext setelah withdrawal+reconcile.
+
+Kegagalan nyata yang ditemukan dan diperbaiki: Windows root replacement sempat
+diterima; crash antara create/protect `.tmp` dan link/unlink publication dapat
+meninggalkan state yang ditolak recovery; migrasi schema7 sempat berada di
+discovery startup normal. Ketiganya kini memiliki regresi. Migrasi dipindah ke
+`synthetic-migrations/` dan hanya digabung oleh fixture disposable.
+
+Batas: race detector **NOT_RUN** (CGO_ENABLED=0), pengujian Linux untuk
+`renameat2` **NOT_RUN** (tidak ada runtime Linux; hanya build/vet lintas platform
+bila dijalankan), tidak ada uji power-loss, preview yang sudah diotorisasi dan
+sedang ditulis tidak dapat ditarik kembali, dan penghapusan tidak menjangkau
+backup eksternal/SSD/WAL secara forensik. Timer recovery D-030 tetap BLOCKED.
+
+## 11. Bukti FL-ENR02A — UI mahasiswa dan integrasi sintetis (26 Oktober 2026)
+
+Scope: aplikasi staging turunan FaceLink sebenarnya, package `ai.facelink.enr02host`,
+database/akun/roster/kunci disposable; tidak memakai database Product Owner,
+ADB, manusia atau kamera. Laporan A–L: `FL_ENR02A_TECHNICAL_REPORT.md`.
+
+| Acceptance | Bukti dan batas |
+|---|---|
+| Consent terpisah dari enrollment | `enrollmentFlow.test.ts`: explicit grant, template/consent/status guard, renewal menyimpan terminal submission lalu dapat menuju scan |
+| Guidance dan single submission | Harness clock alignment/hold/capture; cancel terminal; fixture dikirim sekali dan referensi buffer dikosongkan |
+| Status pending/rejected/expired/failed | State mapping tanpa trust ACTIVE; TTL tidak diciptakan client |
+| Snapshot ACTIVE stale | Background, umur30detik, failed full reload dan network failure menghilangkan trust |
+| Withdrawal | State withdrawn; regresi respons hilang setelah commit merekonsiliasi REVOKED tanpa mempertahankan ACTIVE |
+| Lifecycle async | Cancel saat menunggu token tidak mengirim JPEG; token null keluar dari uploading; resume initial load membaca consent lagi |
+| API | `enrollmentApi.test.ts`: ETag/If-Match, replacement ID, UUID, body JPEG, error parsing, menolak marker nonsintetis |
+| Navigation/roles | Existing role-route tests ikut lulus; main flag default-off dan transform staging diuji; UI perangkat NOT_RUN |
+| Backend actual | E2E opt-in server Go nyata + client TS nyata: grant → JPEG → PENDING → Admin approval202 → ACTIVE/template_ready → withdrawal/REVOKED |
+| Native packaging | Gradle ARM64 debug lulus; aapt package terpisah dan tanpa CAMERA/media/storage/overlay |
+
+Run akhir main dan staging: `npm run typecheck && npm run lint && npm test`,
+masing-masing **139 passed,1 skipped**. E2E dipisah:
+`FACELINK_ENR_E2E=1 npx vitest run tests/enrollmentE2E.test.ts`: **1/1 passed**.
+Export `npx expo export --platform android --output-dir artifacts/export-final`
+lulus1491 modules. Gradle `app:assembleDebug -PreactNativeArchitectures=arm64-v8a
+--offline --console=plain` **BUILD SUCCESSFUL4m8s**.
+Backend `go test -count=1 ./...`16 paket uji lulus/5 tanpa tes,
+`go vet ./...` lulus, `go run ./cmd/enrollment-synthetic` smoke TLS nyata lulus,
+key-loss fail-closed, manual tanpa kunci201, akhir0 template/0 ciphertext.
+
+Review independen source dan generated config tidak menyisakan temuan actionable
+yang dilaporkan setelah perbaikan. Tes UI di atas adalah state/kontrak, bukan
+mounted visual interaction. **NOT_RUN:** layar Android, accessibility aktual,
+OTP staging di HP, UI→backend device E2E, runtime TLS dan isolasi SecureStore
+antar-app. Izin perangkat baru diperlukan sebelum ADB/install.
+Gate **PARTIAL** untuk acceptance UI; **NO-GO** FL-ENR02B otomatis,
+capture manusia, production atau migrasi database Product Owner.
+
+Cleanup harness: EOF stdin menghentikan server test-token nyata; readiness
+failure menutup child sebelum rethrow. Smoke sertifikat hilang teramati gagal
+sesuai harapan dengan0 root disposable tertinggal; sesudah E2E0 server fixture.
+Review independen menutup temuan orphan `go run` Windows dan bypass defer
+pada fatal startup. Ini bukan pengujian crash/power-loss atau forensic cleanup.
+
+## 12. Bukti FL-ENR02A-R1 — Android fisik sintetis (26 Oktober 2026)
+
+**PARTIAL keseluruhan; alur inti perangkat PASSED.** TECNO LJ7 fisik, izin baru
+sebelum ADB/install, package staging `ai.facelink.enr02host`. Laporan A–M:
+`FL_ENR02A_R1_ANDROID_ACCEPTANCE_REPORT.md`. Bukti §11 adalah hasil offline
+historis; bagian ini menambahkan observasi perangkat, tidak mengganti asal bukti.
+
+| Jenis bukti | Skenario dan hasil nyata |
+|---|---|
+| Android UI | Login OTP mahasiswa sintetis dibantu pemilik; consent/notice dan checkbox; tombol disabled sebelum acceptance |
+| Android UI→HTTPS | Scan pola sintetis, satu pending; Admin reject200; fresh consent/retry menghasilkan submission baru; approval202→worker ACTIVE→Wajah terdaftar |
+| Cancel/lifecycle | Back dan HOME saat scan tidak mengirim submission (queue0); resume preparation; force-stop/cold relaunch memulihkan sesi valid |
+| Offline/error | TLS byte-relay staging dihentikan; UI Aktif (belum terverifikasi), stale warning dan retry; sesudah koneksi pulih fresh ACTIVE kembali |
+| Withdrawal | Konfirmasi perangkat→Persetujuan ditarik; sesudah respons HTTPS REVOKED/template_ready=false/deletion COMPLETE |
+| Expiry perangkat | Pending ketiga; clock fixture+73jam→backend EXPIRED; login ulang sah setelah sesi expired; HP menampilkan PHOTO_RETENTION_EXPIRED pada offset75jam |
+| Expiry otomatis | Clock72jam+1detik; replay23jam tidak mengubah deadline; expired preview410/approve409 |
+| RBAC/audit otomatis | Student/Dosen preview/approve/queue/detail403; self selector400; replay ID sama/count1; audit actor/entity/count dan protected-log assertions lulus |
+| Preservation | Main APK SHA256 sama, lastUpdateTime tidak berubah,6 setting identik; staging installed tanpa CAMERA; tidak mengubah global permission |
+
+Perintah acceptance otomatis yang dijalankan:
+`FACELINK_R1_BACKEND=1 go test ./internal/httpapi -run '^TestR1HTTPSAcceptance$' -count=1 -v`.
+Tiga subtest **PASSED**: GrantReplayRejectRenew, ApproveActiveWithdraw,
+PendingExpiry72Hours. Test memakai real HTTPS dengan trusted CA dan verified
+identity, bukan InsecureSkipVerify. Setup auth fixture otomatis bukan bukti OTP;
+OTP dibuktikan terpisah oleh login perangkat dan Admin melalui endpoint normal.
+
+Clock kontrol hanya pada harness disposable, tanpa endpoint baru atau perubahan
+retensi/session timestamp SQL. Offset maju74/75jam untuk cooldown OTP yang
+terbekukan; jam HP tidak diubah. Injeksi clock kemudian dikembalikan ke clock.Real.
+Dua harness sementara diarsipkan di evidence ignored, bukan source aktif.
+
+Regresi akhir setelah restorasi: main `npm run typecheck && npm run lint &&
+npm test` **139 passed,1 skipped**; backend `go test -count=1 ./...`16 paket uji
+lulus/5 tanpa tes, `go vet ./...` lulus; smoke `go run ./cmd/enrollment-synthetic`
+HTTPS lulus dan akhir0 template/0 ciphertext.
+
+Runtime perangkat sebelum cleanup: submission akhir REJECTED1/REVOKED1/EXPIRED1,
+template0/photo0; audit submitted3/approved1/activated1/rejected1/revoked1/expired1.
+Screenshot dan metadata lokal: `research/fl-enr02a-host/evidence-local/r1/`.
+Log sample tidak memuat marker JPEG/base64 payload atau token; bukan audit
+forensik/zero-telemetry semua SDK.
+
+**Residual:** LogBox expo-video TextureVideoView/player already released muncul
+non-fatal pada lifecycle, telah tercatat sebelum R1 di ANDROID_SETUP §17d.
+Tidak ada fix dugaan/suppression atau perubahan video/main. Accessibility
+semantik dasar diamati; TalkBack/varian font/endurance/release-build R1 NOT_RUN.
+
+**Cleanup:** staging force-stopped dan tetap installed, HTTPS/Metro/relay
+berhenti, reverse kosong, XML UI sementara di HP dan root disposable task dihapus;
+main/PO DB/APK historis/video/evidence dipertahankan.
+NO-GO capture manusia/production/FL-ENR02B otomatis; STOP setelah laporan.
+
+## 13. Bukti FL-ENR02A-R2 — video lifecycle dan accessibility (26 Oktober 2026)
+
+**PARTIAL; GO terbatas synthetic-only.** Laporan A–H:
+`FL_ENR02A_R2_VIDEO_ACCESSIBILITY_REPORT.md`.
+
+| Bukti | Hasil |
+|---|---|
+| Pra-fix device | Restart dengan sesi tersimpan + TalkBack menampilkan `TextureVideoView`/`shared object already released`; non-fatal |
+| Post-fix device | Urutan restart sama mendarat di dashboard tanpa warning; tidak ada FATAL |
+| Fix | Video login hanya dipasang saat status bukan `memulihkan`/`signedIn`/`unregistered` |
+| Accessibility | Target Back/retry48dp, heading, label status, checkbox hint/state, label progress, announcement phase, copy offline tegas |
+| Font scale |1.0/2.0 pada intro/consent; teks membungkus, konten dapat discroll, tombol tidak terpotong |
+| Kontras | Utama gelap ≥4.8:1; residual putih pada tombol merah≈3.90:1 dan TalkBack penuh belum PASS |
+| Regresi | Main/staging143 lulus/1 skipped, typecheck/lint lulus; export1491 modules; Gradle debug ARM64 BUILD SUCCESSFUL; backend16 paket/vet lulus |
+| Cleanup | Font1.0, TalkBack off/`null`/touch0, rotation tetap, reverse kosong, staging force-stopped/installed, main hash sama |
+
+TalkBack diaktifkan dan fokus visual/TTS teramati, tetapi onboarding sistem dan
+panjang notice membuat traversal ucapan menyeluruh **NOT_RUN**. Ini bukan klaim
+accessibility PASS. Tidak ada kamera, human capture, production, atau migrasi
+database Product Owner.
+
+## 14. Bukti FL-ENR02B — native camera offline (26 Oktober 2026)
+
+**PARTIAL; live camera/mannequin NOT_RUN.** Laporan A–L:
+`FL_ENR02B_TECHNICAL_REPORT.md`.
+
+| Bukti | Hasil |
+|---|---|
+| Native bridge | `FaceLinkCaptureLive` CAM00 + `Cam02FrameStore`/adapter/encoder; metadata-only JS |
+| Detector | patch 2.1.0 CAM02 idempotent; host live compile bergantung marker |
+| Modes | synthetic default tanpa CAMERA; mannequin staging dengan CAMERA/FLAG_SECURE, explicit start |
+| Privacy | no JPEG/base64/pixel/path ke JS; opaque consume token private; no live upload |
+| Tests | main/staging147 lulus/1 skipped, typecheck/lint; CAM00 JVM35+224, JS21+10 |
+| Android | export1622 modules; mannequin debug BUILD SUCCESSFUL5m3s; synthetic debug BUILD SUCCESSFUL3m34s; mannequin CAMERA, synthetic no-CAMERA; both no storage/media/overlay |
+| Security | review menemukan lalu menutup FLAG_SECURE, install/patch, mode isolation, availability, status, ownership |
+| Device | ADB/kamera/mannequin/permission/background/TalkBack **NOT_RUN** |
+
+Tidak ada klaim runtime live, recognition, PAD, production, human capture, atau
+migrasi database Product Owner.
+
+## 15. Bukti FL-ENR02B-R1 — Android live mannequin acceptance (26 Oktober 2026)
+
+**PARTIAL; NO-GO menuju Admin Enrollment UI integration.**
+Laporan A–M: `FL_ENR02B_R1_ANDROID_ACCEPTANCE_REPORT.md`.
+
+| Kategori | Hasil dan batas |
+|---|---|
+| Gate | Offline package/hash/manifest sebelum ADB; izin eksplisit baru; fixture mannequin dikonfirmasi pemilik |
+| Startup | Installed staging terpisah; OTP normal; sink attach error saat reload diperbaiki dengan identity-checked detach pada host destruction; cold/hot restart teramati |
+| Preview LIVE | Explicit start setelah consent dan permission; preview normal menurut pemilik; FLAG_SECURE tanpa screenshot preview |
+| Guidance LIVE | NO_FACE/0 dan TOO_FAR/1 teramati; frame callback berjalan; tidak capture sebelum syarat terpenuhi |
+| Capture/consume LIVE | **NOT_PROVEN**; trace CAPTURE/READY/CONSUME kosong; positive dwell, same-frame, duplicate/stale consume dan cleanup setelah codec **NOT_RUN** |
+| Lifecycle LIVE | Permission denied/one-time grant; cancel/Back; background release setelah1500ms; resume tidak auto-start |
+| Privacy | Inventory nama/ukuran staging tanpa image-named paths; backend disposable0 submission/foto/template; bukan proof no-temporary-write/zero-telemetry |
+| Unit | Kotlin35+224 assertions, JS21+10 PASS; bukan live codec proof |
+| Regresi | Main/staging TypeScript/lint dan147 tes/1 skipped; native rebuild; E2E sempat timeout saat build berjalan, satu run tanpa build PASS; rincian hasil akhir di laporan |
+| Cleanup | Staging force-stopped/installed, reverse kosong, layanan berhenti/root fixture dihapus; main APK hash identik; diagnostik sementara dibuang |
+| Settings | Tidak ada settings put; setelah jeda brightness4→1 dan timeout15000→1800000 teramati dan dipertahankan; tidak mengklaim seluruh baseline setting identik |
+
+TalkBack/font scale, Settings revocation, dua fixture nonmanusia, positive oval/
+mirror/crop dan background codec belum dibuktikan. Tidak ada manusia, live
+upload, production, migrasi Product Owner, atau commit/push/merge.
+
+## 16. Bukti FL-ENR02B-R2 — readiness dan same-frame capture (26 Oktober 2026)
+
+**Happy path LIVE DEVICE PASS; keseluruhan PARTIAL.**
+Laporan A–M: `FL_ENR02B_R2_READINESS_CAPTURE_REPORT.md`.
+
+| Kategori | Hasil dan batas |
+|---|---|
+| Gate | Izin R2 sebelum semua ADB; APK staging sudah identik, tidak install ulang; fixture gambar mannequin nonmanusia di browser dikonfirmasi sebelum start |
+| Diagnosis | Gate tetap dp; sensor bounds bukan ML Kit dimensions; unit trace dikoreksi sebelum device run; tidak ada perubahan threshold/mapping |
+| Readiness LIVE | Generation1793029361952/frame1512, dwell1504.65792ms/32 sampel; ukuran/containment/pose gate tetap; prefix event awal tidak seluruhnya tersimpan |
+| Same-frame LIVE | Frame1512 sama pada CAPTURE_READY, CAPTURE, JPEG_READY146991 byte, CONSUMED dan RELEASED |
+| Native replay | Stale generation−1→E_CAPTURE_GENERATION; duplicate sesudah consume→E_CAPTURE_HANDLE; bukan live concurrent-race proof |
+| Native memory | READY owned4194304/held0/busytrue; sesudah consume owned0/held0/busyfalse, captures1/consumes1/releases1; bukan total memory-zeroization claim |
+| Geometry | Preview323.70367×473.70367dp; round-trip0.00003dp; native rotation270/mirroredtrue/buffer1280×960; inspeksi visual JPEG crop NOT_RUN |
+| Lifecycle | Close sesudah capture; Back saat start; HOME sesudah FRAME1513; DRAINED nol; camera client kosong setelah settle1500ms; resume/cold restart tidak auto-start |
+| Residual lifecycle | Background/cancel tepat ketika ENCODING, revocation dan TalkBack scanner NOT_RUN pada R2 |
+| Privacy | Sandbox32 berkas awal/akhir tanpa image paths; disposable0 enrollment/submission/foto/template; UI Belum terdaftar, bukan ACTIVE; tanpa JPEG di JS/log/evidence |
+| Offline | Main/staging147 PASS/1 skipped;5 trace tests; Kotlin35+224 assertions; JS31; final mannequin dan synthetic TypeScript/lint PASS |
+| Build | Android ARM64 offline max-workers1 BUILD SUCCESSFUL7m7s; build pertama gagal baca PromiseType.hpp, penyebab sementara belum diisolasi |
+| Preservation | Main APK SHA256 identik;10 settings identik; tidak ada settings put/restore; tidak ada native/auth/schema/main-source change |
+| Cleanup | Staging force-stopped/installed; reverse kosong; port8089/8090/8091/8769 kosong;0 fixture backend; root disposable hilang; stage synthetic_flow/TRACE0/PROBES0 dan regresi ulang lulus |
+
+Tidak ada human capture, live upload, production enrollment/template, database
+Product Owner, ESP-CAM, SMTP/DNS atau commit/push/merge. Tidak memulai
+FL-ENR03/Admin UI implementation otomatis. **STOP setelah laporan R2.**
+
+## 17. Bukti FL-ENR03 — Admin enrollment staging sintetis (27 Oktober 2026)
+
+| Area | Hasil nyata |
+|---|---|
+| Backend | `go test -count=1 ./...` 17 paket `ok`, 4 tanpa tes; `go vet ./...` exit0; replay receipt setelah subject menjadi ineligible, filter status kosong, dan segmen statik Windows diuji |
+| Mobile unit | `npm run typecheck`, `npm run lint`, `npm test` lulus; 14 file lulus/2 skipped, **206 tes lulus/6 skipped** |
+| E2E HTTPS | `FACELINK_ADMIN_ENR_E2E=1`, `NODE_EXTRA_CA_CERTS=backend/dev/certs/dev-ca.pem`, proses Go nyata + SQLite disposable: **5/5 lulus** |
+| E2E scenarios | Queue/detail/preview; approve202→worker ACTIVE→withdraw; dua reviewer/CAS replay; retry setelah failure; Dosen/Mahasiswa 403; role/status Admin dicabut; expiry72jam |
+| Frontend contracts | DTO malformed/wrong-target ditolak; 202 ACTIVE palsu ditolak; token tidak pernah di URL; preview ≤1MiB, `image/jpeg`, `no-store`, abort setelah chunk; replay memakai key/ETag/payload sama |
+| Lifecycle | Rotasi bearer normal, polling tidak membatalkan read, blur/background menyimpan operasi ambigu, preview tidak membuka ulang otomatis; unit/controller membuktikan; runtime perangkat NOT_RUN |
+| Staging | `prepare-enr02a.cjs` default-OFF menghapus route dan menulis flag0; flag eksplisit mengembalikan route/flag1; stage typecheck/lint lulus; web export1093 modul |
+| Build | Gradle ARM64 `assembleDebug --offline --max-workers=1` BUILD SUCCESSFUL11m48s; APK102262250B SHA256`07bd378d…afe32`, package`ai.facelink.enr02host`, tanpa CAMERA/media/storage/overlay |
+| Browser smoke | Login staging dan `/admin-enrollment` tanpa sesi termuat; route menolak menampilkan review. Login OTP web berhenti pada SecureStore yang tidak tersedia (perilaku existing) |
+| NOT_RUN | UI terautentikasi di web; ADB/install/launch Android; TalkBack/font scaling; dua perangkat; cold restart; cache/zeroization renderer |
+
+Tidak ada endpoint/migrasi baru, foto manusia, kamera, database Product Owner,
+perubahan OTP/session/role, atau commit/push/merge. **STOP; NO-GO production.**
+
+## 18. Bukti FL-ENR04 — integrasi CV lokal sintetis/disposable
+
+- Python: `services/face-engine/.venv/Scripts/python.exe -m pytest
+  services/face-engine/tests` dari root: **208 passed, 1 skipped**; skip existing
+  memerlukan deteksi positif yang tidak ada pada gambar acak.
+- Backend: dari `backend/`, `go test -count=1 ./... && go vet ./...`:
+  **18 paket ok, 4 tanpa tes, exit0**. Tes IPC memakai child helper terisolasi
+  untuk auth/schema/binding/bounds/crash/cancellation/deadline/singleflight.
+- Mobile dan stage masing-masing: typecheck/lint lulus, **219 passed/6 skipped**.
+  Opt-in HTTPS Admin: `FACELINK_ADMIN_ENR_E2E=1` dan
+  `NODE_EXTRA_CA_CERTS=backend/dev/certs/dev-ca.pem`: **5/5**.
+  `FACELINK_ENR_E2E=1`: mahasiswa HTTP disposable **1/1**.
+- Smoke executable Go + Python + model pinned: approval202 →
+  FAILED_PROCESSING/NO_FACE; template0, photo READY0, processing.failed1;
+  shutdown menghapus root disposable. Tes langsung IPC juga membuktikan request
+  tanpa HMAC benar/oversize ditolak dan missing/corrupt model gagal tertutup.
+- Angka resource adalah satu smoke, bukan SLA: model init122,21ms,
+  JPEG+YuNet negative140,99ms, peak working set126,59MiB pada proses Python
+  aktual, OpenCV threads1. Pengukuran launcher venv tidak dipakai.
+- Run awal Go menemukan empat tes baru mencoba mengubah binding yang memang
+  immutable; tes diperbaiki untuk membuktikan penolakan DB dan legitimate
+  activation tetap berjalan, tanpa mengubah/mematikan trigger produk.
+- **REAL_MODEL_POSITIVE_NOT_PROVEN**. Tes SFace real dengan landmark buatan
+  adalah bukti komponen saja. Tidak ada manusia/kamera/ADB/Android build,
+  FAR/FRR, kalibrasi, PAD/liveness, atau production acceptance.
+- Review keamanan dan lifecycle independen tidak menemukan defect actionable
+  pada trust boundary yang ditinjau; bukan jaminan semua race native hilang.
+
+Laporan lengkap A–O: `FL_ENR04_TECHNICAL_REPORT.md`. **STOP sebelum FL-ENR05.**
+
+## 19. Bukti FL-ENR04-R1 — bounded synthetic positive screening
+
+| Area | Hasil yang dijalankan |
+|---|---|
+|Fixture|6mannequin height-field2,5D lokal, CC0 fixture-only, hash reproducible6/6; ignored evidence-local, tanpa asset manusia|
+|YuNet asli|Semua6 NO_FACE, threshold0,75 unchanged; direct pipeline dan HMAC IPC|
+|SFace/alignment real positive|NOT_RUN; tidak ada deteksi/landmark sah|
+|Go real-model strict positive|Configured candidate01 **FAIL/NO_FACE**; pending-photo encryption/HTTP202/actual IPC/reconcile berjalan, template0/active0/photo0/files0|
+|Template real positive dan withdrawal sesudahnya|NOT_PROVEN/NOT_RUN|
+|Python|213passed,1skipped; invalid query/template/dimension/NaN/Inf/model version/checksum matching guards|
+|Go+vet|18paket ok,4tanpa tes, exit0; opt-inpositive test absent config SKIP; partial config FAIL sebelum pipeline|
+|Failure/concurrency|Withdrawal/timeout/crash/model unavailable/invalid vector/AAD/expiry/lease/reviewer/restart, plus failed template encryption retained-safe dan duplicate worker single activation|
+|E2E|HTTPS Admin5 + HTTP mahasiswa1,6/6passed; no mobile shared/runtime contract change|
+|Evidence hardening|Screening HMAC/version/binding checks tidak memakai removable assert; replay `-O` dan tampered HMAC rejection terbukti|
+|Review|Dua independent read-only review tanpa actionable security findings; keterbatasan evidence optimasi ditutup|
+
+Artefak final: `research/fl-enr02a-host/evidence-local/enr04-r1/fixtures-v1-verified/screening.json`.
+Run awal dan evidence negatif Go dipertahankan. Hasil default-suite PASS tidak
+menggantikan configured-positive FAIL. Tidak ada Android/ADB/kamera, manusia,
+production, threshold manipulation atau D-030 policy change.
+Laporan A–N dan perintah reproduksi: `FL_ENR04_R1_TECHNICAL_REPORT.md`.
+**PARTIAL — REAL_MODEL_POSITIVE_NOT_PROVEN; STOP sebelum FL-ENR05.**
+
+## 20. Bukti FL-ENR04-R2 — native positive dan batas AAD v1
+
+Hasil R1 di atas adalah snapshot sebelum perbaikan R2. Tidak ada kandidat unik
+baru; fixture01 bytes/hash existing dipakai ulang. Threshold0,75, quality gate,
+dua model dan dependency tetap. Root cause: upscale512→960 menghilangkan deteksi;
+native512 menghasilkan satu wajah. Frame≤960 kini tetap native, fingerprint
+Go/Python `enr04-synthetic-native-v2`.
+
+| Area | Hasil yang dijalankan |
+|---|---|
+| Regresi ukuran square/rectangular/non-multiple32 dan real extraction |4FAIL sebelum→4PASS setelah|
+| Python lengkap |217PASS,1SKIP|
+| Go lengkap dan vet |18paket ok,4tanpa tes; vet exit0|
+| Real-model lifecycle HTTPS disposable |18request CA/hostname verified, actual YuNet→SFace→IPC→AES-256-GCM→ACTIVE→withdraw→REVOKED; payload/files0|
+| Template |128float32 finite/unit, ciphertext528byte; metadata/fingerprint/ownership sesuai; purpose-key/nonce separation dan tamper rejection|
+| AAD same-person/model/version snapshot substitution |2/2diterima dengan payload record lain; ordinary UPDATE ditolak;4kontrol lain ditolak|
+| Mobile typecheck/lint/tests |Lulus;219PASS,6SKIP|
+| Existing client E2E |Admin5 + mahasiswa1:6/6PASS|
+| Independent review |Tidak ada defect preprocessing tambahan; satu P2 AAD record-binding terkonfirmasi|
+
+AAD diagnostic memakai dua SQLite snapshot offline, FK/lifecycle INSERT guard
+tidak diuji; bukan remote endpoint exploit atau mutation path legal. Temporary
+test dihapus setelah hasil aman disimpan. Kontrak AAD/ciphertext tidak diubah.
+**Positive functional PASS; keseluruhan NO-GO FL-ENR05** sampai keputusan kontrak
+AADv2/remediasi terpisah. Tidak ada Android/ADB, kamera, manusia, migrasi Product
+Owner, threshold manipulation atau D-030 policy change.
+Laporan A–K, perintah dan evidence: `FL_ENR04_R2_TECHNICAL_REPORT.md`.
+**STOP; R3/R4/FL-ENR05 tidak dimulai otomatis.**
+
+
+## 21. Bukti FL-SEC01 — template AAD v2 record binding
+
+| Pemeriksaan | Hasil yang dijalankan |
+|---|---|
+| Sameperson/model, target templateID berbeda |FAIL-before plaintext=true→PASS-after tanpa plaintext|
+| AAD lengkap |Template/submission/person/immutable grant/model/version/fingerprint/key-version; forged storedAAD tetap ditolak GCM|
+| Encoding |Delimiter dan no-separator tuple collision ditolak; identical binding menghasilkan deterministicAAD|
+| Legacy/unknown |Authenticv1 unsupported tanpa fallback; relabel/rewriteAAD ditolak; purpose-specific version check sebelum key lookup|
+| SQLite coherent transplant |Full envelope dengan identitas template/submission/grant diubah independen, FK/join tetap valid: tidak ready, ciphertext retained|
+| Migration7→8 |Legacy bytes/metadata/ledger≤7/FK preserved; newv1INSERT ditolak; default migrations tidak berubah|
+| Withdrawal |Grant historis tetap; ACTIVEv2→REVOKED/template_readyfalse/deletionCOMPLETE; payload/files0|
+| Failure/concurrency |Encryptionfailure noACTIVE; auditrollback, stale lease/attempt/epoch/reviewer, keyloss/corruption/restart/reconcile retained-safe; dua record/vector tidak tertukar|
+| Key ownership |Owned copies wiped pada Seal/Open success, authenticationfailure, shortkey dan providererror|
+| Go lengkap+vet |18paket ok,4tanpa tes; vet exit0|
+| Python |217PASS,1SKIP|
+| Real-model HTTPS |18CA/hostname verified requests, actual YuNet/SFace/IPC, envelopeversion2,128float32finite/unit,ciphertext528byte|
+| Mobile |Typecheck/lint lulus;219PASS,6SKIP; explicit existing E2E AdminHTTPS5+mahasiswaHTTP1:6/6PASS|
+| Independent review |Crypto/domain/migration/caller/security; tidak ada evidence-backed defect tersisa|
+
+Run Go awal gagal pada fixture baru (multi-statement parameter binding dan
+legacy activation); setup diperbaiki dengan Exec terpisah/RowsAffected tanpa
+melemahkan assertion, kemudian fullsuite/vet lulus. Catatan skip/host dan
+perintah reproduksi ada pada `FL_SEC01_TECHNICAL_REPORT.md` §J.
+AEAD tidak mencegah rollback seluruh DB/state yang konsisten; replay dengan
+binding sama tetap authentic dan memerlukan kontrol freshness di luar AEAD.
+Tidak ada human/camera/ADB, model/threshold/auth/session/role/KeyProvider change,
+atau migration database Product Owner. D-030 tetap BLOCKED.
+**PASS sintetis/disposable; STOP tanpa memulai FL-ENR05 otomatis.**
+
+## 22. Bukti FL-ENR05 — synthetic integrated E2E
+
+- Continuous actual Student/Admin TS APIs+controllers, normal OTP/verifiedHTTPS,
+  Go staging, satu WAL schema8 disposable, real pinned YuNet/SFace IPC,
+  encrypted template AADv2, server ACTIVE, withdrawal/REVOKED/cleanup0: PASS.
+- Protected preview SHA = canonical submission SHA = actual Process input SHA;
+  approval202 belum ACTIVE, embedding128finite/unit dan manifest tervalidasi.
+- Failure/concurrency23 kasus dipetakan per lapisan pada laporan §H; actual TLS
+  consent/72h/retryTTL/reviewer/lease races, SQLite reopen/reconstruction,
+  filesystem cleanup outage, adapter child timeout/crash, crypto/legacy/keyloss.
+- Response-loss diinjeksikan setelah realHTTPS approval commit: uncertain,
+  noACTIVE, identical body/CAS/key replay200, approval audit+1/replay+0.
+  Bukan physical network disconnect atau Android device evidence.
+- Student token-null ACTIVE distrust:3FAIL-before; load/manual/background
+  stale+recovery PASS-after, termasuk smoke dengan ACTIVE backend aktual.
+- OTP fixture barrier menunggu exact committed delivery; auth policy unchanged.
+  Activation/withdrawal cleanup diperiksa setelah existing reconciliation.
+- Final Go18paket+4tanpa tests dan vet exit0; Python217PASS/1SKIP;
+  mobile typecheck/lint,17files/230PASS (8HTTPS E2E opt-in aktif);
+  offline JS/native contract36PASS. Android UI/native build/ADB NOT_RUN.
+- Run awal gagal karena timing cleanup, receipt24h disalahartikan sebagai72h,
+  dan helper polling terhapus; diperbaiki tanpa melonggarkan runtime kontrak.
+  Dua trace FAIL dipertahankan; tidak dihitung sebagai PASS.
+- Laporan A–N, commands, measurement dan satu trace:
+  `FL_ENR05_TECHNICAL_REPORT.md`; trace `<redacted-id>`.
+  Tidak ada human/productionDB/modelthreshold/native/SMTP/authrole redesign.
+  **GO Synthetic Integrated E2E; STOP tanpa human/production/tahap baru.**

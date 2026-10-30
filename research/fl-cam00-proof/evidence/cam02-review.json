@@ -1,0 +1,21 @@
+{
+  "reviewer": "Cam02Review",
+  "mode": "independent read-only source review; no builds/tests/edits",
+  "initialActionableFindings": 0,
+  "runtimeDefectNotEstablishedByInitialSourceReview": {
+    "code": "E_CAM02_PREVIEW_NOT_CONTAINED",
+    "observedOverflowPixels": 0.00006103515625,
+    "sourceFix": "0.05 pixel initial comparison margin, conservative even inward rounding, final exact crop containment",
+    "regression": "New measured-geometry case failed before fix; final 35 Kotlin boundary assertions passed after fix",
+    "landedFixReviewed": true,
+    "newActionableFindings": 0
+  },
+  "honestLimits": [
+    "Source review is not end-to-end device proof of JPEG or preview matching",
+    "Cooperative cancellation cannot interrupt an executing platform codec; force-stop does not execute Kotlin finally",
+    "16 MiB image-buffer reservation cap excludes CameraX, ML Kit, codec scratch, GPU and whole-process memory",
+    "JPEG_READY is historical validated metadata; JPEG backing bytes are wiped before publication and bitmap retained for at most 15 seconds",
+    "Bounded FileObserver and historical UID TrafficStats do not prove zero telemetry or forensic absence of writes",
+    "Prototype was ignored/untracked, so git diff/history did not independently establish patch provenance; pinned source hashes and actual source were inspected"
+  ]
+}
