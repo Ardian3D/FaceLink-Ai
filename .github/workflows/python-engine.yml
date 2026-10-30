@@ -1,0 +1,68 @@
+name: Python Engine
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "services/face-engine/**"
+      - ".github/workflows/python-engine.yml"
+  push:
+    branches: [main]
+    paths:
+      - "services/face-engine/**"
+      - ".github/workflows/python-engine.yml"
+  workflow_dispatch:
+
+# Least privilege: tidak ada langkah yang menulis kembali ke repositori.
+permissions:
+  contents: read
+
+concurrency:
+  group: python-engine-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Python (import, unit, synthetic)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: services/face-engine
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: services/face-engine/requirements.txt
+
+      # opencv-python (bukan headless) memuat libGL saat impor cv2.
+      - name: Pasang pustaka sistem OpenCV
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libgl1 libglib2.0-0
+
+      - name: Verifikasi versi
+        run: |
+          python --version
+          python -c "import platform; print(platform.platform())"
+
+      - name: Pasang dependency
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Pemeriksaan impor
+        run: |
+          python -c "import face_engine.pipeline, face_engine.ipc, face_engine.config, face_engine.detector, face_engine.embedder"
+
+      # Pengujian bertanda `model` otomatis SKIP karena bobot ONNX privat tidak
+      # diunduh atau disimpan di CI. Bukti real-model tetap lokal dan terpisah.
+      - name: pytest (unit + sintetis)
+        run: python -m pytest tests -q

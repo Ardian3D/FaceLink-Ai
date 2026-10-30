@@ -1,0 +1,62 @@
+name: Mobile
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/mobile-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/mobile/**"
+      - ".github/workflows/mobile-ci.yml"
+  workflow_dispatch:
+
+# Least privilege: tidak ada langkah yang menulis kembali ke repositori.
+permissions:
+  contents: read
+
+concurrency:
+  group: mobile-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Mobile (typecheck, lint, unit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+
+      - name: Verifikasi versi
+        run: |
+          node --version
+          npm --version
+
+      - name: Pasang dependency (reproducible)
+        run: npm ci --no-audit --no-fund
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      # Hanya unit/controller test yang tidak butuh backend, model, atau device.
+      # Suite opt-in (FACELINK_*_E2E) tetap SKIP oleh gate masing-masing.
+      - name: Vitest unit
+        run: npm run test
