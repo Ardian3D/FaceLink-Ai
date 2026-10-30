@@ -298,7 +298,6 @@ func TestRedactedTidakMembocorkanNilaiSensitif(t *testing.T) {
 		t.Errorf("bentuk aman harus melaporkan ai_engine_url sebagai set:\n%s", rendered)
 	}
 
-
 	// Seluruh nilai yang boleh muncul hanyalah nilai yang memang tidak rahasia.
 	for _, forbidden := range []string{"password", "token", "secret", "api_key"} {
 		if strings.Contains(strings.ToLower(rendered), forbidden) {
